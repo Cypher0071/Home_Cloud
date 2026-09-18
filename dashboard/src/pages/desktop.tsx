@@ -7,6 +7,7 @@ import {
   Folder,
   Box,
   Zap,
+  LayoutGrid,
 } from 'lucide-react';
 
 import OSWindow from '../components/OSWindow';
@@ -14,6 +15,8 @@ import WindowErrorBoundary from '../components/WindowErrorBoundary';
 import WindowSkeleton from '../components/skeletons/WindowSkeleton';
 import DesktopMetricWidget from '../components/DesktopMetricWidget';
 import { useNetworkDetector } from '../hooks/useNetworkDetector';
+import { useSystemMetrics } from '../hooks/useSystemMetrics';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { getLazyWindowApp, preloadWindowApp, type WindowAppId } from '../utils/windowAppRegistry';
 
 interface WindowState {
@@ -57,6 +60,8 @@ function getInitialDeepLink(): WindowAppId | null {
 export default function Desktop() {
   const navigate = useNavigate();
   const net = useNetworkDetector();
+  const isMobile = useIsMobile();
+  const metrics = useSystemMetrics();
   const [time, setTime] = useState('');
   const [activeWindowId, setActiveWindowId] = useState<string | null>(() => getInitialDeepLink());
   const [maxZIndex, setMaxZIndex] = useState(() => (getInitialDeepLink() ? 11 : 10));
@@ -194,6 +199,22 @@ export default function Desktop() {
     }
   };
 
+  const handleHomeClick = () => {
+    setWindows(prev => prev.map(w => ({ ...w, isMinimized: true })));
+    setActiveWindowId(null);
+  };
+
+  const isAnyWindowVisible = windows.some(
+    w => w.id === activeWindowId && w.isOpen && !w.isMinimized
+  );
+
+  const mobileAppTabs: { id: WindowAppId; label: string; icon: React.ReactNode }[] = [
+    { id: 'docker', label: 'Docker', icon: <Box size={20} /> },
+    { id: 'files', label: 'Files', icon: <Folder size={20} /> },
+    { id: 'terminal', label: 'Terminal', icon: <TerminalIcon size={20} /> },
+    { id: 'metrics', label: 'Activity', icon: <Activity size={20} /> },
+  ];
+
   const handleLogout = async () => {
     try {
       const res = await fetch('/api/auth/logout', { method: 'POST' });
@@ -206,6 +227,52 @@ export default function Desktop() {
 
   return (
     <div className="desktop">
+      {/* Mobile Top Status Bar (renders on desktop wallpaper when on mobile) */}
+      {isMobile && (
+        <div className="mobile-top-bar">
+          <div className="mobile-top-left">
+            {net.isDirectLocal ? (
+              <div className="mobile-status-pill local">
+                <Zap size={11} fill="currentColor" />
+                <span>LAN</span>
+              </div>
+            ) : (
+              <div
+                className="mobile-status-pill tunnel"
+                onClick={net.serverLocalIp ? net.redirectToLocal : undefined}
+              >
+                <span className="tray-dot" />
+                <span>{net.isLocalLAN ? 'Upgrading…' : 'Tunnel'}</span>
+              </div>
+            )}
+            <button
+              type="button"
+              className="mobile-metric-chip"
+              onClick={() => handleDockClick('metrics')}
+              aria-label="Activity metrics"
+            >
+              <span>CPU {metrics.connected ? `${metrics.cpuLoad.toFixed(0)}%` : '—'}</span>
+              <span>·</span>
+              <span>RAM {metrics.connected ? `${metrics.memUsedPct.toFixed(0)}%` : '—'}</span>
+            </button>
+          </div>
+
+          <div className="mobile-top-time">{time}</div>
+
+          <div className="mobile-top-right">
+            <button
+              type="button"
+              className="mobile-signout-btn"
+              onClick={handleLogout}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Workspace — windows live here */}
       <div className="desktop-workspace">
         {windows.map(win => (
@@ -240,86 +307,127 @@ export default function Desktop() {
         ))}
       </div>
 
-      {/* Taskbar */}
-      <div className="taskbar">
-        <div className="taskbar-left">
-          <DesktopMetricWidget
-            active={
-              activeWindowId === 'metrics' &&
-              (windows.find(w => w.id === 'metrics')?.isOpen ?? false) &&
-              !(windows.find(w => w.id === 'metrics')?.isMinimized ?? false)
-            }
-            isOpen={windows.find(w => w.id === 'metrics')?.isOpen}
-            onClick={() => handleDockClick('metrics')}
-            onMouseEnter={() => preloadWindowApp('metrics')}
-          />
-        </div>
-
-        {/* Center: app icons (File Explorer, Terminal, Docker) */}
-        <div className="taskbar-center">
-          {windows
-            .filter(win => win.id !== 'metrics')
-            .map(win => {
-              const isActive = activeWindowId === win.id && win.isOpen && !win.isMinimized;
-              return (
-                <button
-                  key={win.id}
-                  className={`dock-item${isActive ? ' active' : ''}`}
-                  onClick={() => handleDockClick(win.id)}
-                  onMouseEnter={() => preloadWindowApp(win.id)}
-                  aria-label={win.title}
-                >
-                  {win.icon}
-                  <span className="dock-tooltip">{win.title}</span>
-                  {win.isOpen && <span className="dock-item-dot" />}
-                </button>
-              );
-            })}
-        </div>
-
-        {/* Right: system tray */}
-        <div className="taskbar-right">
-          {net.isDirectLocal ? (
-            <div
-              className="tray-tunnel"
-              style={{
-                color: 'var(--ok)',
-                borderColor: 'rgba(52, 211, 153, 0.30)',
-                background: 'rgba(52, 211, 153, 0.12)',
-              }}
-              title={net.serverLocalIp ? `Connected directly over Home Wi-Fi LAN (${net.serverLocalIp})` : 'Connected directly over Home Wi-Fi LAN'}
-            >
-              <Zap size={11} fill="currentColor" />
-              {net.serverLocalIp ? `LAN · ${net.serverLocalIp}` : 'Direct LAN'}
-            </div>
-          ) : (
-            <div
-              className="tray-tunnel"
-              onClick={net.serverLocalIp ? net.redirectToLocal : undefined}
-              style={{ cursor: net.serverLocalIp ? 'pointer' : 'default' }}
-              title={
-                net.isLocalLAN
-                  ? `Redirecting to local Wi-Fi LAN (${net.serverLocalIp || 'detecting…'})…`
-                  : net.serverLocalIp
-                  ? `Connected over Cloudflare Remote Tunnel. Click to switch to local LAN (http://${net.serverLocalIp}:${net.serverLocalPort})`
-                  : 'Connected over Cloudflare Remote Tunnel'
-              }
-            >
-              <span className="tray-dot" />
-              {net.isLocalLAN ? 'Upgrading to LAN…' : 'Tunnel'}
-            </div>
-          )}
-          <span className="tray-time">{time}</span>
+      {/* Mobile Bottom Navigation Bar */}
+      {isMobile ? (
+        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+          {/* Home Tab */}
           <button
-            className="tray-signout"
-            onClick={handleLogout}
-            title="Sign out"
-            aria-label="Sign out"
+            type="button"
+            className={`mobile-nav-item ${!isAnyWindowVisible ? 'active' : ''}`}
+            onClick={handleHomeClick}
+            aria-label="Home"
           >
-            <LogOut size={14} />
+            <div className="mobile-nav-icon-wrap">
+              <LayoutGrid size={19} />
+              {!isAnyWindowVisible && <span className="mobile-nav-dot" />}
+            </div>
+            <span className="mobile-nav-label">Home</span>
           </button>
+
+          {/* App Tabs */}
+          {mobileAppTabs.map(tab => {
+            const win = windows.find(w => w.id === tab.id);
+            const isActive = activeWindowId === tab.id && (win?.isOpen ?? false) && !(win?.isMinimized ?? false);
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`mobile-nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => handleDockClick(tab.id)}
+                onPointerDown={() => preloadWindowApp(tab.id)}
+                aria-label={tab.label}
+              >
+                <div className="mobile-nav-icon-wrap">
+                  {tab.icon}
+                  {isActive && <span className="mobile-nav-dot" />}
+                </div>
+                <span className="mobile-nav-label">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      ) : (
+        /* Desktop Acrylic Taskbar */
+        <div className="taskbar">
+          <div className="taskbar-left">
+            <DesktopMetricWidget
+              active={
+                activeWindowId === 'metrics' &&
+                (windows.find(w => w.id === 'metrics')?.isOpen ?? false) &&
+                !(windows.find(w => w.id === 'metrics')?.isMinimized ?? false)
+              }
+              isOpen={windows.find(w => w.id === 'metrics')?.isOpen}
+              onClick={() => handleDockClick('metrics')}
+              onMouseEnter={() => preloadWindowApp('metrics')}
+            />
+          </div>
+
+          {/* Center: app icons (File Explorer, Terminal, Docker) */}
+          <div className="taskbar-center">
+            {windows
+              .filter(win => win.id !== 'metrics')
+              .map(win => {
+                const isActive = activeWindowId === win.id && win.isOpen && !win.isMinimized;
+                return (
+                  <button
+                    key={win.id}
+                    className={`dock-item${isActive ? ' active' : ''}`}
+                    onClick={() => handleDockClick(win.id)}
+                    onMouseEnter={() => preloadWindowApp(win.id)}
+                    aria-label={win.title}
+                  >
+                    {win.icon}
+                    <span className="dock-tooltip">{win.title}</span>
+                    {win.isOpen && <span className="dock-item-dot" />}
+                  </button>
+                );
+              })}
+          </div>
+
+          {/* Right: system tray */}
+          <div className="taskbar-right">
+            {net.isDirectLocal ? (
+              <div
+                className="tray-tunnel"
+                style={{
+                  color: 'var(--ok)',
+                  borderColor: 'rgba(52, 211, 153, 0.30)',
+                  background: 'rgba(52, 211, 153, 0.12)',
+                }}
+                title={net.serverLocalIp ? `Connected directly over Home Wi-Fi LAN (${net.serverLocalIp})` : 'Connected directly over Home Wi-Fi LAN'}
+              >
+                <Zap size={11} fill="currentColor" />
+                {net.serverLocalIp ? `LAN · ${net.serverLocalIp}` : 'Direct LAN'}
+              </div>
+            ) : (
+              <div
+                className="tray-tunnel"
+                onClick={net.serverLocalIp ? net.redirectToLocal : undefined}
+                style={{ cursor: net.serverLocalIp ? 'pointer' : 'default' }}
+                title={
+                  net.isLocalLAN
+                    ? `Redirecting to local Wi-Fi LAN (${net.serverLocalIp || 'detecting…'})…`
+                    : net.serverLocalIp
+                    ? `Connected over Cloudflare Remote Tunnel. Click to switch to local LAN (http://${net.serverLocalIp}:${net.serverLocalPort})`
+                    : 'Connected over Cloudflare Remote Tunnel'
+                }
+              >
+                <span className="tray-dot" />
+                {net.isLocalLAN ? 'Upgrading to LAN…' : 'Tunnel'}
+              </div>
+            )}
+            <span className="tray-time">{time}</span>
+            <button
+              className="tray-signout"
+              onClick={handleLogout}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
