@@ -3,7 +3,17 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Power, RefreshCw, Trash2 } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import styles from './terminal.module.css';
+
+const SOFT_KEYS = [
+  { label: 'Esc', code: '\x1b' },
+  { label: 'Tab', code: '\t' },
+  { label: 'Ctrl+C', code: '\x03' },
+  { label: 'Clear', code: '\x0c' },
+  { label: '↑', code: '\x1b[A' },
+  { label: '↓', code: '\x1b[B' },
+];
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -131,6 +141,7 @@ function cleanInitialStream(raw: string, state: InitialStreamState): string {
 }
 
 export default function TerminalApp() {
+  const isMobile = useIsMobile();
   const terminalRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -165,6 +176,36 @@ export default function TerminalApp() {
       } catch {
         /* ignore layout errors during resize */
       }
+    }
+  }, []);
+
+  // Listen to visualViewport resize events (triggered when mobile keyboard opens/closes)
+  useEffect(() => {
+    const visualViewport = window.visualViewport;
+    if (!visualViewport) return;
+
+    const handleViewportResize = () => {
+      syncDimensions();
+      requestAnimationFrame(() => {
+        syncDimensions();
+      });
+    };
+
+    visualViewport.addEventListener('resize', handleViewportResize);
+    visualViewport.addEventListener('scroll', handleViewportResize);
+
+    return () => {
+      visualViewport.removeEventListener('resize', handleViewportResize);
+      visualViewport.removeEventListener('scroll', handleViewportResize);
+    };
+  }, [syncDimensions]);
+
+  const handleSoftKey = useCallback((code: string) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(code);
+    }
+    if (xtermRef.current) {
+      xtermRef.current.focus();
     }
   }, []);
 
@@ -466,6 +507,31 @@ export default function TerminalApp() {
       <div className={styles.terminalWrapper}>
         <div ref={terminalRef} className={styles.terminalCanvas} />
       </div>
+
+      {isMobile && (
+        <div className={styles.mobileSoftKeyBar} role="toolbar" aria-label="Terminal touch helpers">
+          {SOFT_KEYS.map((key) => (
+            <button
+              key={key.label}
+              type="button"
+              className={styles.softKeyBtn}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                handleSoftKey(key.code);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSoftKey(key.code);
+                }
+              }}
+              aria-label={`Send ${key.label}`}
+            >
+              {key.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

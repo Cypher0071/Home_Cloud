@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useNetworkDetector } from '../../hooks/useNetworkDetector';
 import { useSystemMetrics } from '../../hooks/useSystemMetrics';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 // ─── Format Helpers ───
 
@@ -107,12 +108,12 @@ function SparklineChart({
   });
 
   return (
-    <div style={{ width: '100%', position: 'relative', height: `${height}px` }}>
+    <div style={{ width: '100%', position: 'relative', height: `${height}px`, overflow: 'hidden' }}>
       {/* Subtle baseline */}
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
-        style={{ width: '100%', height: `${height}px`, display: 'block', overflow: 'visible' }}
+        style={{ width: '100%', height: `${height}px`, display: 'block', overflow: 'hidden' }}
         aria-hidden="true"
       >
         <line
@@ -202,6 +203,7 @@ function StatRow({
         alignItems: 'baseline',
         gap: '12px',
         lineHeight: '1.4',
+        minWidth: 0,
       }}
     >
       <span
@@ -210,11 +212,21 @@ function StatRow({
           color: muted ? 'var(--text-muted)' : 'var(--text-secondary)',
           whiteSpace: 'nowrap',
           fontFamily: 'var(--sans)',
+          flexShrink: 0,
         }}
       >
         {label}
       </span>
-      {typeof value === 'string' ? <Val muted={muted}>{value}</Val> : value}
+      <div
+        style={{
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          textAlign: 'right',
+        }}
+      >
+        {typeof value === 'string' ? <Val muted={muted}>{value}</Val> : value}
+      </div>
     </div>
   );
 }
@@ -231,18 +243,20 @@ function MetricCard({
   children: React.ReactNode;
   style?: React.CSSProperties;
 }) {
+  const isMobile = useIsMobile();
   return (
     <div
       style={{
         background: '#0a0a0a',
         border: '1px solid #262626',
         borderRadius: '8px',
-        padding: '16px 18px',
+        padding: isMobile ? '12px' : '16px 18px',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.40)',
         boxSizing: 'border-box',
+        minWidth: 0,
         ...style,
       }}
     >
@@ -329,6 +343,7 @@ function CardHeader({
 export default function SystemMonitorApp() {
   const { data, cpuHistory } = useSystemMetrics();
   const netDetector = useNetworkDetector();
+  const isMobile = useIsMobile();
 
   // ─── Loading / Connecting View ───
   if (!data) {
@@ -420,22 +435,25 @@ export default function SystemMonitorApp() {
   return (
     <div
       style={{
-        padding: '14px 16px',
+        padding: isMobile ? '10px 10px 24px 10px' : '14px 16px',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
         overflowY: 'auto',
+        overflowX: 'hidden',
         height: '100%',
         boxSizing: 'border-box',
         background: '#000000',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
-      {/* ─── 2x2 Telemetry Grid (CPU, RAM, Storage, Network) ─── */}
+      {/* ─── Telemetry Grid ─── */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))',
           gap: '12px',
+          minWidth: 0,
         }}
       >
         {/* ─── Card 1: CPU Telemetry ─── */}
@@ -681,9 +699,11 @@ export default function SystemMonitorApp() {
                     alignItems: 'baseline',
                     justifyContent: 'space-between',
                     gap: '8px',
+                    minWidth: 0,
+                    flexWrap: isMobile ? 'wrap' : 'nowrap',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: isMobile ? '1 1 100%' : '1' }}>
                     <span
                       style={{
                         fontFamily: 'var(--mono)',
@@ -697,7 +717,9 @@ export default function SystemMonitorApp() {
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
+                        maxWidth: isMobile ? '160px' : '220px',
                       }}
+                      title={d.mount}
                     >
                       {d.mount}
                     </span>
@@ -706,13 +728,14 @@ export default function SystemMonitorApp() {
                         fontSize: '10.5px',
                         color: 'var(--text-muted)',
                         fontFamily: 'var(--mono)',
+                        flexShrink: 0,
                       }}
                     >
                       {d.type || d.fs}
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexShrink: 0, marginLeft: isMobile ? 'auto' : undefined }}>
                     <span
                       style={{
                         fontSize: '11px',

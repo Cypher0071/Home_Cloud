@@ -192,3 +192,99 @@
 .terminalWrapper :global(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
   background: #333333;
 }
+
+/* ─── Mobile Soft-Key Helper Bar ─── */
+.mobileSoftKeyBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #0d0d0d;
+  border-top: 1px solid #222222;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobileSoftKeyBar::-webkit-scrollbar {
+  display: none;
+}
+
+.softKeyBtn {
+  flex: 1;
+  min-width: 44px;
+  height: 34px;
+  padding: 0 4px;
+  background: #171717;
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  color: #ededed;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    transform 0.1s ease;
+}
+
+.softKeyBtn:hover {
+  background: #202020;
+  border-color: #383838;
+}
+
+.softKeyBtn:active {
+  background: #2a2a2a;
+  border-color: #444444;
+  color: #ffffff;
+  transform: scale(0.96);
+}
+
+.softKeyBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ─── Mobile Adaptations (< 768px) ─── */
+@media (max-width: 767px) {
+  .headerBar {
+    padding: 4px 8px;
+    min-height: 36px;
+  }
+
+  .tabBadge {
+    padding: 3px 8px;
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .tabTitle {
+    font-size: 11px;
+  }
+
+  .actionsGroup {
+    gap: 4px;
+  }
+
+  .actionBtn {
+    padding: 3px 7px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .terminalWrapper {
+    padding: 2px 4px;
+  }
+}
