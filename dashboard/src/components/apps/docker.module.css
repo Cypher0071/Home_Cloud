@@ -36,6 +36,13 @@
   padding: 3px;
   border-radius: 8px;
   border: 1px solid #262626;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabNavGroup::-webkit-scrollbar {
+  display: none;
 }
 
 .tabBtn {
@@ -2302,4 +2309,249 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* ─── Mobile Touchscreen Responsiveness (< 768px) ─── */
+
+.mobileCardsContainer {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .tabHeader {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .tabBtn {
+    padding: 5px 8px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .table {
+    display: none !important;
+  }
+
+  .mobileCardsContainer {
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .mobileCard {
+    background: #0d0d0d;
+    border: 1px solid #262626;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .mobileCard:active {
+    background: #141414;
+  }
+
+  .mobileCardSelected {
+    border-color: #404040;
+    background: #121212;
+  }
+
+  .mobileCardHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .mobileCardTitleGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .mobileCardName {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileCardBadges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .mobileCardMeta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11.5px;
+  }
+
+  .mobileCardMetaRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .mobileCardActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid #222222;
+  }
+
+  .mobileActionBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: var(--sans);
+    background: #171717;
+    border: 1px solid #2e2e2e;
+    color: #d4d4d8;
+    cursor: pointer;
+    flex: 1;
+    min-width: 62px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobileActionBtn:active {
+    background: #262626;
+    color: #ffffff;
+  }
+
+  .mobileActionBtnPrimary {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #000000;
+    font-weight: 600;
+  }
+
+  .mobileActionBtnPrimary:active {
+    background: #e4e4e7;
+  }
+
+  .mobileActionBtnDanger {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+  }
+
+  .mobileActionBtnDanger:active {
+    background: rgba(239, 68, 68, 0.25);
+  }
+
+  /* Drawer full screen on mobile */
+  .detailPane {
+    width: 100% !important;
+    max-width: 100% !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 50 !important;
+  }
+
+  /* Modal full screen on mobile */
+  .modalOverlay {
+    padding: 0 !important;
+  }
+
+  .modalCard {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  .modalForm input,
+  .modalForm select,
+  .modalForm textarea {
+    font-size: 16px !important; /* Prevents iOS Safari auto-zoom */
+  }
+
+  .modalFooter {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: #0a0a0a !important;
+    padding: 12px 14px !important;
+    z-index: 10 !important;
+  }
+
+  /* Action bar stack on small screens */
+  .actionBar {
+    padding: 8px 10px !important;
+    gap: 8px !important;
+  }
+
+  .actionLeft {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .searchWrapper {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .filterPills {
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    padding-bottom: 2px !important;
+  }
+
+  .filterPills::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .actionRight {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+
+  .pullForm {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+  }
+
+  .pullInput {
+    font-size: 16px !important;
+  }
+
+  .composeGrid,
+  .stacksGrid {
+    grid-template-columns: 1fr !important;
+  }
 }

@@ -2848,7 +2848,8 @@ export default function DockerApp() {
                   </p>
                 </div>
               ) : (
-                <table className={styles.table}>
+                <>
+                  <table className={styles.table}>
                   <thead className={styles.thead}>
                     <tr className={styles.theadRow}>
                       <th className={styles.th} style={{ width: '32px' }}></th>
@@ -3101,7 +3102,173 @@ export default function DockerApp() {
                     })}
                   </tbody>
                 </table>
-              )}
+
+                {/* Mobile Responsive Container Cards (< 768px) */}
+                <div className={styles.mobileCardsContainer}>
+                  {filteredContainers.map((c) => {
+                    const name = (c.Names[0] ?? c.Id).replace(/^\//, '');
+                    const shortId = c.Id.substring(0, 12);
+                    const isRunning = c.State === 'running';
+                    const busy = (suf: string) => actionLoading === `${c.Id}-${suf}`;
+                    const anyBusy = ['start', 'stop', 'restart', 'delete'].some(busy);
+                    const isConfirm = confirmDeleteId === c.Id;
+                    const isSelected = selectedId === c.Id;
+
+                    return (
+                      <div
+                        key={c.Id}
+                        className={`${styles.mobileCard} ${isSelected ? styles.mobileCardSelected : ''}`}
+                        onClick={() => setSelectedId(c.Id)}
+                      >
+                        <div className={styles.mobileCardHeader}>
+                          <div className={styles.mobileCardTitleGroup}>
+                            <span className={styles.containerDot} style={{ background: getDotColor(c.State) }} />
+                            <span className={styles.mobileCardName}>{name}</span>
+                          </div>
+                          <span className={`${styles.statusBadge} ${getStatusClass(c.State)}`}>
+                            {c.Status}
+                          </span>
+                        </div>
+
+                        <div className={styles.mobileCardBadges}>
+                          <span className={styles.imageBadge}>{c.Image}</span>
+                          {c.exposedRule && (
+                            <a
+                              href={c.exposedRule.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.exposedBadge}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Globe size={9} />
+                              <span>{c.exposedRule.subdomain}</span>
+                              <ExternalLink size={8} />
+                            </a>
+                          )}
+                          {net.serverLocalIp && c.Ports && c.Ports.some((p) => p.PublicPort) && (
+                            <a
+                              href={`http://${net.serverLocalIp}:${c.Ports.find((p) => p.PublicPort)?.PublicPort}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.exposedBadge}
+                              style={{ color: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.25)' }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Zap size={9} fill="currentColor" />
+                              <span>LAN:{c.Ports.find((p) => p.PublicPort)?.PublicPort}</span>
+                              <ExternalLink size={8} />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className={styles.mobileCardMeta}>
+                          <div className={styles.mobileCardMetaRow}>
+                            <span className={styles.dimText}>ID: {shortId}</span>
+                            <span className={styles.dimText}>{formatAge(c.Created)}</span>
+                          </div>
+                        </div>
+
+                        {/* Quick Action Buttons */}
+                        <div className={styles.mobileCardActions} onClick={(e) => e.stopPropagation()}>
+                          {isConfirm ? (
+                            <div className={styles.deleteConfirm} style={{ width: '100%', justifyContent: 'space-between' }}>
+                              <span className={styles.deleteConfirmText}>Confirm delete?</span>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button className={styles.confirmBtn} onClick={() => doAction(c.Id, 'delete')}>
+                                  Yes
+                                </button>
+                                <button className={styles.cancelBtn} onClick={() => setConfirmDeleteId(null)}>
+                                  No
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {isRunning ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className={`${styles.mobileActionBtn} ${styles.mobileActionBtnDanger}`}
+                                    disabled={anyBusy}
+                                    onClick={() => doAction(c.Id, 'stop')}
+                                  >
+                                    <Square size={12} fill="currentColor" />
+                                    <span>Stop</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.mobileActionBtn}
+                                    disabled={anyBusy}
+                                    onClick={() => doAction(c.Id, 'restart')}
+                                  >
+                                    <RefreshCw size={12} />
+                                    <span>Restart</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.mobileActionBtn}
+                                    onClick={() => {
+                                      setSelectedId(c.Id);
+                                      setActiveTab('console');
+                                    }}
+                                  >
+                                    <Terminal size={12} />
+                                    <span>Shell</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.mobileActionBtn}
+                                    onClick={() => {
+                                      setSelectedId(c.Id);
+                                      setActiveTab('logs');
+                                    }}
+                                  >
+                                    <FileText size={12} />
+                                    <span>Logs</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    className={`${styles.mobileActionBtn} ${styles.mobileActionBtnPrimary}`}
+                                    disabled={anyBusy}
+                                    onClick={() => doAction(c.Id, 'start')}
+                                  >
+                                    <Play size={12} fill="currentColor" />
+                                    <span>Start</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={styles.mobileActionBtn}
+                                    onClick={() => {
+                                      setSelectedId(c.Id);
+                                      setActiveTab('logs');
+                                    }}
+                                  >
+                                    <FileText size={12} />
+                                    <span>Logs</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`${styles.mobileActionBtn} ${styles.mobileActionBtnDanger}`}
+                                    disabled={anyBusy}
+                                    onClick={() => setConfirmDeleteId(c.Id)}
+                                  >
+                                    <Trash2 size={12} />
+                                    <span>Delete</span>
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
             </div>
 
             {/* ─── Sliding Detail Drawer ─── */}
