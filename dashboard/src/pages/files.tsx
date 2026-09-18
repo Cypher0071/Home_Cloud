@@ -34,6 +34,7 @@ import styles from './files.module.css';
 import axios from 'axios';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useNetworkDetector } from '../hooks/useNetworkDetector';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -402,6 +403,8 @@ function FileViewer({ filePath, fileName, ext, onClose }: ViewerProps) {
 
 export default function FileExplorer() {
   const net = useNetworkDetector();
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const basePath = net.baseDir;
   const [drives, setDrives] = useState<DriveInfo[]>([]);
   const [currentPath, setCurrentPath] = useState<string>('');
@@ -1149,6 +1152,18 @@ export default function FileExplorer() {
       {/* ─── Address Bar ─── */}
       <div className={styles.addressBarArea}>
         <div className={styles.navButtonGroup}>
+          {isMobile && (
+            <button
+              type="button"
+              className={styles.locationsToggleBtn}
+              onClick={() => setSidebarOpen(prev => !prev)}
+              title="Drives & Locations"
+              aria-label="Toggle locations drawer"
+            >
+              <HardDrive size={13} />
+              <span>Drives</span>
+            </button>
+          )}
           <button className={styles.navButton} onClick={handleBack} disabled={historyIndex <= 0} title="Back">
             <ArrowLeft size={15} />
           </button>
@@ -1334,8 +1349,16 @@ export default function FileExplorer() {
 
       {/* ─── Sidebar + Content Area ─── */}
       <div className={styles.workspace}>
+        {/* Mobile Backdrop Overlay */}
+        {isMobile && sidebarOpen && (
+          <div
+            className={styles.sidebarBackdrop}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        <div className={styles.sidebar}>
+        <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
           <div className={styles.sidebarSectionTitle}>Devices</div>
           {Array.isArray(drives) && drives.length > 0 ? (
             drives.map((drive, index) => {
@@ -1345,7 +1368,10 @@ export default function FileExplorer() {
                 <div
                   key={drive.fs || index}
                   className={`${styles.sidebarItem} ${isActive ? styles.sidebarItemActive : ''}`}
-                  onClick={() => { if (basePath) navigateToPath(basePath); }}
+                  onClick={() => {
+                    if (basePath) navigateToPath(basePath);
+                    if (isMobile) setSidebarOpen(false);
+                  }}
                   title={`${drive.fs} (${drive.type})`}
                 >
                   <HardDrive size={15} className={styles.sidebarIcon} />
@@ -1354,7 +1380,13 @@ export default function FileExplorer() {
               );
             })
           ) : (
-            <div className={`${styles.sidebarItem} ${currentPath === basePath ? styles.sidebarItemActive : ''}`} onClick={() => { if (basePath) navigateToPath(basePath); }}>
+            <div
+              className={`${styles.sidebarItem} ${currentPath === basePath ? styles.sidebarItemActive : ''}`}
+              onClick={() => {
+                if (basePath) navigateToPath(basePath);
+                if (isMobile) setSidebarOpen(false);
+              }}
+            >
               <HardDrive size={15} className={styles.sidebarIcon} />
               <span>Home</span>
             </div>
