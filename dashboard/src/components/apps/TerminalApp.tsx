@@ -200,9 +200,15 @@ export default function TerminalApp() {
     };
   }, [syncDimensions]);
 
+  const lastSoftKeyHandledRef = useRef<number>(0);
+
   const handleSoftKey = useCallback((code: string) => {
+    lastSoftKeyHandledRef.current = Date.now();
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(code);
+    }
+    if (code === '\x0c') {
+      xtermRef.current?.clear();
     }
     if (xtermRef.current) {
       xtermRef.current.focus();
@@ -504,7 +510,12 @@ export default function TerminalApp() {
         </div>
       </div>
 
-      <div className={styles.terminalWrapper}>
+      <div
+        className={styles.terminalWrapper}
+        onClick={() => {
+          xtermRef.current?.focus();
+        }}
+      >
         <div ref={terminalRef} className={styles.terminalCanvas} />
       </div>
 
@@ -517,6 +528,10 @@ export default function TerminalApp() {
               className={styles.softKeyBtn}
               onPointerDown={(e) => {
                 e.preventDefault();
+                handleSoftKey(key.code);
+              }}
+              onClick={() => {
+                if (Date.now() - lastSoftKeyHandledRef.current < 250) return;
                 handleSoftKey(key.code);
               }}
               onKeyDown={(e) => {

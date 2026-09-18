@@ -27,7 +27,7 @@
 
 @media (max-width: 767px) {
   .desktop-workspace {
-    height: calc(100dvh - var(--mobile-nav-height) - var(--safe-bottom));
+    height: calc(var(--app-height, 100dvh) - var(--mobile-nav-height) - var(--safe-bottom));
   }
 }
 
@@ -564,7 +564,7 @@
   top: 0 !important;
   left: 0 !important;
   width: 100% !important;
-  height: calc(100dvh - var(--mobile-nav-height) - var(--safe-bottom)) !important;
+  height: calc(var(--app-height, 100dvh) - var(--mobile-nav-height) - var(--safe-bottom)) !important;
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
@@ -576,14 +576,29 @@
   display: none !important;
 }
 
+:root.keyboard-open .os-window.mobile-window {
+  height: var(--app-height, 100dvh) !important;
+}
+
+:root.keyboard-open .desktop-workspace {
+  height: var(--app-height, 100dvh) !important;
+}
+
+:root.keyboard-open .mobile-bottom-nav {
+  display: none !important;
+}
+
 .mobile-window-header {
-  height: 48px;
+  height: calc(48px + var(--safe-top));
+  padding-top: var(--safe-top);
   background: #0a0a0a;
   border-bottom: 1px solid #222222;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px 0 6px;
+  padding-left: calc(6px + var(--safe-left));
+  padding-right: calc(8px + var(--safe-right));
+  padding-bottom: 2px;
   flex-shrink: 0;
   user-select: none;
   box-sizing: border-box;
@@ -654,13 +669,15 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 46px;
-  padding: var(--safe-top) 12px 0 12px;
+  height: calc(46px + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: calc(12px + var(--safe-left));
+  padding-right: calc(12px + var(--safe-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
   z-index: 10;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 100%);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0) 100%);
   pointer-events: auto;
   box-sizing: border-box;
 }

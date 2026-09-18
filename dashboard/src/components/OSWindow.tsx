@@ -125,7 +125,7 @@ export default function OSWindow({
               left: 0,
               top: 0,
               width: '100%',
-              height: 'calc(100dvh - var(--mobile-nav-height) - var(--safe-bottom))',
+              height: 'calc(var(--app-height, 100dvh) - var(--mobile-nav-height) - var(--safe-bottom))',
               zIndex,
             }
           : {

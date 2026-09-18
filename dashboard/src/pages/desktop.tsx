@@ -147,6 +147,38 @@ export default function Desktop() {
     return () => clearInterval(id);
   }, []);
 
+  // Dynamic visualViewport management for mobile virtual keyboard handling
+  useEffect(() => {
+    if (!isMobile || typeof window === 'undefined') return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const handleViewportChange = () => {
+      const height = vv.height;
+      document.documentElement.style.setProperty('--app-height', `${height}px`);
+      const keyboardHeight = Math.max(0, window.innerHeight - height);
+      if (keyboardHeight > 100) {
+        document.documentElement.classList.add('keyboard-open');
+        document.documentElement.style.setProperty('--keyboard-height', `${keyboardHeight}px`);
+      } else {
+        document.documentElement.classList.remove('keyboard-open');
+        document.documentElement.style.setProperty('--keyboard-height', '0px');
+      }
+    };
+
+    handleViewportChange();
+    vv.addEventListener('resize', handleViewportChange);
+    vv.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      vv.removeEventListener('resize', handleViewportChange);
+      vv.removeEventListener('scroll', handleViewportChange);
+      document.documentElement.classList.remove('keyboard-open');
+      document.documentElement.style.removeProperty('--app-height');
+      document.documentElement.style.removeProperty('--keyboard-height');
+    };
+  }, [isMobile]);
+
   // Bring window to front
   const focusWindow = (id: string) => {
     setActiveWindowId(id);

@@ -520,7 +520,8 @@ export default function SystemMonitorApp() {
                   gridTemplateColumns: `repeat(${Math.min(cpu.cpus.length, 8)}, 1fr)`,
                   gap: '4px',
                   alignItems: 'flex-end',
-                  height: '24px',
+                  minHeight: '24px',
+                  height: 'auto',
                   background: 'rgba(255, 255, 255, 0.02)',
                   padding: '4px',
                   borderRadius: '4px',
@@ -531,7 +532,7 @@ export default function SystemMonitorApp() {
                     key={idx}
                     title={`Core ${idx}: ${c.load.toFixed(1)}%`}
                     style={{
-                      height: '100%',
+                      height: '20px',
                       background: 'rgba(255, 255, 255, 0.06)',
                       borderRadius: '2px',
                       position: 'relative',
