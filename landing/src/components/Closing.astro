@@ -1,0 +1,127 @@
+---
+// landing/src/components/Closing.astro
+// Closing band directly above the footer hatch: centered statement,
+// two real actions, and the authentic stippled mountain landscape in the site palette.
+---
+
+<section class="closing" aria-labelledby="closing-title">
+  <div class="container closing-frame">
+    <div class="closing-copy">
+      <h2 id="closing-title" class="closing-title">
+        Your hardware.<br />Your rules.
+      </h2>
+      <p class="closing-lede">
+        Install Home Cloud on a spare Linux machine. The dashboard, files,
+        and terminal stay on hardware you control.
+      </p>
+      <div class="closing-actions">
+        <a class="btn btn-primary" href="#setup">Get Started</a>
+        <a
+          class="btn btn-ghost"
+          href="https://github.com/Cypher0071/Home_Cloud"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub<span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="closing-mountain-stage" aria-hidden="true">
+      <img
+        class="closing-mountain"
+        src="/mountains-dark.webp"
+        alt=""
+        width="1924"
+        height="610"
+        loading="eager"
+        decoding="async"
+      />
+    </div>
+  </div>
+</section>
+
+<style>
+  .closing {
+    margin: 0;
+    background: var(--hc-canvas);
+    color: var(--hc-text-secondary);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .closing-frame {
+    padding-bottom: 0;
+  }
+
+  .closing-copy {
+    padding-top: clamp(2.5rem, 5vw, 4.5rem);
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  .closing-title {
+    margin: 0 auto;
+    max-width: 12ch;
+    font-family: var(--hc-font-display);
+    font-weight: 550;
+    font-size: clamp(2.7rem, 1.8rem + 3.4vw, 4.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    color: var(--hc-text-primary);
+  }
+
+  .closing-lede {
+    max-width: 46ch;
+    margin: 18px auto 0;
+    font-size: var(--hc-text-body);
+    line-height: 1.55;
+    color: var(--hc-text-secondary);
+  }
+
+  .closing-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 26px;
+  }
+
+  .closing-actions .btn-ghost {
+    border-color: var(--hc-border-strong);
+  }
+
+  .closing-mountain-stage {
+    position: relative;
+    width: 100%;
+    margin-top: clamp(12px, 2.5vw, 24px);
+    overflow: hidden;
+    line-height: 0;
+    z-index: 1;
+  }
+
+  .closing-mountain {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: clamp(280px, 46vw, 520px);
+    object-fit: cover;
+    object-position: bottom center;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  @media (max-width: 540px) {
+    .closing-actions .btn {
+      min-width: 148px;
+      justify-content: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .closing-actions .btn:active {
+      transform: none;
+    }
+  }
+</style>
