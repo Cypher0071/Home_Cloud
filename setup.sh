@@ -105,12 +105,12 @@ fi
 # Ensure repository tree is present (in case setup.sh was executed standalone)
 if [ ! -f "$SCRIPT_DIR/home-cloud.service.template" ] || [ ! -f "$SCRIPT_DIR/agent/package.json" ]; then
     echo "⚠ Home Cloud repository files not found in $SCRIPT_DIR."
-    echo "⬇ Cloning full repository from https://github.com/Cypher-0071/Home_Cloud.git..."
+    echo "⬇ Cloning full repository from https://github.com/Cypher0071/Home_Cloud.git..."
     CLONE_TARGET="$SCRIPT_DIR/Home_Cloud"
     if [ -d "$CLONE_TARGET" ]; then
         echo "Found existing $CLONE_TARGET directory. Using it."
     else
-        run_as_current_user git clone https://github.com/Cypher-0071/Home_Cloud.git "$CLONE_TARGET"
+        run_as_current_user git clone https://github.com/Cypher0071/Home_Cloud.git "$CLONE_TARGET"
     fi
     SCRIPT_DIR="$CLONE_TARGET"
     TEMPLATE_FILE="$SCRIPT_DIR/home-cloud.service.template"
