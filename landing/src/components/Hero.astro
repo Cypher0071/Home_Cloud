@@ -1,165 +1,336 @@
 ---
 // landing/src/components/Hero.astro
-// Hero visual: the computer you own, and the laptop you reach it from.
-//
-// One scene. The machine is the large object. The laptop sits in front of
-// it, screen open on your files. No cloud, no connector. Stacked below the
-// copy under 1280px so it never covers type.
+// Editorial engineering hero section:
+// Left: Eyebrow, Display headline, Supporting copy, Terminal command box, CTAs, Meta specs.
+// Right: Hairline isometric illustration (desktop PC, cloud gateway, laptop, live signal telemetry).
+// Bottom: Structural diagonal-hatch separator transitioning into How It Works.
 ---
 
 <section id="hero" class="hero">
   <!-- Sparse dot field (atmosphere, not illustration) -->
   <div class="hero-dots hero-dot-field" aria-hidden="true"></div>
 
-  <div class="container hero-inner">
-    <p class="hero-kicker"><span class="kicker-mark" aria-hidden="true"></span>OPEN SOURCE · SELF-HOSTED</p>
-
-    <h1 class="hero-title">
-      YOUR COMPUTER.<br />YOUR CLOUD.
-    </h1>
-
-    <p class="hero-sub">
-      Turn a spare PC, mini PC, or laptop into a private cloud you can reach from anywhere.
-    </p>
-
-    <div class="hero-cmd" id="hero-install-pill">
-      <span class="cmd-prompt" aria-hidden="true">$</span>
-      <code class="cmd-code" id="hero-install-cmd">curl -fsSL https://raw.githubusercontent.com/Cypher-0071/Home_Cloud/main/setup.sh | bash</code>
-      <button
-        type="button"
-        class="cmd-copy"
-        id="hero-copy-btn"
-        aria-label="Copy install command to clipboard"
-        data-copy="curl -fsSL https://raw.githubusercontent.com/Cypher-0071/Home_Cloud/main/setup.sh | bash"
-      >
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="5" y="5" width="8" height="8" rx="1.5"></rect>
-          <path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"></path>
-        </svg>
-        <span id="hero-copy-label">Copy</span>
-      </button>
-    </div>
-
-    <div class="hero-actions">
-      <a href="#setup" class="hero-install">Install</a>
-      <a href="https://github.com/Cypher-0071/Home_Cloud" target="_blank" rel="noopener noreferrer" class="hero-github">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
-        </svg>
-        <span>GitHub</span>
-      </a>
-    </div>
-
-    <p class="hero-meta">LINUX · X86_64 / ARM64 · ZERO OPEN PORTS</p>
+  <!-- Hatch divider below the fixed nav -->
+  <div class="container">
+    <div class="hatch hatch-top" aria-hidden="true"></div>
   </div>
 
-  <!-- Remote browser, secure tunnel, and the server that stays at home. -->
-  <div class="hero-visual">
-    <svg class="hero-visual-svg" viewBox="0 0 900 560" role="img" aria-labelledby="hero-visual-title hero-visual-desc">
-      <title id="hero-visual-title">Your home server, securely reachable from anywhere.</title>
-      <desc id="hero-visual-desc">A remote browser controls files, system metrics, Docker, and a terminal on a Linux computer at home through an encrypted Cloudflare Tunnel, with no open ports.</desc>
+  <div class="container hero-container">
+    <div class="hero-stage">
+      <!-- Left Column: Editorial engineering narrative -->
+      <div class="hero-content">
+        <p class="hero-kicker">
+          <span class="kicker-mark" aria-hidden="true"></span>OPEN SOURCE · SELF-HOSTED
+        </p>
 
-      <!-- Remote control surface -->
-      <g class="hc-browser">
-        <path class="hc-browser-shell" d="M38 136h332a10 10 0 0 1 10 10v205H28V146a10 10 0 0 1 10-10Z" />
-        <path class="hc-browser-top" d="M28 166v-20a10 10 0 0 1 10-10h332a10 10 0 0 1 10 10v20Z" />
-        <circle class="hc-window-dot" cx="48" cy="151" r="3" />
-        <circle class="hc-window-dot" cx="61" cy="151" r="3" />
-        <circle class="hc-window-dot" cx="74" cy="151" r="3" />
-        <rect class="hc-address" x="105" y="143" width="214" height="16" rx="3" />
-        <path class="hc-lock" d="M115 151v-2a2 2 0 0 1 4 0v2m-5 0h6v5h-6z" />
-        <text class="hc-browser-url" x="128" y="154">dash.your-home.net</text>
+        <h1 class="hero-title">
+          YOUR COMPUTER.<br />YOUR CLOUD.
+        </h1>
 
-        <rect class="hc-screen" x="42" y="180" width="304" height="150" rx="2" />
-        <path class="hc-screen-head" d="M42 180h304v26H42z" />
-        <path class="hc-brand-mark" d="M57 188h10v10H57z" />
-        <text class="hc-screen-brand" x="75" y="197">HOME CLOUD</text>
-        <text class="hc-screen-state" x="313" y="197">CONNECTED</text>
-        <circle class="hc-screen-live" cx="304" cy="193" r="3" />
+        <p class="hero-sub">
+          Turn a spare PC, mini PC, or laptop into a private cloud you can reach from anywhere.
+        </p>
 
-        <g class="hc-tool">
-          <rect x="55" y="219" width="130" height="45" rx="3" />
-          <path class="hc-tool-icon" d="M67 250v-12l7-6 7 6v12m-10 0v-7h6v7" />
-          <text x="91" y="237">SYSTEM</text>
-          <text class="hc-tool-value" x="91" y="252">12% CPU</text>
-        </g>
-        <g class="hc-tool">
-          <rect x="195" y="219" width="137" height="45" rx="3" />
-          <path class="hc-tool-icon" d="M207 232h12v12h-12zm0 0 4-4h6l2 4" />
-          <text x="226" y="237">FILES</text>
-          <text class="hc-tool-value" x="226" y="252">Home directory</text>
-        </g>
-        <g class="hc-tool">
-          <rect x="55" y="273" width="130" height="43" rx="3" />
-          <path class="hc-tool-icon" d="M68 287h12v12H68zm-2 15h16" />
-          <text x="91" y="291">DOCKER</text>
-          <text class="hc-tool-value" x="91" y="306">2 containers</text>
-        </g>
-        <g class="hc-tool hc-terminal">
-          <rect x="195" y="273" width="137" height="43" rx="3" />
-          <path class="hc-terminal-prompt" d="m208 288 5 4-5 4m9 1h8" />
-          <text x="232" y="291">TERMINAL</text>
-          <text class="hc-tool-value" x="232" y="306">root@home:~</text>
-        </g>
-        <path class="hc-laptop-base" d="M22 351h354l17 13H5z" />
-        <path class="hc-laptop-edge" d="M5 364h388" />
-        <path class="hc-trackpad" d="M163 354h74" />
-      </g>
+        <div class="hero-cmd" id="hero-install-pill">
+          <span class="cmd-prompt" aria-hidden="true">$</span>
+          <code class="cmd-code" id="hero-install-cmd">curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash</code>
+          <button
+            type="button"
+            class="cmd-copy"
+            id="hero-copy-btn"
+            aria-label="Copy install command to clipboard"
+            data-copy="curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash"
+          >
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="5" y="5" width="8" height="8" rx="1.5"></rect>
+              <path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"></path>
+            </svg>
+            <span id="hero-copy-label">Copy</span>
+          </button>
+        </div>
+      </div>
 
-      <!-- The connection is initiated from the home host; no inbound port is exposed. -->
-      <g class="hc-route">
-        <path class="hc-route-line" d="M393 283h92c23 0 31-20 52-20h31" />
-        <path class="hc-route-dash" d="M393 283h92c23 0 31-20 52-20h31" />
-        <circle class="hc-route-node" cx="393" cy="283" r="4" />
-        <circle class="hc-route-node hc-route-node-end" cx="568" cy="263" r="4" />
-        <g class="hc-tunnel-badge" transform="translate(443 218)">
-          <rect x="0" y="0" width="132" height="42" rx="4" />
-          <path class="hc-shield" d="M17 10 26 7l9 3v8c0 6-4 10-9 13-5-3-9-7-9-13z" />
-          <path class="hc-shield-check" d="m22 18 3 3 5-6" />
-          <text x="44" y="18">CLOUDFLARE</text>
-          <text class="hc-route-caption" x="44" y="31">ENCRYPTED TUNNEL</text>
-        </g>
-        <text class="hc-route-note" x="411" y="304">OUTBOUND CONNECTION · ZERO OPEN PORTS</text>
-      </g>
+      <!-- Right Column: Hairline isometric illustration -->
+      <div class="hero-visual">
+        <svg class="hero-visual-svg" viewBox="-20 -155 676 547" role="img" aria-labelledby="hero-visual-title hero-visual-desc">
+          <title id="hero-visual-title">Your PC, connected to your dashboard.</title>
+          <desc id="hero-visual-desc">A closed desktop tower, a fine outbound connection through a small cloud, and a laptop open on a simple dashboard.</desc>
 
-      <!-- A restrained home boundary around the machine that owns the data. -->
-      <g class="hc-home-zone">
-        <path class="hc-home-frame" d="M558 178v-21l132-76 132 76v21M558 422v28h264v-28" />
-        <path class="hc-home-guide" d="M570 178h240M570 422h240" />
-        <path class="hc-home-icon" d="m581 145 10-8 10 8v10h-7v-6h-6v6h-7z" />
-        <text class="hc-home-label" x="608" y="151">AT HOME</text>
+          <g class="pc hero-home-machine" transform="translate(-28, -180) translate(132, 296) scale(1.1) translate(-132, -296)">
+            <path class="solid" d="M132,296 L200,262 L200,98 L96,46 L28,80 L28,244 Z"/>
+            <path class="ln" d="M132,296 L132,132"/>
+            <path class="ln" d="M132,132 L200,98"/>
+            <path class="ln" d="M132,132 L28,80"/>
 
-        <g class="hc-server">
-          <path class="hc-server-side" d="M764 188h30l23 14v202l-23 14h-30z" />
-          <path class="hc-server-top" d="M610 188h154l30 14H640z" />
-          <path class="hc-server-front" d="M610 188h154v230H610z" />
-          <path class="hc-server-inset" d="M627 207h120v191H627z" />
-          <path class="hc-server-slot" d="M641 222h92v26h-92z" />
-          <path class="hc-server-slot-line" d="M651 231h34m-34 7h59" />
-          <circle class="hc-server-power-ring" cx="718" cy="274" r="8" />
-          <circle class="hc-server-power" cx="718" cy="274" r="3" />
-          <rect class="hc-server-led" x="691" y="271" width="8" height="5" rx="1" />
-          <g class="hc-vent-lines">
-            <path d="M643 314v64m16-64v64m16-64v64m16-64v64m16-64v64m16-64v64" />
+            <!-- Top I/O port notches -->
+            <path class="dim" d="M142,126 L148,123"/>
+            <path class="dim" d="M152,121 L158,118"/>
+
+            <!-- Upper front panel: Power button & host status LEDs -->
+            <path class="dim" d="M132,170 L200,136"/>
+            <circle class="host-led-disk" cx="152" cy="140" r="1.1"/>
+            <circle class="ln" r="4.2" transform="matrix(1 -0.5 0 -1 166 133)"/>
+            <circle class="host-led-live" cx="180" cy="126" r="1.5"/>
+
+            <!-- Storage module: Dual drive bay caddies -->
+            <path class="dim" d="M132,198 L200,164"/>
+            <path class="dim" d="M144,182 L184,162"/>
+            <path class="dim" d="M144,190 L184,170"/>
+
+            <!-- Rear NIC / Ethernet socket where outbound tunnel originates -->
+            <path class="dim" d="M194,187 L200,184 L200,192 L194,195 Z"/>
+            <path class="ln" d="M198,185 L202,183 L202,189 L198,191 Z" fill="var(--hc-canvas)"/>
+            <circle class="sig" cx="196" cy="184" r="0.9"/>
+
+            <!-- Lower intake grille vents -->
+            <path class="dim" d="M148,248 L172,236"/>
+            <path class="dim" d="M148,238 L172,226"/>
+            <path class="dim" d="M148,228 L172,216"/>
           </g>
-          <path class="hc-server-foot" d="M626 418v7h30v-7m92 0v7h30v-7" />
-        </g>
 
-        <text class="hc-host-name" x="690" y="474" text-anchor="middle">YOUR LINUX HOST</text>
-        <text class="hc-host-state" x="690" y="492" text-anchor="middle">PRIVATE BY DESIGN</text>
-      </g>
+          <g class="lap hero-remote" transform="translate(-3, 40)">
+            <path class="solid" d="M349.0,254.0 L513.0,336.0 L513.0,342.0 L349.0,260.0 Z"/>
+            <path class="solid" d="M513.0,336.0 L629.0,278.0 L629.0,284.0 L513.0,342.0 Z"/>
+            <path class="solid" d="M465.0,196.0 L629.0,278.0 L513.0,336.0 L349.0,254.0 Z"/>
+            <path class="dim" d="M421.2,290.1 L421.2,291.9 L440.8,301.7 L440.8,299.9"/>
+            <path class="dim" d="M445.8,263.0 L495.0,287.6 L462.6,303.8 L413.4,279.2 Z"/>
+            <path class="dim" d="M475.4,210.5 L600.0,272.8 L540.9,302.4 L416.2,240.1 Z"/>
+            <circle class="mark" r="0.7" cx="460.6" cy="208.9"/>
+            <circle class="mark" r="0.7" cx="453.6" cy="212.4"/>
+            <circle class="mark" r="0.7" cx="446.7" cy="215.8"/>
+            <circle class="mark" r="0.7" cx="439.7" cy="219.3"/>
+            <circle class="mark" r="0.7" cx="432.7" cy="222.8"/>
+            <circle class="mark" r="0.7" cx="425.8" cy="226.3"/>
+            <circle class="mark" r="0.7" cx="418.8" cy="229.8"/>
+            <circle class="mark" r="0.7" cx="411.9" cy="233.2"/>
+            <circle class="mark" r="0.7" cx="463.9" cy="210.5"/>
+            <circle class="mark" r="0.7" cx="456.9" cy="214.0"/>
+            <circle class="mark" r="0.7" cx="449.9" cy="217.5"/>
+            <circle class="mark" r="0.7" cx="443.0" cy="220.9"/>
+            <circle class="mark" r="0.7" cx="436.0" cy="224.4"/>
+            <circle class="mark" r="0.7" cx="429.1" cy="227.9"/>
+            <circle class="mark" r="0.7" cx="422.1" cy="231.4"/>
+            <circle class="mark" r="0.7" cx="415.1" cy="234.9"/>
+            <circle class="mark" r="0.7" cx="600.0" cy="278.6"/>
+            <circle class="mark" r="0.7" cx="593.0" cy="282.0"/>
+            <circle class="mark" r="0.7" cx="586.1" cy="285.5"/>
+            <circle class="mark" r="0.7" cx="579.1" cy="289.0"/>
+            <circle class="mark" r="0.7" cx="572.1" cy="292.5"/>
+            <circle class="mark" r="0.7" cx="565.2" cy="296.0"/>
+            <circle class="mark" r="0.7" cx="558.2" cy="299.4"/>
+            <circle class="mark" r="0.7" cx="551.3" cy="302.9"/>
+            <circle class="mark" r="0.7" cx="603.3" cy="280.2"/>
+            <circle class="mark" r="0.7" cx="596.3" cy="283.7"/>
+            <circle class="mark" r="0.7" cx="589.3" cy="287.2"/>
+            <circle class="mark" r="0.7" cx="582.4" cy="290.7"/>
+            <circle class="mark" r="0.7" cx="575.4" cy="294.1"/>
+            <circle class="mark" r="0.7" cx="568.5" cy="297.6"/>
+            <circle class="mark" r="0.7" cx="561.5" cy="301.1"/>
+            <circle class="mark" r="0.7" cx="554.5" cy="304.6"/>
+            <path class="dim" d="M468.4,214.0 L593.1,276.3"/>
+            <path class="dim" d="M458.0,219.2 L582.6,281.5"/>
+            <path class="dim" d="M447.6,224.4 L572.2,286.7"/>
+            <path class="dim" d="M437.1,229.6 L561.8,291.9"/>
+            <path class="dim" d="M426.7,234.8 L551.3,297.2"/>
+            <path class="dim" d="M485.7,215.6 L478.8,219.1"/>
+            <path class="dim" d="M496.2,220.9 L489.3,224.4"/>
+            <path class="dim" d="M506.6,226.1 L499.6,229.5"/>
+            <path class="dim" d="M516.9,231.2 L509.9,234.7"/>
+            <path class="dim" d="M527.4,236.5 L520.4,240.0"/>
+            <path class="dim" d="M537.7,241.6 L530.8,245.1"/>
+            <path class="dim" d="M548.1,246.8 L541.1,250.3"/>
+            <path class="dim" d="M558.5,252.1 L551.6,255.5"/>
+            <path class="dim" d="M568.9,257.2 L561.9,260.7"/>
+            <path class="dim" d="M579.2,262.4 L572.3,265.9"/>
+            <path class="dim" d="M589.7,267.6 L582.7,271.1"/>
+            <path class="dim" d="M478.0,218.7 L467.5,223.9"/>
+            <path class="dim" d="M487.6,223.6 L477.2,228.8"/>
+            <path class="dim" d="M497.1,228.3 L486.7,233.5"/>
+            <path class="dim" d="M506.8,233.1 L496.4,238.4"/>
+            <path class="dim" d="M516.3,237.9 L505.9,243.1"/>
+            <path class="dim" d="M526.0,242.7 L515.6,248.0"/>
+            <path class="dim" d="M535.5,247.5 L525.1,252.7"/>
+            <path class="dim" d="M545.2,252.3 L534.8,257.6"/>
+            <path class="dim" d="M554.7,257.1 L544.3,262.3"/>
+            <path class="dim" d="M564.4,261.9 L553.9,267.1"/>
+            <path class="dim" d="M573.9,266.7 L563.5,271.9"/>
+            <path class="dim" d="M583.6,271.5 L573.1,276.7"/>
+            <path class="dim" d="M471.1,225.7 L460.7,231.0"/>
+            <path class="dim" d="M481.0,230.7 L470.5,235.9"/>
+            <path class="dim" d="M490.6,235.5 L480.2,240.7"/>
+            <path class="dim" d="M500.3,240.3 L489.9,245.6"/>
+            <path class="dim" d="M510.2,245.3 L499.7,250.5"/>
+            <path class="dim" d="M519.8,250.1 L509.4,255.3"/>
+            <path class="dim" d="M529.5,254.9 L519.1,260.2"/>
+            <path class="dim" d="M539.3,259.9 L528.9,265.1"/>
+            <path class="dim" d="M549.0,264.7 L538.6,269.9"/>
+            <path class="dim" d="M558.9,269.6 L548.4,274.8"/>
+            <path class="dim" d="M568.5,274.4 L558.1,279.7"/>
+            <path class="dim" d="M463.5,232.4 L453.0,237.6"/>
+            <path class="dim" d="M473.6,237.4 L463.2,242.7"/>
+            <path class="dim" d="M483.8,242.5 L473.4,247.7"/>
+            <path class="dim" d="M494.0,247.6 L483.5,252.8"/>
+            <path class="dim" d="M504.3,252.8 L493.9,258.0"/>
+            <path class="dim" d="M514.5,257.9 L504.0,263.1"/>
+            <path class="dim" d="M524.6,262.9 L514.2,268.2"/>
+            <path class="dim" d="M535.0,268.1 L524.5,273.3"/>
+            <path class="dim" d="M545.1,273.2 L534.7,278.4"/>
+            <path class="dim" d="M555.3,278.3 L544.9,283.5"/>
+            <path class="dim" d="M456.1,239.1 L445.7,244.4"/>
+            <path class="dim" d="M467.0,244.5 L456.5,249.8"/>
+            <path class="dim" d="M477.8,250.0 L467.4,255.2"/>
+            <path class="dim" d="M488.6,255.4 L478.2,260.6"/>
+            <path class="dim" d="M499.4,260.8 L489.0,266.0"/>
+            <path class="dim" d="M510.3,266.2 L499.8,271.4"/>
+            <path class="dim" d="M521.1,271.6 L510.6,276.8"/>
+            <path class="dim" d="M531.9,277.0 L521.5,282.2"/>
+            <path class="dim" d="M542.7,282.4 L532.3,287.6"/>
+            <path class="dim" d="M436.5,239.8 L426.1,245.0"/>
+            <path class="dim" d="M446.4,244.7 L435.9,249.9"/>
+            <path class="dim" d="M457.8,250.4 L447.4,255.6"/>
+            <path class="dim" d="M520.2,281.6 L509.7,286.8"/>
+            <path class="dim" d="M530.0,286.5 L519.6,291.7"/>
+            <path class="dim" d="M538.2,290.6 L527.8,295.8"/>
+            <path class="dim" d="M544.8,293.9 L534.3,299.1"/>
+            <path class="dim" d="M533.0,293.2 L539.5,296.5"/>
+            <path class="solid" d="M483.0,70.0 L647.0,152.0 L650.2,150.4 L486.2,68.4 Z"/>
+            <path class="solid" d="M647.0,152.0 L629.0,278.0 L632.2,276.4 L650.2,150.4 Z"/>
+            <path class="solid" d="M465.0,196.0 L629.0,278.0 L647.0,152.0 L483.0,70.0 Z"/>
+            <path class="dim" d="M472.5,193.0 L623.3,268.4 L639.5,155.0 L488.7,79.6 Z"/>
+            <!-- Top Browser Chrome: Window controls, address bar, and remote tunnel indicator -->
+            <path class="dim" d="M487.4,88.4 L638.3,163.8"/>
+            <circle class="mark" r="1.1" cx="494.6" cy="87.3"/>
+            <circle class="mark" r="1.1" cx="501.1" cy="90.5"/>
+            <circle class="mark" r="1.1" cx="507.7" cy="93.8"/>
+            <!-- URL Address capsule (dash.home-cloud.live) -->
+            <path class="dim" d="M533.6,109.5 L592.6,139 L593.4,133.9 L534.3,104.4 Z"/>
+            <circle class="dim" cx="538.9" cy="109.4" r="0.8"/>
+            <path class="dim" d="M543.8,111.9 L583.1,131.6"/>
+            <circle class="sig" r="1.2" cx="632.4" cy="156.1"/>
 
-      <path class="hc-ground" d="M36 430h382m146 0h298" />
-      <text class="hc-origin" x="40" y="410">ANY BROWSER</text>
-      <text class="hc-origin-detail" x="40" y="426">REMOTE ACCESS</text>
-    </svg>
+            <!-- Bottom Acrylic Taskbar / Dock -->
+            <path class="dim" d="M473.9,182.9 L624.8,258.3"/>
+            <!-- Left: Activity Monitor Metric Widget chip -->
+            <path class="dim" d="M478.1,190.4 L494.5,198.6"/>
+            <circle class="sig" cx="481.4" cy="192" r="0.9"/>
+            <!-- Center Dock App Icons: File Explorer, Terminal (active), Docker -->
+            <path class="dim" d="M538.2,224.5 L544.8,227.8 L545.7,221.5 L539.1,218.2 Z"/>
+            <path class="ln" d="M548.1,229.4 L554.6,232.7 L555.5,226.4 L549,223.1 Z"/>
+            <circle class="sig" cx="551.1" cy="233" r="0.7"/>
+            <path class="dim" d="M557.9,234.4 L564.5,237.6 L565.4,231.3 L558.8,228.1 Z"/>
+            <!-- Right System Tray: Tunnel status pill (green) + clock -->
+            <path class="dim" d="M594.1,251.8 L610.5,260 L611.4,253.7 L595,245.5 Z"/>
+            <circle class="host-led-live" cx="597.8" cy="250.3" r="0.9"/>
+            <path class="dim" d="M615.9,259.3 L622.4,262.6"/>
+
+            <!-- Floating Home Cloud OS Window (Terminal & System Telemetry) -->
+            <path class="solid" d="M481.4,179.9 L619.1,248.8 L630.8,166.9 L493.1,98 Z"/>
+            <!-- Titlebar: App title & controls -->
+            <path class="dim" d="M491.8,106.8 L629.6,175.7"/>
+            <path class="sig" d="M498.9,106.3 L504.1,106.9"/>
+            <path class="sig" d="M499.2,104.4 L503.8,108.8"/>
+            <path class="dim" d="M505.4,110.2 L510.3,112.7"/>
+            <path class="ln" d="M515.4,113.9 L548.2,130.3"/>
+            <path class="dim" d="M610.5,161.4 L615.4,163.9"/>
+            <path class="dim" d="M618.4,167.4 L623.4,169.9 L623.9,166.1 L619,163.6 Z"/>
+            <path class="dim" d="M626.6,171.5 L630.5,169.4"/>
+            <path class="dim" d="M627.2,167.7 L629.9,173.2"/>
+
+            <!-- Window Sub-Header: Host session banner -->
+            <circle class="host-led-live" cx="497.5" cy="116.4" r="1"/>
+            <path class="dim" d="M502.4,118.8 L572.9,154.1"/>
+            <path class="dim" d="M582.7,159 L622.1,178.7"/>
+
+            <!-- Column Divider: Telemetry (left) / Containers & Shell (right) -->
+            <path class="dim" d="M547.7,207.6 L555.6,152.2"/>
+
+            <!-- Left Column: CPU, RAM, Disk telemetry progress bars -->
+            <path class="dim" d="M496,126.5 L512.4,134.7"/>
+            <path class="dim" d="M515.7,136.3 L548.5,152.7"/>
+            <path class="sig" d="M515.7,136.3 L528.8,142.9"/>
+
+            <path class="dim" d="M494.4,137.8 L510.8,146"/>
+            <path class="dim" d="M514.1,147.6 L546.9,164"/>
+            <path class="sig" d="M514.1,147.6 L533.8,157.5"/>
+
+            <path class="dim" d="M492.8,149.1 L509.2,157.3"/>
+            <path class="dim" d="M512.5,159 L545.3,175.4"/>
+            <path class="ln" d="M512.5,159 L520.7,163.1"/>
+
+            <path class="dim" d="M491.2,160.5 L543.6,186.7"/>
+            <path class="dim" d="M489.7,170.6 L532.4,191.9"/>
+
+            <!-- Right Column: Docker container health & Shell prompt -->
+            <circle class="host-led-live" cx="561.6" cy="159.3" r="0.9"/>
+            <path class="dim" d="M566.5,161.7 L617.4,187.1"/>
+            <circle class="host-led-live" cx="560" cy="170.6" r="0.9"/>
+            <path class="dim" d="M564.9,173.1 L609.2,195.2"/>
+            <circle class="host-led-live" cx="558.4" cy="181.9" r="0.9"/>
+            <path class="dim" d="M563.3,184.4 L604.3,204.9"/>
+
+            <!-- Shell prompt with accent cursor -->
+            <path class="dim" d="M555.7,200.8 L581.9,214"/>
+            <path class="sig" d="M585.2,215.6 L588.5,217.2"/>
+
+            <!-- Remote connection socket at display hinge -->
+            <path class="dim" d="M461.0,194.0 L465.0,196.0 L465.0,202.0 L461.0,200.0 Z"/>
+            <path class="ln" d="M461.0,195.0 L464.0,196.5 L464.0,200.5 L461.0,199.0 Z" fill="var(--hc-canvas)"/>
+            <circle class="sig" cx="463.0" cy="198.0" r="0.9"/>
+            <!-- Telemetry trace feeding directly into the browser dashboard -->
+            <path class="tun-feed" d="M465.0,196.0 L472.5,150.0 L487.4,88.4"/>
+            <circle class="sig" cx="487.4" cy="88.4" r="1.3"/>
+          </g>
+
+          <g class="hero-tunnel">
+            <path class="tun hero-tunnel-path" d="M174,-7 C241.0,37.0 296.0,168.0 326.0,168.0 L446.0,168.0 C454.0,168.0 459.0,211.0 462.0,236.0"/>
+            <circle class="sig" cx="174" cy="-7" r="2.4" fill="var(--hc-canvas)" stroke="var(--hc-accent)" stroke-width="1.2"/>
+            <circle class="sig" cx="462" cy="236" r="2.4" fill="var(--hc-canvas)" stroke="var(--hc-accent)" stroke-width="1.2"/>
+
+            <circle class="sig hero-tunnel-signal" r="2.15" cx="174" cy="-7" opacity="0"/>
+            <circle class="sig hero-tunnel-signal" r="2.15" cx="174" cy="-7" opacity="0"/>
+            <circle class="sig hero-tunnel-signal" r="2.15" cx="174" cy="-7" opacity="0"/>
+
+            <!-- Infrastructure Gateway Capsule Card -->
+            <g class="gateway-card" transform="translate(224, 144.4) scale(1.05)">
+              <!-- Card surface and hairline border -->
+              <rect class="relay-card-bg" x="0" y="0" width="120" height="45" rx="6"/>
+
+              <!-- Input/Output port collar rings on left/right edges -->
+              <circle class="relay-port" cx="0" cy="22.5" r="2"/>
+              <circle class="relay-port" cx="120" cy="22.5" r="2"/>
+
+              <!-- Home Cloud Brand Mark: orange sun + ivory cloud -->
+              <g transform="translate(12, 7.2) scale(1.7)">
+                <circle class="sig" cx="13" cy="4" r="3.4"/>
+                <path class="relay-cloud" d="M0 13.5 h13 a4.2,4.2 0 0 0 0.5,-8.3 A6,6 0 0 0 2 6.5 A3.5,3.5 0 0 0 0 13.5 Z"/>
+              </g>
+
+              <!-- Monospace micro-typography -->
+              <text class="relay-title" x="45" y="20">HOME CLOUD</text>
+              <text class="relay-sub" x="45" y="32">GATEWAY RELAY</text>
+
+              <!-- Active live heartbeat LED -->
+              <circle class="host-led-live" cx="108" cy="11.5" r="1.4"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hatch divider into How It Works -->
+  <div class="container">
+    <div class="hatch hatch-bottom" aria-hidden="true"></div>
   </div>
 </section>
 
 <style>
   .hero {
     position: relative;
-    min-height: max(620px, 94svh);
+    min-height: calc(100vh - 56px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     overflow: hidden;
     background: transparent;
   }
@@ -175,14 +346,42 @@
     mask-image: radial-gradient(ellipse 95% 85% at 38% 52%, black 25%, transparent 78%);
   }
 
+  /* Hero stage container */
+  .hero-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .hero-stage {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    align-items: center;
+    gap: clamp(32px, 4.5vw, 64px);
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border-left: 1px solid var(--hc-border-subtle);
+    border-right: 1px solid var(--hc-border-subtle);
+    padding-inline: clamp(24px, 4vw, 48px);
+    padding-top: clamp(80px, 11vh, 112px);
+    padding-bottom: clamp(40px, 5vh, 64px);
+  }
+
   /* Text block — left-anchored, dominant */
-  .hero-inner {
+  .hero-content {
     position: relative;
     z-index: 2;
-    max-width: 680px;
-    margin-inline: 0;
-    padding-top: clamp(120px, 15vh, 170px);
-    padding-bottom: clamp(110px, 14vh, 170px);
+    max-width: 580px;
+    width: 100%;
+    min-width: 0;
   }
 
   .hero-kicker {
@@ -213,7 +412,7 @@
   }
 
   .hero-sub {
-    max-width: 52ch;
+    max-width: 48ch;
     margin-bottom: var(--hc-space-6);
     font-size: var(--hc-text-body);
     line-height: 1.6;
@@ -229,7 +428,11 @@
     padding: 7px 7px 7px 16px;
     background: var(--hc-surface-1);
     border: 1px solid var(--hc-border-default);
-    border-radius: var(--hc-radius-md);
+    border-radius: 3px;
+    max-width: 540px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .cmd-prompt {
@@ -249,6 +452,9 @@
     font-size: 0.82rem;
     color: var(--hc-text-primary);
     white-space: nowrap;
+    padding-right: 14px;
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent 100%);
+    mask-image: linear-gradient(to right, black calc(100% - 32px), transparent 100%);
   }
 
   .cmd-code::-webkit-scrollbar {
@@ -260,8 +466,8 @@
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
-    padding: 9px 14px;
-    border-radius: 6px;
+    padding: 8px 14px;
+    border-radius: 3px;
     background: var(--hc-surface-2);
     border: 1px solid var(--hc-border-default);
     color: var(--hc-text-primary);
@@ -280,209 +486,258 @@
     border-color: var(--hc-success-soft);
   }
 
-  /* Actions */
-  .hero-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: var(--hc-space-6);
-  }
-
-  .hero-install {
-    display: inline-flex;
-    align-items: center;
-    min-height: 46px;
-    padding-inline: 26px;
-    border-radius: var(--hc-radius-md);
-    background: var(--hc-text-primary);
-    color: #0c0c0b;
-    font-size: 0.92rem;
-    font-weight: 550;
-    letter-spacing: -0.01em;
-    transition: background-color var(--hc-duration-micro) var(--hc-ease-out);
-  }
-
-  .hero-install:hover {
-    background: var(--hc-text-emphasis);
-  }
-
-  .hero-install:active {
-    transform: scale(0.98);
-  }
-
-  .hero-github {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 46px;
-    padding-inline: 22px;
-    border-radius: var(--hc-radius-md);
-    border: 1px solid var(--hc-border-default);
-    color: var(--hc-text-primary);
-    font-size: 0.92rem;
-    font-weight: 500;
-    transition:
-      border-color var(--hc-duration-micro) var(--hc-ease-out),
-      background-color var(--hc-duration-micro) var(--hc-ease-out);
-  }
-
-  .hero-github:hover {
-    border-color: var(--hc-border-strong);
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .hero-meta {
-    font-family: var(--hc-font-mono);
-    font-size: 11px;
-    color: var(--hc-text-tertiary);
-  }
-
-  /* Object sits in the right-hand negative space.
-     In flow under 1280px so it can never cover the type. */
+  /* Illustration panel — unframed, art sits directly on the canvas */
   .hero-visual {
     position: relative;
     z-index: 1;
     width: 100%;
-    padding-inline: var(--hc-gutter);
-    margin-bottom: clamp(72px, 10vh, 120px);
+    max-width: 620px;
+    margin-left: auto;
     pointer-events: none;
+    box-sizing: border-box;
   }
 
   .hero-visual-svg {
     display: block;
-    width: min(520px, 100%);
+    width: 100%;
     height: auto;
-    margin-right: auto;
     overflow: visible;
+    shape-rendering: geometricPrecision;
   }
 
-  .hero-visual-svg * {
-    vector-effect: non-scaling-stroke;
+  /* SVG styling */
+  .solid {
+    fill: var(--hc-canvas);
+    stroke: var(--hc-text-primary);
+    stroke-width: 1.35;
     stroke-linejoin: miter;
-    stroke-linecap: butt;
+    stroke-miterlimit: 2.2;
   }
 
-  .hc-browser-shell,
-  .hc-server-front,
-  .hc-server-side,
-  .hc-server-top {
-    stroke: rgba(245, 245, 245, 0.58);
+  .ln {
+    fill: none;
+    stroke: var(--hc-text-primary);
+    stroke-width: 1.35;
+    stroke-linejoin: miter;
+    stroke-miterlimit: 2.2;
+  }
+
+  .dim {
+    fill: none;
+    stroke: var(--hc-text-tertiary);
+    stroke-width: 1;
+    stroke-linejoin: miter;
+    stroke-miterlimit: 2.2;
+  }
+
+  .mark {
+    fill: var(--hc-text-tertiary);
+  }
+
+  .tun {
+    fill: none;
+    stroke: var(--hc-accent);
+    stroke-width: 1.35;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .tun-feed {
+    fill: none;
+    stroke: var(--hc-accent);
+    stroke-width: 1;
+    stroke-dasharray: 2 3;
+    opacity: 0.65;
+  }
+
+  .sig {
+    fill: var(--hc-accent);
+  }
+
+  .cloud {
+    fill: var(--hc-canvas);
+    stroke: var(--hc-text-primary);
+    stroke-width: 1.25;
+    stroke-linejoin: round;
+  }
+
+  .relay-card-bg {
+    fill: var(--hc-surface-1);
+    stroke: var(--hc-border-default);
     stroke-width: 1.1;
   }
 
-  .hc-browser-shell { fill: #0b0b0b; }
-  .hc-browser-top { fill: #101010; stroke: rgba(245, 245, 245, 0.42); stroke-width: 1; }
-  .hc-window-dot { fill: rgba(245, 245, 245, 0.38); }
-  .hc-address { fill: #090909; stroke: rgba(245, 245, 245, 0.12); stroke-width: 0.8; }
-  .hc-lock { fill: none; stroke: rgba(245, 245, 245, 0.62); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
-  .hc-browser-url,
-  .hc-screen-brand,
-  .hc-screen-state,
-  .hc-tool text,
-  .hc-tunnel-badge text,
-  .hc-home-label,
-  .hc-host-name,
-  .hc-host-state,
-  .hc-route-note,
-  .hc-origin,
-  .hc-origin-detail { font-family: var(--hc-font-mono); }
-  .hc-browser-url { fill: rgba(245, 245, 245, 0.54); font-size: 8px; }
-  .hc-screen { fill: #0c0c0c; stroke: rgba(245, 245, 245, 0.15); stroke-width: 0.8; }
-  .hc-screen-head { fill: #0d0d0d; stroke: rgba(245, 245, 245, 0.12); stroke-width: 0.8; }
-  .hc-brand-mark { fill: none; stroke: var(--hc-accent); stroke-width: 1; }
-  .hc-screen-brand { fill: rgba(245, 245, 245, 0.88); font-size: 7px; letter-spacing: 1px; }
-  .hc-screen-state { fill: rgba(245, 245, 245, 0.45); font-size: 5.5px; letter-spacing: 0.6px; text-anchor: end; }
-  .hc-screen-live { fill: var(--hc-success); }
-  .hc-tool rect { fill: rgba(255, 255, 255, 0.015); stroke: rgba(245, 245, 245, 0.12); stroke-width: 0.8; }
-  .hc-tool text { fill: rgba(245, 245, 245, 0.57); font-size: 6px; letter-spacing: 0.4px; }
-  .hc-tool .hc-tool-value { fill: rgba(245, 245, 245, 0.84); font-size: 7px; letter-spacing: 0; }
-  .hc-tool-icon,
-  .hc-terminal-prompt { fill: none; stroke: rgba(245, 245, 245, 0.62); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
-  .hc-terminal-prompt { stroke: var(--hc-accent); }
-  .hc-laptop-base { fill: #141414; stroke: rgba(245, 245, 245, 0.42); stroke-width: 1; }
-  .hc-laptop-edge { stroke: rgba(245, 245, 245, 0.56); stroke-width: 1; }
-  .hc-trackpad { stroke: rgba(245, 245, 245, 0.15); stroke-width: 0.8; }
+  .relay-port {
+    fill: var(--hc-surface-1);
+    stroke: var(--hc-accent);
+    stroke-width: 1.2;
+  }
 
-  .hc-route-line { fill: none; stroke: rgba(255, 106, 61, 0.28); stroke-width: 2; }
-  .hc-route-dash { fill: none; stroke: var(--hc-accent); stroke-width: 1.3; stroke-dasharray: 3 6; }
-  .hc-route-node { fill: var(--hc-canvas); stroke: var(--hc-accent); stroke-width: 1.3; }
-  .hc-route-node-end { fill: var(--hc-accent); }
-  .hc-tunnel-badge rect { fill: #0b0b0b; stroke: rgba(255, 106, 61, 0.42); stroke-width: 0.9; }
-  .hc-shield,
-  .hc-shield-check { fill: none; stroke: var(--hc-accent); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
-  .hc-tunnel-badge text { fill: rgba(245, 245, 245, 0.8); font-size: 6px; letter-spacing: 0.5px; }
-  .hc-tunnel-badge .hc-route-caption { fill: rgba(245, 245, 245, 0.48); font-size: 5px; letter-spacing: 0.35px; }
-  .hc-route-note { fill: rgba(245, 245, 245, 0.46); font-size: 5px; letter-spacing: 0.35px; }
+  .relay-cloud {
+    fill: var(--hc-surface-1);
+    stroke: var(--hc-text-primary);
+    stroke-width: 1.1;
+    stroke-linejoin: round;
+  }
 
-  .hc-home-frame { fill: none; stroke: rgba(245, 245, 245, 0.16); stroke-width: 1; }
-  .hc-home-guide { fill: none; stroke: rgba(245, 245, 245, 0.09); stroke-width: 0.8; }
-  .hc-home-icon { fill: none; stroke: rgba(245, 245, 245, 0.7); stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
-  .hc-home-label { fill: rgba(245, 245, 245, 0.7); font-size: 7px; letter-spacing: 0.8px; }
-  .hc-server-side { fill: #080808; }
-  .hc-server-top { fill: #1a1a1a; }
-  .hc-server-front { fill: #101010; }
-  .hc-server-inset { fill: none; stroke: rgba(245, 245, 245, 0.12); stroke-width: 0.8; }
-  .hc-server-slot { fill: #070707; stroke: rgba(245, 245, 245, 0.12); stroke-width: 0.7; }
-  .hc-server-slot-line { fill: none; stroke: rgba(245, 245, 245, 0.38); stroke-width: 0.8; stroke-linecap: round; }
-  .hc-server-power-ring { fill: none; stroke: rgba(245, 245, 245, 0.76); stroke-width: 1; }
-  .hc-server-power { fill: rgba(245, 245, 245, 0.82); }
-  .hc-server-led { fill: var(--hc-accent); }
-  .hc-vent-lines { fill: none; stroke: rgba(245, 245, 245, 0.3); stroke-width: 1; }
-  .hc-server-foot { fill: none; stroke: rgba(245, 245, 245, 0.32); stroke-width: 1; }
-  .hc-host-name { fill: rgba(245, 245, 245, 0.84); font-size: 8px; letter-spacing: 0.9px; }
-  .hc-host-state { fill: rgba(245, 245, 245, 0.42); font-size: 6px; letter-spacing: 0.75px; }
-  .hc-ground { fill: none; stroke: rgba(245, 245, 245, 0.12); stroke-width: 0.8; }
-  .hc-origin { fill: rgba(245, 245, 245, 0.63); font-size: 6px; letter-spacing: 0.7px; }
-  .hc-origin-detail { fill: rgba(245, 245, 245, 0.38); font-size: 5px; letter-spacing: 0.6px; }
+  .relay-title {
+    font-family: var(--hc-font-mono);
+    font-size: 8px;
+    font-weight: 600;
+    fill: var(--hc-text-primary);
+    letter-spacing: 0.7px;
+  }
 
-  @media (min-width: 1280px) {
-    .hero-visual {
-      position: absolute;
-      top: 55%;
-      transform: translateY(-50%);
-      right: clamp(16px, 2.5vw, 64px);
-      width: clamp(520px, calc(100vw - 740px), 720px);
-      padding-inline: 0;
-      margin-bottom: 0;
+  .relay-sub {
+    font-family: var(--hc-font-mono);
+    font-size: 5.8px;
+    fill: var(--hc-text-tertiary);
+    letter-spacing: 0.5px;
+  }
+
+  .host-led-live {
+    fill: var(--hc-success, #36c98f);
+    filter: drop-shadow(0 0 2px rgba(54, 201, 143, 0.7));
+    animation: host-heartbeat 3.6s ease-in-out infinite;
+  }
+
+  .host-led-disk {
+    fill: var(--hc-accent, #ff6a3d);
+    opacity: 0.8;
+  }
+
+  @keyframes host-heartbeat {
+    0%, 100% {
+      opacity: 0.95;
+      filter: drop-shadow(0 0 2.5px rgba(54, 201, 143, 0.8));
     }
+    50% {
+      opacity: 0.35;
+      filter: drop-shadow(0 0 0.5px rgba(54, 201, 143, 0.2));
+    }
+  }
 
-    .hero-visual-svg {
+  /* Full-bleed diagonal-hatch divider bands */
+  .hatch {
+    height: 28px;
+    flex-shrink: 0;
+    background-color: var(--hc-canvas);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      var(--hc-border-default) 6px 7px
+    );
+  }
+
+  .hatch-top {
+    margin-top: 56px;
+    border: 1px solid var(--hc-border-subtle);
+  }
+
+  .hatch-bottom {
+    border: 1px solid var(--hc-border-subtle);
+  }
+
+  @media (max-width: 1200px) {
+    .hero-title {
+      font-size: clamp(2.4rem, 2rem + 1.8vw, 3.4rem);
+    }
+  }
+
+  @media (max-width: 960px) {
+    .hero-stage {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 40px;
+      padding-top: 96px;
+      padding-bottom: 48px;
+    }
+    .hero-content {
+      max-width: 100%;
+    }
+    .hero-visual {
+      max-width: 520px;
       width: 100%;
+      min-width: 0;
+      margin-inline: auto;
     }
   }
 
   @media (max-width: 640px) {
-    .hero-inner {
-      padding-top: 118px;
+    .hero-stage {
+      padding-top: 84px;
+      padding-bottom: 36px;
+    }
+    .hero-title {
+      font-size: clamp(2rem, 1.6rem + 2.5vw, 2.7rem);
+      line-height: 1.06;
     }
     .hero-cmd {
       gap: 8px;
       padding-left: 12px;
+      width: 100%;
+      box-sizing: border-box;
     }
     .cmd-code {
       font-size: 0.76rem;
     }
     .cmd-copy {
-      padding: 9px 12px;
+      padding: 8px 12px;
     }
-    .hero-actions {
-      gap: 10px;
+    .hero-visual {
+      max-width: 100%;
     }
-    .hero-install,
-    .hero-github {
-      flex: 1;
-      justify-content: center;
-      padding-inline: 12px;
+    .hatch {
+      height: 22px;
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .hc-route-dash { stroke-dasharray: none; }
+    .host-led-live {
+      animation: none;
+      opacity: 0.9;
+    }
   }
 </style>
 
 <script>
+  // Tunnel signals: three dots travel tower → cloud → laptop on a slow loop.
+  // Under reduced motion they park visibly along the path instead.
+  const hvSvg = document.querySelector('.hero-visual-svg');
+  const hPath = hvSvg?.querySelector('.tun') ?? null;
+  const hDots = hvSvg ? Array.from(hvSvg.querySelectorAll('.hero-tunnel-signal')) : [];
+  const hReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const HLOOP = 16000;
+  let hLen = 0;
+
+  if (hPath && typeof hPath.getTotalLength === 'function') {
+    hLen = hPath.getTotalLength();
+  }
+
+  function hPlace(el, p) {
+    const pt = hPath.getPointAtLength(hLen * p);
+    el.setAttribute('cx', String(pt.x));
+    el.setAttribute('cy', String(pt.y));
+    const edge = Math.min(p, 1 - p) / 0.06;
+    el.setAttribute('opacity', String(Math.min(1, edge)));
+  }
+
+  if (hLen > 0 && hDots.length > 0) {
+    if (hReduced) {
+      hDots.forEach((d, i) => {
+        hPlace(d, (i + 0.5) / hDots.length);
+        d.setAttribute('opacity', '0.9');
+      });
+    } else {
+      const hStart = performance.now();
+      const hTick = (now) => {
+        const t = ((now - hStart) % HLOOP) / HLOOP;
+        hDots.forEach((d, i) => hPlace(d, (t + i / hDots.length) % 1));
+        requestAnimationFrame(hTick);
+      };
+      requestAnimationFrame(hTick);
+    }
+  }
+
   // Install command copy (preserved behavior + ids)
   const copyBtn = document.getElementById('hero-copy-btn');
   const copyLabel = document.getElementById('hero-copy-label');

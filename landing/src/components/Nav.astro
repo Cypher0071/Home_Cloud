@@ -1,75 +1,93 @@
 ---
 // landing/src/components/Nav.astro
-// Desktop floating navigation: three independent capsules
-// (left links / center brand / right actions). Center stays a pill and
-// collapses to logo-only on scroll, with scroll progress traced around
-// the pill outline. Mobile drawer preserved for a later mobile phase.
+// Unified editorial engineering navigation header:
+// Left: Brand icon + wordmark.
+// Center: Features and Setup links.
+// Right: GitHub link and Install action.
 ---
 
 <header id="nav" class="nav-root">
-  <div class="nav-floats">
-    <!-- LEFT: section links -->
-    <nav class="capsule capsule-links" aria-label="Main Navigation">
-      <a href="#features" class="nav-link">Features</a>
-      <a href="#setup" class="nav-link">Setup</a>
-    </nav>
-
-    <!-- CENTER: brand anchor -->
-    <a href="#hero" class="capsule brand-capsule" aria-label="Home Cloud — Home">
-      <img
-        src="/favicon.svg"
-        alt=""
-        width="22"
-        height="22"
-        class="brand-mark"
-        loading="eager"
-        decoding="async"
-        aria-hidden="true"
-      />
-      <span class="brand-name">Home Cloud</span>
-      <svg class="brand-progress" aria-hidden="true" focusable="false">
-        <rect class="brand-progress-ring" x="1.5" y="1.5" width="61" height="41" rx="20.5" pathLength="100" />
-      </svg>
-    </a>
-
-    <!-- RIGHT: actions -->
-    <div class="capsule capsule-actions">
-      <a
-        href="https://github.com/Cypher-0071/Home_Cloud"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="nav-gh-link"
-        aria-label="View Home Cloud on GitHub"
-      >
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+  <div class="container nav-container">
+    <div class="nav-bar">
+      <!-- LEFT: Brand anchor -->
+      <a href="#hero" class="nav-brand" aria-label="Home Cloud — Home">
+        <svg
+          viewBox="0 0 32 32"
+          width="20"
+          height="20"
+          fill="none"
+          class="brand-mark"
+          aria-hidden="true"
+        >
+          <defs>
+            <mask id="nav-brand-mask">
+              <rect width="32" height="32" fill="#fff" />
+              <path
+                d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z"
+                fill="#000"
+                stroke="#000"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+            </mask>
+          </defs>
+          <circle cx="22.5" cy="9.5" r="3" fill="var(--hc-accent, #ff4d17)" mask="url(#nav-brand-mask)" />
+          <path
+            d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z"
+            fill="none"
+            stroke="var(--hc-text-primary, #f9f5ef)"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
         </svg>
-        <span class="gh-text">GitHub</span>
+        <span class="brand-name">Home Cloud</span>
       </a>
 
-      <a href="#setup" class="nav-install">
-        <span>Install</span>
-        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 8h10M9 4l4 4-4 4"></path>
-        </svg>
-      </a>
+      <!-- MIDDLE: Navigation links -->
+      <nav class="nav-links" aria-label="Main Navigation">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#setup" class="nav-link">Setup</a>
+      </nav>
 
-      <!-- Mobile toggle (desktop hidden) -->
-      <button
-        type="button"
-        id="nav-toggle"
-        class="nav-toggle"
-        aria-label="Toggle navigation menu"
-        aria-expanded="false"
-        aria-controls="mobile-nav"
-      >
-        <span class="toggle-bar"></span>
-        <span class="toggle-bar"></span>
-      </button>
+      <!-- RIGHT: Actions -->
+      <div class="nav-actions">
+        <a
+          href="https://github.com/Cypher0071/Home_Cloud"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="nav-gh-link"
+          aria-label="View Home Cloud on GitHub"
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+          </svg>
+          <span class="gh-text">GitHub</span>
+        </a>
+
+        <a href="#setup" class="nav-install">
+          <span>Install</span>
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 8h10M9 4l4 4-4 4"></path>
+          </svg>
+        </a>
+
+        <!-- Mobile toggle -->
+        <button
+          type="button"
+          id="nav-toggle"
+          class="nav-toggle"
+          aria-label="Toggle navigation menu"
+          aria-expanded="false"
+          aria-controls="mobile-nav"
+        >
+          <span class="toggle-bar"></span>
+          <span class="toggle-bar"></span>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Mobile Drawer (preserved for later mobile phase) -->
+  <!-- Mobile Drawer -->
   <div id="mobile-nav" class="mobile-drawer" aria-hidden="true">
     <div class="mobile-drawer-content">
       <nav class="mobile-nav-links">
@@ -78,7 +96,7 @@
       </nav>
       <div class="mobile-actions">
         <a
-          href="https://github.com/Cypher-0071/Home_Cloud"
+          href="https://github.com/Cypher0071/Home_Cloud"
           target="_blank"
           rel="noopener noreferrer"
           class="mobile-gh-btn"
@@ -100,129 +118,47 @@
     left: 0;
     right: 0;
     z-index: 200;
-    pointer-events: none;
-    padding-top: 24px;
+    background: rgba(12, 12, 11, 0.78);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    backdrop-filter: blur(16px) saturate(1.2);
+    transition: background-color 200ms var(--hc-ease-out);
   }
 
-  .nav-floats {
-    position: relative;
-    display: flex;
+  .nav-root.is-scrolled {
+    background: rgba(12, 12, 11, 0.92);
+  }
+
+  .nav-container {
+    padding-inline: var(--hc-gutter);
+  }
+
+  .nav-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 44px;
-    padding-inline: clamp(28px, 4vw, 52px);
+    height: 56px;
+    border: 1px solid var(--hc-border-subtle);
+    padding-inline: clamp(16px, 2.5vw, 28px);
+    transition: border-color 200ms var(--hc-ease-out);
   }
 
-  /* Independent floating surfaces — frosted glass, not solid */
-  .capsule {
-    pointer-events: auto;
-    display: flex;
+  .nav-root.is-scrolled .nav-bar {
+    border-color: var(--hc-border-default);
+  }
+
+  /* LEFT: Brand */
+  .nav-brand {
+    display: inline-flex;
     align-items: center;
-    background: rgba(12, 12, 11, 0.62);
-    -webkit-backdrop-filter: blur(18px) saturate(1.3);
-    backdrop-filter: blur(18px) saturate(1.3);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 999px;
-    box-shadow: 0 6px 20px -12px rgba(0, 0, 0, 0.5);
-    transition:
-      background-color 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      border-color 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      box-shadow 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      padding 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
-  }
-
-  .nav-root.is-scrolled .capsule {
-    background: rgba(10, 10, 10, 0.72);
-    box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
-  }
-
-  /* LEFT */
-  .capsule-links {
-    gap: 20px;
-    padding: 0 18px;
-    height: 44px;
-  }
-
-  .nav-link {
-    font-family: var(--hc-font-sans);
-    font-size: 0.85rem;
-    font-weight: 500;
-    letter-spacing: -0.01em;
-    color: var(--hc-text-secondary);
-    transition: color 170ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
-    white-space: nowrap;
-  }
-
-  .nav-link:hover {
-    color: var(--hc-text-primary);
-  }
-
-  /* CENTER — mathematically centered: viewport 50% minus half its own width.
-     Side-group widths have zero influence on brand position, top or scrolled.
-     The inter-item gap collapses with the label so the mark stays on the
-     same center axis in both states (a zero-width label still consumes
-     flex gap, which would offset the logo inside the capsule). */
-  .brand-capsule {
-    position: absolute;
-    left: 50%;
-    top: 0;
-    transform: translateX(-50%);
     gap: 10px;
-    height: 44px;
-    padding: 0 18px;
-    background: rgba(14, 14, 13, 0.66);
-    border-color: rgba(255, 255, 255, 0.11);
     text-decoration: none;
-    overflow: hidden;
-    transition:
-      background-color 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      border-color 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      box-shadow 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      padding 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      gap 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
-  }
-
-  .brand-capsule:hover {
-    border-color: rgba(255, 255, 255, 0.16);
-  }
-
-  .nav-root.is-scrolled .brand-capsule {
-    gap: 0;
-    padding: 0 22px;
-  }
-
-  /* Scroll-progress outline tracing the pill perimeter.
-     Geometry is synced to the capsule box via ResizeObserver (see script);
-     dash progress is scroll-linked with no transition — instant state, no animation. */
-  .brand-progress {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: visible;
-    opacity: 0;
-    transition: opacity 300ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
-  }
-
-  .nav-root.is-scrolled .brand-progress {
-    opacity: 1;
-  }
-
-  .brand-progress-ring {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.45);
-    stroke-width: 1.5;
-    stroke-dasharray: 100;
-    stroke-dashoffset: 100;
-    stroke-linecap: round;
+    color: var(--hc-text-primary);
+    width: fit-content;
   }
 
   .brand-mark {
     width: 20px;
     height: 20px;
-    border-radius: 5px;
     display: block;
     flex-shrink: 0;
   }
@@ -234,59 +170,82 @@
     letter-spacing: -0.01em;
     color: var(--hc-text-primary);
     white-space: nowrap;
-    overflow: hidden;
-    max-width: 140px;
-    opacity: 1;
-    transition:
-      max-width 450ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
-      opacity 300ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: color 150ms var(--hc-ease-out);
   }
 
-  .nav-root.is-scrolled .brand-name {
-    max-width: 0;
-    opacity: 0;
+  .nav-brand:hover .brand-name {
+    color: var(--hc-text-emphasis);
   }
 
-  /* RIGHT */
-  .capsule-actions {
-    gap: 4px;
-    height: 44px;
-    padding: 4px 4px 4px 6px;
-    margin-left: auto;
+  /* MIDDLE: Links */
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+
+  .nav-link {
+    font-family: var(--hc-font-sans);
+    font-size: 0.84rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--hc-text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 150ms var(--hc-ease-out);
+  }
+
+  .nav-link:hover {
+    color: var(--hc-text-primary);
+  }
+
+  /* RIGHT: Actions */
+  .nav-actions {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 14px;
   }
 
   .nav-gh-link {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--hc-border-default);
+    border-radius: 2px;
     color: var(--hc-text-secondary);
     font-family: var(--hc-font-sans);
-    font-size: 0.83rem;
+    font-size: 0.82rem;
     font-weight: 500;
     letter-spacing: -0.01em;
+    text-decoration: none;
     white-space: nowrap;
-    transition: color 170ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: color 150ms var(--hc-ease-out);
   }
 
   .nav-gh-link:hover {
     color: var(--hc-text-primary);
+    border-color: var(--hc-border-strong);
   }
 
   .nav-install {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 15px;
-    border-radius: 999px;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 2px;
     background: var(--hc-text-primary);
     color: #0c0c0b;
     font-family: var(--hc-font-sans);
-    font-size: 0.83rem;
+    font-size: 0.82rem;
     font-weight: 550;
     letter-spacing: -0.01em;
+    text-decoration: none;
     white-space: nowrap;
-    transition: background-color 200ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+    transition:
+      background-color 150ms var(--hc-ease-out),
+      transform 100ms var(--hc-ease-out);
   }
 
   .nav-install:hover {
@@ -297,26 +256,38 @@
     transform: scale(0.98);
   }
 
+  /* Focus states */
+  .nav-brand:focus-visible,
+  .nav-link:focus-visible,
+  .nav-gh-link:focus-visible,
+  .nav-install:focus-visible,
+  .nav-toggle:focus-visible {
+    outline: 2px solid var(--hc-accent);
+    outline-offset: 3px;
+  }
+
+  /* Mobile toggle */
   .nav-toggle {
     display: none;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     gap: 5px;
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 2px;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--hc-border-default);
     color: var(--hc-text-primary);
+    cursor: pointer;
     flex-shrink: 0;
   }
 
   .toggle-bar {
-    width: 16px;
+    width: 15px;
     height: 1.5px;
     background: currentColor;
-    transition: transform 170ms var(--hc-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+    transition: transform 170ms var(--hc-ease-out);
   }
 
   .nav-toggle[aria-expanded='true'] .toggle-bar:first-child {
@@ -327,43 +298,45 @@
     transform: translateY(-3.25px) rotate(-45deg);
   }
 
-  /* Mobile drawer — preserved, not redesigned in this phase */
+  /* Mobile drawer */
   .mobile-drawer {
     display: none;
-    pointer-events: auto;
-    margin: 12px clamp(20px, 4vw, 32px) 0;
-    background: rgba(12, 12, 11, 0.82);
-    -webkit-backdrop-filter: blur(18px) saturate(1.3);
-    backdrop-filter: blur(18px) saturate(1.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    padding: 24px clamp(20px, 4vw, 32px);
-    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+    background: rgba(12, 12, 11, 0.96);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    padding: 20px var(--hc-gutter) 24px;
   }
 
   .mobile-drawer.is-open {
     display: block;
   }
 
+  .mobile-drawer-content {
+    max-width: calc(var(--hc-container) + var(--hc-gutter) * 2);
+    margin-inline: auto;
+  }
+
   .mobile-nav-links {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 24px;
+    gap: 8px;
+    margin-bottom: 20px;
   }
 
   .mobile-link {
-    font-size: 1.05rem;
+    font-family: var(--hc-font-sans);
+    font-size: 1rem;
     font-weight: 500;
     color: var(--hc-text-primary);
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 10px 0;
+    text-decoration: none;
+    border-bottom: 1px solid var(--hc-border-subtle);
   }
 
   .mobile-actions {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   .mobile-gh-btn,
@@ -371,15 +344,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 44px;
-    border-radius: 999px;
-    font-weight: 600;
-    font-size: 0.92rem;
+    height: 42px;
+    border-radius: 2px;
+    font-family: var(--hc-font-sans);
+    font-weight: 550;
+    font-size: 0.88rem;
+    text-decoration: none;
   }
 
   .mobile-gh-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--hc-surface-1);
+    border: 1px solid var(--hc-border-default);
     color: var(--hc-text-primary);
   }
 
@@ -389,101 +364,40 @@
   }
 
   @media (max-width: 860px) {
-    .capsule-links,
+    .nav-bar {
+      grid-template-columns: auto auto;
+      justify-content: space-between;
+    }
+    .nav-links,
     .nav-gh-link {
       display: none;
     }
     .nav-toggle {
       display: flex;
     }
-    .nav-root {
-      padding-top: 14px;
-    }
-    .nav-floats {
-      padding-inline: 16px;
-    }
-    /* Mobile fallback (pre-redesign): dock brand left so capsules
-       can never overlap at narrow widths. Desktop centering untouched. */
-    .brand-capsule {
-      position: static;
-      transform: none;
-    }
-    /* Keep brand legible on mobile — no collapse in this phase */
-    .nav-root.is-scrolled .brand-name {
-      max-width: 140px;
-      opacity: 1;
-    }
-    .nav-root.is-scrolled .brand-capsule {
-      padding: 0 18px;
-    }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .capsule,
     .brand-name,
-    .brand-progress,
     .nav-link,
     .nav-gh-link,
-    .nav-install {
+    .nav-install,
+    .toggle-bar {
       transition: none;
     }
   }
 </style>
 
 <script>
-  // Scroll state: collapse center brand to logo-only pill + trace scroll
-  // progress around the pill outline. No progress bar element.
   const header = document.getElementById('nav');
-  const brandCapsule = header?.querySelector<HTMLElement>('.brand-capsule') ?? null;
-  const progressSvg = header?.querySelector<SVGSVGElement>('.brand-progress') ?? null;
-  const progressRing = header?.querySelector<SVGRectElement>('.brand-progress-ring') ?? null;
-
-  const sizeProgressRing = () => {
-    if (!brandCapsule || !progressSvg || !progressRing) return;
-    const w = brandCapsule.offsetWidth;
-    const h = brandCapsule.offsetHeight;
-    if (w <= 0 || h <= 0) return;
-    progressSvg.setAttribute('viewBox', `0 0 ${w} ${h}`);
-    progressRing.setAttribute('width', String(Math.max(0, w - 3)));
-    progressRing.setAttribute('height', String(Math.max(0, h - 3)));
-    progressRing.setAttribute('rx', String(Math.max(0, (h - 3) / 2)));
-  };
-
-  const updateProgressRing = () => {
-    if (!progressRing) return;
-    const max = document.documentElement.scrollHeight - window.innerHeight;
-    const p = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
-    progressRing.style.strokeDashoffset = String(100 - p * 100);
-  };
-
   if (header) {
-    let ticking = false;
-    const update = () => {
-      header.classList.toggle('is-scrolled', window.scrollY > 24);
-      updateProgressRing();
-      ticking = false;
+    const onScroll = () => {
+      header.classList.toggle('is-scrolled', window.scrollY > 16);
     };
-    window.addEventListener(
-      'scroll',
-      () => {
-        if (!ticking) {
-          ticking = true;
-          requestAnimationFrame(update);
-        }
-      },
-      { passive: true },
-    );
-    sizeProgressRing();
-    update();
-    // Track the pill box through the collapse transition and viewport changes
-    if (brandCapsule && 'ResizeObserver' in window) {
-      new ResizeObserver(() => sizeProgressRing()).observe(brandCapsule);
-    } else {
-      window.addEventListener('resize', sizeProgressRing, { passive: true });
-    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
   }
 
-  // Mobile menu toggle (preserved)
   const toggle = document.getElementById('nav-toggle');
   const drawer = document.getElementById('mobile-nav');
   if (toggle && drawer) {
@@ -494,7 +408,6 @@
       drawer.classList.toggle('is-open', !isOpen);
     });
 
-    // Close on link click
     drawer.querySelectorAll('a').forEach((link) => {
       link.addEventListener('click', () => {
         toggle.setAttribute('aria-expanded', 'false');
