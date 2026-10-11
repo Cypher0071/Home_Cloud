@@ -6,8 +6,9 @@
 ---
 
 <section id="setup" class="setup-section">
-  <div class="container setup-container">
-    <div class="setup-header reveal">
+  <div class="container">
+    <div class="setup-box">
+      <div class="setup-header reveal">
       <p class="setup-eyebrow">GET STARTED</p>
       <h2 class="setup-title">
         From spare PC to private cloud.
@@ -83,17 +84,39 @@
       </div>
     </div>
   </div>
+</div>
+
+  <div class="container">
+    <div class="hatch setup-hatch" aria-hidden="true"></div>
+  </div>
 </section>
 
 <style>
   .setup-section {
     position: relative;
-    padding-block: clamp(4rem, 6vw, 7.5rem);
+    padding-block: 0;
     background: var(--hc-canvas);
   }
 
-  .setup-container {
-    max-width: 1140px;
+  .setup-box {
+    border-left: 1px solid var(--hc-border-subtle);
+    border-right: 1px solid var(--hc-border-subtle);
+    padding-block: clamp(64px, 8vw, 96px);
+    padding-inline: clamp(24px, 4vw, 48px);
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .setup-hatch {
+    height: 28px;
+    background-color: var(--hc-canvas);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      var(--hc-border-default) 6px 7px
+    );
+    border: 1px solid var(--hc-border-subtle);
+    box-sizing: border-box;
   }
 
   .setup-header {
