@@ -6,8 +6,9 @@
 ---
 
 <section id="features" class="features-section">
-  <div class="container features-container">
-    <div class="features-header reveal">
+  <div class="container">
+    <div class="features-box">
+      <div class="features-header reveal">
       <h2 class="features-title">
         Everything runs on your machine.
       </h2>
@@ -166,16 +167,37 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="container">
+  <div class="hatch features-hatch" aria-hidden="true"></div>
+</div>
 </section>
 
 <style>
   .features-section {
     position: relative;
-    padding-block: clamp(4rem, 6vw, 7.5rem);
+    padding-block: 0;
   }
 
-  .features-container {
-    max-width: 1200px;
+  .features-box {
+    border-left: 1px solid var(--hc-border-subtle);
+    border-right: 1px solid var(--hc-border-subtle);
+    padding-block: clamp(64px, 8vw, 96px);
+    padding-inline: clamp(24px, 4vw, 48px);
+    box-sizing: border-box;
+  }
+
+  .features-hatch {
+    height: 28px;
+    background-color: var(--hc-canvas);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      var(--hc-border-default) 6px 7px
+    );
+    border: 1px solid var(--hc-border-subtle);
+    box-sizing: border-box;
   }
 
   .features-header {
@@ -428,6 +450,12 @@
   @media (max-width: 860px) {
     .features-bento-grid {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .features-hatch {
+      height: 22px;
     }
   }
 </style>
