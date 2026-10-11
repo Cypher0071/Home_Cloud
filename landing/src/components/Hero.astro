@@ -24,11 +24,13 @@
         </p>
 
         <h1 class="hero-title">
-          YOUR COMPUTER.<br />YOUR CLOUD.
+          <span>YOUR</span><br />
+          <span>COMPUTER.</span><br />
+          <span class="hero-title-nowrap">YOUR CLOUD.</span>
         </h1>
 
         <p class="hero-sub">
-          Turn a spare PC, mini PC, or laptop into a private cloud you can reach from anywhere.
+          Turn a spare PC, mini PC, or laptop into a private server you can reach from anywhere.
         </p>
 
         <div class="hero-cmd" id="hero-install-pill">
@@ -52,11 +54,11 @@
 
       <!-- Right Column: Hairline isometric illustration -->
       <div class="hero-visual">
-        <svg class="hero-visual-svg" viewBox="-20 -155 676 547" role="img" aria-labelledby="hero-visual-title hero-visual-desc">
+        <svg class="hero-visual-svg" viewBox="-90 -155 746 547" role="img" aria-labelledby="hero-visual-title hero-visual-desc">
           <title id="hero-visual-title">Your PC, connected to your dashboard.</title>
           <desc id="hero-visual-desc">A closed desktop tower, a fine outbound connection through a small cloud, and a laptop open on a simple dashboard.</desc>
 
-          <g class="pc hero-home-machine" transform="translate(-28, -180) translate(132, 296) scale(1.1) translate(-132, -296)">
+          <g class="pc hero-home-machine" transform="translate(-98, -180) translate(132, 296) scale(1.1) translate(-132, -296)">
             <path class="solid" d="M132,296 L200,262 L200,98 L96,46 L28,80 L28,244 Z"/>
             <path class="ln" d="M132,296 L132,132"/>
             <path class="ln" d="M132,132 L200,98"/>
@@ -282,16 +284,16 @@
           </g>
 
           <g class="hero-tunnel">
-            <path class="tun hero-tunnel-path" d="M174,-7 C241.0,37.0 296.0,168.0 326.0,168.0 L446.0,168.0 C454.0,168.0 459.0,211.0 462.0,236.0"/>
-            <circle class="sig" cx="174" cy="-7" r="2.4" fill="var(--hc-canvas)" stroke="var(--hc-accent)" stroke-width="1.2"/>
+            <path class="tun hero-tunnel-path" d="M104,-7 C145,15 175,68 205,68 L369,68 C415,68 458,160 462,236"/>
+            <circle class="sig" cx="104" cy="-7" r="2.4" fill="var(--hc-canvas)" stroke="var(--hc-accent)" stroke-width="1.2"/>
             <circle class="sig" cx="462" cy="236" r="2.4" fill="var(--hc-canvas)" stroke="var(--hc-accent)" stroke-width="1.2"/>
 
-            <circle class="sig hero-tunnel-signal" r="2.15" cx="174" cy="-7" opacity="0"/>
-            <circle class="sig hero-tunnel-signal" r="2.15" cx="174" cy="-7" opacity="0"/>
-            <circle class="sig hero-tunnel-signal" r="2.15" cx="174" cy="-7" opacity="0"/>
+            <circle class="sig hero-tunnel-signal" r="2.15" cx="104" cy="-7" opacity="0"/>
+            <circle class="sig hero-tunnel-signal" r="2.15" cx="104" cy="-7" opacity="0"/>
+            <circle class="sig hero-tunnel-signal" r="2.15" cx="104" cy="-7" opacity="0"/>
 
             <!-- Infrastructure Gateway Capsule Card -->
-            <g class="gateway-card" transform="translate(224, 144.4) scale(1.05)">
+            <g class="gateway-card" transform="translate(205.1, 37.3) scale(1.365)">
               <!-- Card surface and hairline border -->
               <rect class="relay-card-bg" x="0" y="0" width="120" height="45" rx="6"/>
 
@@ -327,7 +329,7 @@
 <style>
   .hero {
     position: relative;
-    min-height: calc(100vh - 56px);
+    min-height: calc((100vh - 56px) * 1.1);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -371,8 +373,8 @@
     border-left: 1px solid var(--hc-border-subtle);
     border-right: 1px solid var(--hc-border-subtle);
     padding-inline: clamp(24px, 4vw, 48px);
-    padding-top: clamp(80px, 11vh, 112px);
-    padding-bottom: clamp(40px, 5vh, 64px);
+    padding-top: clamp(28px, 4.5vh, 48px);
+    padding-bottom: clamp(24px, 3.5vh, 36px);
   }
 
   /* Text block — left-anchored, dominant */
@@ -388,34 +390,39 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: var(--hc-space-5);
+    margin-bottom: 12px;
     font-family: var(--hc-font-mono);
-    font-size: 12px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
     color: var(--hc-text-tertiary);
   }
 
   .kicker-mark {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     flex-shrink: 0;
     border: 1px solid var(--hc-border-strong);
   }
 
   .hero-title {
-    margin-bottom: var(--hc-space-5);
+    margin-bottom: 16px;
     font-family: var(--hc-font-display);
-    font-size: var(--hc-text-display-xl);
+    font-size: clamp(3.15rem, 2.45rem + 2.4vw, 4.62rem);
     font-weight: 600;
-    line-height: 1.02;
+    line-height: 1.03;
     letter-spacing: -0.025em;
     color: var(--hc-text-primary);
   }
 
+  .hero-title-nowrap {
+    white-space: nowrap;
+  }
+
   .hero-sub {
-    max-width: 48ch;
-    margin-bottom: var(--hc-space-6);
-    font-size: var(--hc-text-body);
-    line-height: 1.6;
+    max-width: 44ch;
+    margin-bottom: 20px;
+    font-size: clamp(0.92rem, 0.88rem + 0.2vw, 1.02rem);
+    line-height: 1.55;
     color: var(--hc-text-secondary);
   }
 
@@ -424,7 +431,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: var(--hc-space-5);
+    margin-bottom: 0;
     padding: 7px 7px 7px 16px;
     background: var(--hc-surface-1);
     border: 1px solid var(--hc-border-default);
@@ -640,22 +647,22 @@
 
   @media (max-width: 1200px) {
     .hero-title {
-      font-size: clamp(2.4rem, 2rem + 1.8vw, 3.4rem);
+      font-size: clamp(2.8rem, 2.25rem + 2vw, 4.02rem);
     }
   }
 
   @media (max-width: 960px) {
     .hero-stage {
       grid-template-columns: minmax(0, 1fr);
-      gap: 40px;
-      padding-top: 96px;
-      padding-bottom: 48px;
+      gap: 36px;
+      padding-top: clamp(36px, 5vh, 52px);
+      padding-bottom: clamp(28px, 4vh, 40px);
     }
     .hero-content {
       max-width: 100%;
     }
     .hero-visual {
-      max-width: 520px;
+      max-width: 480px;
       width: 100%;
       min-width: 0;
       margin-inline: auto;
@@ -664,12 +671,12 @@
 
   @media (max-width: 640px) {
     .hero-stage {
-      padding-top: 84px;
-      padding-bottom: 36px;
+      padding-top: clamp(28px, 4vh, 40px);
+      padding-bottom: clamp(24px, 3.5vh, 32px);
     }
     .hero-title {
-      font-size: clamp(2rem, 1.6rem + 2.5vw, 2.7rem);
-      line-height: 1.06;
+      font-size: clamp(2.48rem, 1.93rem + 2.6vw, 3.3rem);
+      line-height: 1.05;
     }
     .hero-cmd {
       gap: 8px;
