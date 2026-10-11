@@ -22,7 +22,7 @@
       <div class="bento-card reveal">
         <div class="card-icon-bar">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 17 10 11 4 5"></polyline>
               <line x1="12" y1="19" x2="20" y2="19"></line>
             </svg>
@@ -53,7 +53,7 @@
       <div class="bento-card reveal">
         <div class="card-icon-bar">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
               <polyline points="3.3 7 12 12 20.7 7"></polyline>
               <line x1="12" y1="22" x2="12" y2="12"></line>
@@ -95,7 +95,7 @@
       <div class="bento-card reveal">
         <div class="card-icon-bar">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
             </svg>
           </div>
@@ -132,7 +132,7 @@
       <div class="bento-card reveal">
         <div class="card-icon-bar">
           <div class="feature-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
             </svg>
           </div>
@@ -204,7 +204,7 @@
   .features-bento-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: clamp(1.2rem, 2vw, 1.8rem);
+    gap: clamp(1rem, 1.6vw, 1.4rem);
   }
 
   .bento-card {
@@ -212,7 +212,7 @@
     background: var(--hc-surface-1);
     border: 1px solid var(--hc-border-default);
     border-radius: 16px;
-    padding: clamp(1.5rem, 2.5vw, 2rem);
+    padding: 20px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -229,16 +229,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: var(--space-4);
+    margin-bottom: 14px;
   }
 
   .feature-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     background: var(--hc-surface-2);
     border: 1px solid var(--hc-border-default);
     color: var(--hc-text-secondary);
@@ -251,18 +251,18 @@
   }
 
   .card-title {
-    font-size: 1.22rem;
+    font-size: 1.05rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     letter-spacing: -0.015em;
   }
 
   .card-desc {
-    font-size: 0.92rem;
+    font-size: 0.86rem;
     line-height: 1.55;
     color: var(--text-secondary);
-    margin-bottom: var(--space-5);
+    margin-bottom: 16px;
   }
 
   .card-desc code {
@@ -274,11 +274,10 @@
   /* Previews: consistent weight, one quiet well per card */
   .card-micro-preview {
     margin-top: auto;
-    min-height: 118px;
     background: var(--hc-canvas);
     border: 1px solid var(--hc-border-subtle);
     border-radius: 10px;
-    padding: 12px;
+    padding: 10px 12px;
     overflow: hidden;
   }
 
