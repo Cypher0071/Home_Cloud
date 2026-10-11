@@ -9,7 +9,9 @@
 ---
 
 <section id="how-it-works" class="hiw">
-  <div class="container hiw-cols">
+  <div class="container">
+    <div class="hiw-box">
+      <div class="hiw-cols">
     <!-- Left: narrative + progress rail -->
     <div class="hiw-rail">
       <p class="hiw-eyebrow">HOW IT WORKS</p>
@@ -91,19 +93,44 @@
       </div>
     </div>
   </div>
+</div>
+</div>
+
+<div class="container">
+  <div class="hatch hiw-hatch" aria-hidden="true"></div>
+</div>
 </section>
 
 <style>
   .hiw {
     position: relative;
-    padding-block: var(--hc-section-pad);
+    padding-block: 0;
     background: transparent;
+  }
+
+  .hiw-box {
+    border-left: 1px solid var(--hc-border-subtle);
+    border-right: 1px solid var(--hc-border-subtle);
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  .hiw-hatch {
+    height: 28px;
+    background-color: var(--hc-canvas);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      var(--hc-border-default) 6px 7px
+    );
+    border: 1px solid var(--hc-border-subtle);
+    box-sizing: border-box;
   }
 
   .hiw-cols {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    gap: clamp(40px, 5vw, 88px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0;
     align-items: start;
   }
 
@@ -111,6 +138,9 @@
   .hiw-rail {
     position: sticky;
     top: 108px;
+    padding-block: clamp(64px, 8vh, 96px);
+    padding-inline: clamp(24px, 4vw, 48px);
+    box-sizing: border-box;
   }
 
   .hiw-eyebrow {
@@ -214,8 +244,9 @@
 
   /* ---- Right canvas: one continuous surface ---- */
   .hiw-canvas {
-    border: 1px solid var(--hc-border-subtle);
-    border-radius: var(--hc-radius-lg);
+    border: none;
+    border-left: 1px solid var(--hc-border-subtle);
+    border-radius: 0;
     background: var(--hc-canvas);
     overflow: hidden;
   }
@@ -418,10 +449,16 @@
     }
     .hiw-rail {
       position: static;
+      padding-block: clamp(40px, 6vh, 64px);
+      padding-inline: clamp(20px, 4vw, 36px);
+    }
+    .hiw-canvas {
+      border-left: none;
+      border-top: 1px solid var(--hc-border-subtle);
     }
     .hiw-panel {
       min-height: 0;
-      padding: 28px 20px;
+      padding: 32px clamp(20px, 4vw, 36px);
     }
     .viz-giant {
       font-size: clamp(72px, 22vw, 120px);
@@ -442,6 +479,12 @@
       font-family: var(--hc-font-mono);
       font-size: 12px;
       color: var(--hc-accent);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .hiw-hatch {
+      height: 22px;
     }
   }
 
