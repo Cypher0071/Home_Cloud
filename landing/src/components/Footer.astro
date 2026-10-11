@@ -1,248 +1,309 @@
 ---
 // landing/src/components/Footer.astro
-// Editorial closing composition: brand statement with corner brackets,
-// two compact link groups, and a quiet bottom row with back-to-top.
-// No sitemap grid, no install panel, no unverified claims.
+// Double footer: diagonal hatch, bordered brand + link table, second hatch,
+// then the copyright bar. Same destinations the page already exposes.
 ---
 
-<footer class="footer-root">
-  <div class="container footer-grid">
-    <!-- Brand statement -->
-    <div class="footer-brand-block">
-      <div class="brand-corners" aria-hidden="true"></div>
-      <a href="#hero" class="footer-brand">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="2" y="4" width="20" height="7" rx="2"></rect>
-          <rect x="2" y="13" width="20" height="7" rx="2"></rect>
-          <circle cx="6" cy="7.5" r="1" fill="currentColor"></circle>
-          <circle cx="6" cy="16.5" r="1" fill="currentColor"></circle>
-        </svg>
-        <span class="footer-brand-label">HOME CLOUD / OPEN SOURCE · SELF-HOSTED</span>
-      </a>
-      <p class="footer-closing">
-        Your hardware.<br />Your rules.
-      </p>
-      <p class="footer-support">
-        A private cloud that runs on your machine, under your control.
-      </p>
+<footer class="ft-root">
+  <div class="container">
+    <div class="ft-hatch" aria-hidden="true"></div>
+
+    <div class="ft-table">
+      <div class="ft-brand">
+        <div class="ft-brand-copy">
+          <a href="#hero" class="ft-logo">
+            <svg
+              viewBox="0 0 32 32"
+              width="22"
+              height="22"
+              fill="none"
+              aria-hidden="true"
+            >
+              <defs>
+                <mask id="footer-brand-mask">
+                  <rect width="32" height="32" fill="#fff" />
+                  <path
+                    d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z"
+                    fill="#000"
+                    stroke="#000"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                </mask>
+              </defs>
+              <circle cx="22.5" cy="9.5" r="3" fill="var(--hc-accent)" mask="url(#footer-brand-mask)" />
+              <path
+                d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z"
+                fill="none"
+                stroke="var(--hc-text-primary)"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+            </svg>
+            <span>Home Cloud</span>
+          </a>
+          <p class="ft-blurb">
+            A private cloud that runs on your machine, under your control.
+          </p>
+        </div>
+
+        <a
+          class="ft-social"
+          href="https://github.com/Cypher0071/Home_Cloud"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Home Cloud on GitHub (opens in a new tab)"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"></path>
+          </svg>
+        </a>
+      </div>
+
+      <nav class="ft-nav" aria-label="Footer">
+        <div class="ft-col">
+          <p class="ft-head">Product</p>
+          <a class="ft-link" href="#hero">Overview</a>
+          <a class="ft-link" href="#features">Features</a>
+          <a class="ft-link" href="#setup">Setup</a>
+        </div>
+        <div class="ft-col">
+          <p class="ft-head">How It Works</p>
+          <a class="ft-link" href="#hiw-stage-1">Run it at home</a>
+          <a class="ft-link" href="#hiw-stage-2">Connect outward</a>
+          <a class="ft-link" href="#hiw-stage-3">Access it anywhere</a>
+        </div>
+        <div class="ft-col">
+          <p class="ft-head">Project</p>
+          <a class="ft-link" href="https://github.com/Cypher0071/Home_Cloud" target="_blank" rel="noopener noreferrer">
+            Repository<span class="sr-only"> (opens in a new tab)</span>
+          </a>
+          <a class="ft-link" href="https://github.com/Cypher0071/Home_Cloud/issues" target="_blank" rel="noopener noreferrer">
+            Issue Tracker<span class="sr-only"> (opens in a new tab)</span>
+          </a>
+          <a class="ft-link" href="https://github.com/Cypher0071/Home_Cloud/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+            MIT License<span class="sr-only"> (opens in a new tab)</span>
+          </a>
+        </div>
+      </nav>
     </div>
 
-    <!-- Navigation -->
-    <nav class="footer-nav" aria-label="Footer">
-      <div class="footer-group">
-        <span class="footer-group-title">EXPLORE</span>
-        <a href="#features" class="f-link">Features</a>
-        <a href="#how-it-works" class="f-link">How It Works</a>
-        <a href="#setup" class="f-link">Setup Guide</a>
-      </div>
-      <div class="footer-group">
-        <span class="footer-group-title">PROJECT</span>
-        <a href="https://github.com/Cypher-0071/Home_Cloud" target="_blank" rel="noopener noreferrer" class="f-link">GitHub Repository</a>
-        <a href="https://github.com/Cypher-0071/Home_Cloud/issues" target="_blank" rel="noopener noreferrer" class="f-link">Issue Tracker</a>
-        <a href="https://github.com/Cypher-0071/Home_Cloud/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" class="f-link">MIT License</a>
-      </div>
-    </nav>
-  </div>
+    <div class="ft-hatch" aria-hidden="true"></div>
 
-  <div class="container footer-bottom">
-    <span class="footer-copy">© 2026 Home Cloud. Released under the MIT License.</span>
-    <span class="footer-desc">Open source · Self-hosted · No cloud account required.</span>
-    <button type="button" class="to-top" id="footer-to-top" aria-label="Back to top">
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M8 13V3M4 7l4-4 4 4"></path>
-      </svg>
-    </button>
+    <div class="ft-bar">
+      <span class="ft-copy">© 2026 Home Cloud. Released under the MIT License.</span>
+      <span class="ft-note">Open source · Self-hosted · No cloud account required.</span>
+    </div>
   </div>
 </footer>
 
 <style>
-  .footer-root {
-    position: relative;
+  .ft-root {
     background: var(--hc-canvas);
-    border-top: 1px solid var(--hc-border-subtle);
-    padding-top: clamp(4rem, 7vw, 7rem);
-    padding-bottom: clamp(2rem, 3vw, 3rem);
-    color: var(--text-secondary);
+    color: var(--hc-text-secondary);
+    padding-bottom: var(--hc-space-5);
   }
 
-  /* Asymmetric: statement dominant, navigation secondary */
-  .footer-grid {
+  /* Diagonal hatch. Same rule above the table and under it. */
+  .ft-hatch {
+    height: 22px;
+    background-color: var(--hc-canvas);
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--hc-border-strong) 0 1px,
+      transparent 1px 7px
+    );
+  }
+
+  .ft-table {
     display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    gap: clamp(48px, 7vw, 120px);
-    align-items: start;
-    margin-bottom: clamp(48px, 6vw, 80px);
-  }
-
-  .footer-brand-block {
-    position: relative;
-    padding: clamp(24px, 3vw, 40px) clamp(20px, 3vw, 36px);
-  }
-
-  /* Restrained corner brackets, top-left + bottom-right */
-  .brand-corners::before,
-  .brand-corners::after {
-    content: '';
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    pointer-events: none;
-  }
-
-  .brand-corners::before {
-    top: 0;
-    left: 0;
+    grid-template-columns: minmax(240px, 1.2fr) minmax(0, 3fr);
     border-top: 1px solid var(--hc-border-strong);
     border-left: 1px solid var(--hc-border-strong);
+    background: var(--hc-canvas);
   }
 
-  .brand-corners::after {
-    bottom: 0;
-    right: 0;
-    border-bottom: 1px solid var(--hc-border-strong);
+  .ft-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--hc-space-5);
+    min-width: 0;
+    padding: 28px 28px 20px;
     border-right: 1px solid var(--hc-border-strong);
+    border-bottom: 1px solid var(--hc-border-strong);
   }
 
-  .footer-brand {
+  .ft-brand-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .ft-logo {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: var(--hc-space-5);
-    color: var(--text-primary);
+    color: var(--hc-text-primary);
+    font-family: var(--hc-font-display);
+    font-size: 1.0625rem;
+    font-weight: 550;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    transition: color var(--hc-duration-micro) var(--hc-ease-out);
   }
 
-  .footer-brand svg {
-    color: var(--signal-text);
+  .ft-logo svg {
+    display: block;
     flex-shrink: 0;
   }
 
-  .footer-brand-label {
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    color: var(--text-tertiary);
-  }
-
-  .footer-closing {
-    margin: 0 0 var(--hc-space-4);
-    font-family: var(--font-display);
-    font-size: clamp(2.4rem, 3rem + 2.5vw, 4rem);
-    font-weight: 600;
-    line-height: 1.04;
-    letter-spacing: -0.03em;
-    color: var(--text-primary);
-  }
-
-  .footer-support {
-    margin: 0;
-    max-width: 44ch;
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-  }
-
-  /* Compact link groups */
-  .footer-nav {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--hc-space-6);
-    padding-top: 6px;
-  }
-
-  .footer-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .footer-group-title {
-    margin-bottom: 2px;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    color: var(--text-muted);
-  }
-
-  .f-link {
-    font-size: 0.88rem;
-    color: var(--text-secondary);
-    transition: color var(--dur-fast);
-    width: fit-content;
-  }
-
-  .f-link:hover {
+  .ft-logo:hover {
     color: var(--hc-text-emphasis);
   }
 
-  /* Bottom row */
-  .footer-bottom {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding-top: var(--hc-space-5);
-    border-top: 1px solid var(--hc-border-subtle);
-    font-size: 0.78rem;
-    color: var(--text-muted);
+  .ft-blurb {
+    max-width: 32ch;
+    font-size: var(--hc-text-small);
+    line-height: 1.55;
+    color: var(--hc-text-secondary);
   }
 
-  .footer-desc {
-    margin-left: auto;
-  }
-
-  .to-top {
+  .ft-social {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: 1px solid var(--hc-border-default);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition:
-      border-color var(--dur-fast) var(--ease-out),
-      color var(--dur-fast) var(--ease-out);
+    width: 32px;
+    height: 32px;
+    margin-top: auto;
+    margin-left: -8px;
+    color: var(--hc-text-tertiary);
+    transition: color var(--hc-duration-micro) var(--hc-ease-out);
   }
 
-  .to-top:hover {
-    border-color: var(--hc-border-strong);
-    color: var(--hc-text-emphasis);
+  .ft-social:hover {
+    color: var(--hc-text-primary);
+  }
+
+  .ft-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(64px, auto));
+    min-width: 0;
+  }
+
+  .ft-col {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: 1 / -1;
+    min-width: 0;
+    border-right: 1px solid var(--hc-border-strong);
+  }
+
+  .ft-col:nth-child(1) { grid-column: 1; }
+  .ft-col:nth-child(2) { grid-column: 2; }
+  .ft-col:nth-child(3) { grid-column: 3; }
+
+  .ft-head,
+  .ft-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    margin: 0;
+    padding: 16px 12px;
+    border-bottom: 1px solid var(--hc-border-strong);
+    font-family: var(--hc-font-sans);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    text-align: center;
+  }
+
+  .ft-head {
+    color: var(--hc-text-primary);
+  }
+
+  .ft-link {
+    color: var(--hc-text-secondary);
+    transition:
+      color var(--hc-duration-micro) var(--hc-ease-out),
+      background-color var(--hc-duration-micro) var(--hc-ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ft-link:hover {
+      color: var(--hc-text-emphasis);
+      background: var(--hc-surface-1);
+    }
+  }
+
+  .ft-link:active {
+    background: var(--hc-surface-2);
+  }
+
+  .ft-logo:focus-visible,
+  .ft-social:focus-visible,
+  .ft-link:focus-visible {
+    outline-offset: -3px;
+    border-radius: 0;
+  }
+
+  .ft-bar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px 28px;
+    flex-wrap: wrap;
+    padding: 18px 2px 4px;
+    font-size: var(--hc-text-small);
+    line-height: 1.45;
+    color: var(--hc-text-muted);
+  }
+
+  .ft-note {
+    margin-left: auto;
+    text-align: right;
   }
 
   @media (max-width: 860px) {
-    .footer-grid {
+    .ft-table {
       grid-template-columns: 1fr;
-      gap: var(--hc-space-7);
     }
-    .footer-nav {
-      grid-template-columns: 1fr 1fr;
+
+    .ft-brand {
+      padding: 24px 20px 16px;
     }
-    .footer-bottom {
-      flex-wrap: wrap;
+
+    .ft-nav {
+      grid-template-columns: 1fr;
+      grid-template-rows: none;
     }
-    .footer-desc {
-      margin-left: 0;
-      width: 100%;
+
+    .ft-col,
+    .ft-col:nth-child(1),
+    .ft-col:nth-child(2),
+    .ft-col:nth-child(3) {
+      display: flex;
+      flex-direction: column;
+      grid-column: auto;
+      grid-row: auto;
+      grid-template-rows: none;
     }
   }
 
   @media (max-width: 540px) {
-    .footer-nav {
-      grid-template-columns: 1fr;
-      gap: var(--hc-space-5);
+    .ft-bar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .ft-note {
+      margin-left: 0;
+      text-align: left;
     }
   }
 </style>
-
-<script>
-  // Circular back-to-top control (no prior implementation existed).
-  const toTop = document.getElementById('footer-to-top');
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  if (toTop) {
-    toTop.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
-    });
-  }
-</script>
