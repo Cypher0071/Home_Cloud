@@ -106,21 +106,28 @@
 
   /* Diagonal hatch. Same rule above the table and under it. */
   .ft-hatch {
-    height: 22px;
+    height: 28px;
     background-color: var(--hc-canvas);
     background-image: repeating-linear-gradient(
-      45deg,
-      var(--hc-border-strong) 0 1px,
-      transparent 1px 7px
+      -45deg,
+      transparent 0 6px,
+      var(--hc-border-default) 6px 7px
     );
+    border: 1px solid var(--hc-border-subtle);
+    box-sizing: border-box;
   }
 
   .ft-table {
     display: grid;
     grid-template-columns: minmax(240px, 1.2fr) minmax(0, 3fr);
-    border-top: 1px solid var(--hc-border-strong);
-    border-left: 1px solid var(--hc-border-strong);
+    border-left: 1px solid var(--hc-border-subtle);
+    border-right: 1px solid var(--hc-border-subtle);
+    box-sizing: border-box;
     background: var(--hc-canvas);
+  }
+
+  .ft-table + .ft-hatch {
+    margin-top: -1px;
   }
 
   .ft-brand {
@@ -204,7 +211,10 @@
 
   .ft-col:nth-child(1) { grid-column: 1; }
   .ft-col:nth-child(2) { grid-column: 2; }
-  .ft-col:nth-child(3) { grid-column: 3; }
+  .ft-col:nth-child(3) {
+    grid-column: 3;
+    border-right: none;
+  }
 
   .ft-head,
   .ft-link {
@@ -276,6 +286,7 @@
 
     .ft-brand {
       padding: 24px 20px 16px;
+      border-right: none;
     }
 
     .ft-nav {
@@ -292,6 +303,7 @@
       grid-column: auto;
       grid-row: auto;
       grid-template-rows: none;
+      border-right: none;
     }
   }
 
