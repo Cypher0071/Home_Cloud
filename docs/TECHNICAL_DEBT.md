@@ -49,3 +49,23 @@ This document outlines the current technical limitations, security tradeoffs, op
 ### 9. Details Info Pane (Deferred)
 * **Debt**: The side info pane for displaying file details, large previews, and extended metadata is not rendered.
 * **Tradeoff**: Users cannot inspect detailed file properties without viewing or opening the file.
+---
+
+## 🌐 Cloudflare Tunnel Platform Limits
+
+### 10. 100 MB Upload Cap Through the Tunnel
+* **Debt**: Every request to `dash.<domain>` goes through Cloudflare's proxy, which caps the request body at **100 MB on the Free and Pro plans** (200 MB on Business). `POST /api/files/upload` in `agent/routes/file.js` sends the whole file as one `multer` request with no chunking, so any upload over 100 MB from a remote network fails with `413 Request Entity Too Large`.
+* **Tradeoff**: Large uploads only work on the direct LAN link (split-horizon mode), not remotely.
+* **Possible fix**: Chunked/resumable uploads (each part under 100 MB, reassembled on the agent, e.g. the tus protocol), and auto-prefer the LAN link for big files.
+* **Source**: https://developers.cloudflare.com/cache/concepts/default-cache-behavior/ (Upload limits)
+
+### 11. Video Streaming Restriction on Cloudflare's CDN
+* **Debt**: Cloudflare's Service-Specific Terms say that on Free, Pro, and Business plans, video and other large files must be served through paid services (Stream, Images, R2, Developer Platform). Proxying media (e.g. a Jellyfin container exposed via `jellyfin.<domain>`) through the tunnel risks Cloudflare limiting or disabling access for that hostname.
+* **Tradeoff**: The auto-exposed container subdomains should not be pitched or used for media streaming over the tunnel. Streaming is fine on the LAN link.
+* **Possible fix**: Warn in the Expose UI when exposing known media apps (Jellyfin, Plex, Immich), document LAN-only streaming, and later add an alternative remote-access option (e.g. Tailscale/WireGuard or a self-hosted tunnel like Pangolin) that isn't bound by the CDN terms.
+* **Source**: https://www.cloudflare.com/service-specific-terms-application-services/ (Content Delivery Network, Free/Pro/Business)
+
+### 12. Non-SSE Responses Are Buffered by the Tunnel
+* **Debt**: `cloudflared` buffers proxied responses unless the origin sends `Content-Type: text/event-stream`. Any future live-output endpoint that isn't SSE (e.g. chunked plain-text log streams or large file downloads with progress) will appear frozen until the response completes.
+* **Tradeoff**: Live features must use SSE or WebSockets (as metrics, compose deploy logs, and the terminal already do).
+* **Source**: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/troubleshoot-tunnels/common-errors/
