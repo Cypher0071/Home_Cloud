@@ -1,0 +1,442 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-10-14T17:02:49.578Z",
+  "specification": {
+    "path": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/candidate.json",
+    "sha256": "92b6c1eb35c2cd899957ac2d5928f23740e8fc851930682cfde1c9d36348d071",
+    "bytes": 7717
+  },
+  "artifact": {
+    "path": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+    "sha256": "09d07203423fab7c5192ca713ca18c25f2ad17289608728d47aad6db90aee7ea",
+    "bytes": 831912
+  },
+  "stages": {
+    "validate": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": null,
+      "execution": "embedded-in-deliver",
+      "command": [
+        "/home/rudra-unix/.local/share/mise/installs/node/24.19.0/bin/node",
+        "/home/rudra-unix/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/candidate.json",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/home/rudra-unix/dev/projects/home_cloud",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": true,
+        "command": "validate",
+        "specification": {
+          "sha256": "92b6c1eb35c2cd899957ac2d5928f23740e8fc851930682cfde1c9d36348d071",
+          "bytes": 7717
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        }
+      }
+    },
+    "deliver": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 453,
+      "command": [
+        "/home/rudra-unix/.local/share/mise/installs/node/24.19.0/bin/node",
+        "/home/rudra-unix/.agents/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/candidate.json",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/home/rudra-unix/dev/projects/home_cloud",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "receiptId": "e09c39a3-cb95-41eb-9be3-3501d9b940b0",
+        "ok": true,
+        "command": "deliver",
+        "type": "architecture",
+        "input": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/candidate.json",
+        "output": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+        "specification": {
+          "sha256": "92b6c1eb35c2cd899957ac2d5928f23740e8fc851930682cfde1c9d36348d071",
+          "bytes": 7717
+        },
+        "artifact": {
+          "sha256": "09d07203423fab7c5192ca713ca18c25f2ad17289608728d47aad6db90aee7ea",
+          "bytes": 831912
+        },
+        "validation": {
+          "checksPassed": 9,
+          "checkCount": 9,
+          "compositionProfile": "showcase",
+          "compositionStatus": "pass",
+          "errors": 0,
+          "warnings": 0
+        },
+        "evidence": {
+          "verified": true,
+          "repository": "git@github.com:Cypher-0071/Home_Cloud",
+          "revision": "d464587e969d51700081fa7bea2d8ea4670366c2",
+          "references": 24,
+          "linkMode": "local-only"
+        },
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      }
+    },
+    "check": {
+      "status": "pass",
+      "exitCode": 0,
+      "durationMs": 117,
+      "command": [
+        "/home/rudra-unix/.local/share/mise/installs/node/24.19.0/bin/node",
+        "/home/rudra-unix/.agents/skills/archify/bin/archify.mjs",
+        "check",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+        "--require-provenance"
+      ],
+      "receipt": {
+        "ok": true,
+        "file": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+        "artifact": {
+          "sha256": "09d07203423fab7c5192ca713ca18c25f2ad17289608728d47aad6db90aee7ea",
+          "bytes": 831912
+        },
+        "checks": [
+          {
+            "name": "single_svg",
+            "ok": true,
+            "details": [
+              "found 1 <svg> block(s)"
+            ]
+          },
+          {
+            "name": "finite_svg",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "orthogonal_arrows",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "label_route_clearance",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_crossings",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "relationship_corridors",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "container_border_runs",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "route_rhythm",
+            "ok": true,
+            "details": []
+          },
+          {
+            "name": "legend_clearance",
+            "ok": true,
+            "details": []
+          }
+        ],
+        "composition": {
+          "schemaVersion": 1,
+          "profile": "showcase",
+          "status": "pass",
+          "summary": {
+            "errors": 0,
+            "warnings": 0
+          },
+          "metrics": {
+            "properCrossings": 0,
+            "resolvedCrossovers": 1,
+            "ambiguousCorridors": 0,
+            "arrowheadCollisions": 0,
+            "containerBorderRuns": 0,
+            "labelRouteClearanceIssues": 0,
+            "labelCanvasOverflowIssues": 0,
+            "minLabelRouteClearance": 9.8,
+            "desktopReadabilityIssues": 0,
+            "viewportHeightIssues": 0,
+            "minProjectedNodeTextPx": 6,
+            "maxBends": 4,
+            "routesOverSuggestedBends": 3,
+            "maxStretch": 1.361,
+            "routesOverSuggestedStretch": 1,
+            "minSegmentPx": 16,
+            "minInteriorSegmentPx": 16,
+            "shortSegmentCount": 0,
+            "shortEndpointSegmentCount": 0,
+            "shortInteriorSegmentCount": 0,
+            "microSegmentCount": 0
+          },
+          "suggestedLimits": {
+            "bendsPerRelationship": 2,
+            "stretch": 1.35,
+            "segmentPx": 16,
+            "microSegmentPx": 8
+          },
+          "routeReview": {
+            "crossings": [
+              {
+                "left": {
+                  "id": "browser-lan",
+                  "from": "browser",
+                  "to": "agent",
+                  "label": "direct LAN :3000",
+                  "collectionIndex": 2,
+                  "artifactIndex": 3
+                },
+                "right": {
+                  "id": "tunnel-apps",
+                  "from": "tunnel",
+                  "to": "containers",
+                  "label": "app host → mapped host port",
+                  "collectionIndex": 5,
+                  "artifactIndex": 6
+                },
+                "point": [
+                  602,
+                  336
+                ]
+              }
+            ],
+            "detours": [
+              {
+                "relationship": {
+                  "id": "operator-dashboard",
+                  "from": "operator",
+                  "to": "browser",
+                  "label": "uses control plane",
+                  "collectionIndex": 0,
+                  "artifactIndex": 1
+                },
+                "bends": 3,
+                "stretch": 1.361
+              },
+              {
+                "relationship": {
+                  "id": "agent-host-os",
+                  "from": "agent",
+                  "to": "host_os",
+                  "label": "collect metrics · spawn host PTY",
+                  "collectionIndex": 6,
+                  "artifactIndex": 7
+                },
+                "bends": 3,
+                "stretch": 1
+              },
+              {
+                "relationship": {
+                  "id": "agent-files",
+                  "from": "agent",
+                  "to": "home_files",
+                  "label": "read / write within BASE_DIR",
+                  "collectionIndex": 7,
+                  "artifactIndex": 8
+                },
+                "bends": 4,
+                "stretch": 1.239
+              }
+            ]
+          },
+          "leadingSpace": {
+            "measured": true,
+            "emptyTopPx": 60,
+            "emptyTopRatio": 0.081,
+            "occupiedTop": 60,
+            "viewBoxTop": 0,
+            "canvasHeight": 744,
+            "typicalNodeHeight": 72,
+            "reviewSuggested": false
+          },
+          "desktopReadability": {
+            "budgetBasis": "recognized-declared-wide",
+            "readerContract": "declared-wide-v1",
+            "availableDiagramWidth": 1346,
+            "actualBudgetPx": 1346,
+            "actualReaderWidth": 1376,
+            "desiredReaderWidth": 1376,
+            "viewportCap": 1376,
+            "limit": "source-size",
+            "requestedTargetPx": 7.5,
+            "requestedTargetMet": false,
+            "hardFloorPx": 6,
+            "hardFloorMet": true,
+            "minimumOwner": {
+              "kind": "node",
+              "id": "tunnel"
+            },
+            "minimumSourceTextPx": 6,
+            "minimumProjectedTextPx": 6,
+            "semanticTextCount": 32
+          },
+          "issues": []
+        },
+        "provenance": "current",
+        "deliveryReceiptId": "e09c39a3-cb95-41eb-9be3-3501d9b940b0"
+      }
+    },
+    "browser-check": {
+      "status": "skipped",
+      "exitCode": 2,
+      "durationMs": 24,
+      "command": [
+        "/home/rudra-unix/.local/share/mise/installs/node/24.19.0/bin/node",
+        "/home/rudra-unix/.agents/skills/archify/bin/archify.mjs",
+        "browser-check",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+        "--json",
+        "--require-provenance",
+        "--out-dir",
+        "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3"
+      ],
+      "execution": "in-process",
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "browser-check",
+        "evidenceKind": "automated-browser",
+        "status": "skipped",
+        "visualReview": "not-requested",
+        "provenance": "current",
+        "deliveryReceiptId": "e09c39a3-cb95-41eb-9be3-3501d9b940b0",
+        "artifact": {
+          "path": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+          "sha256": "09d07203423fab7c5192ca713ca18c25f2ad17289608728d47aad6db90aee7ea",
+          "bytes": 831912
+        },
+        "state": {
+          "detail": "read",
+          "motion": "still"
+        },
+        "chrome": {
+          "status": "unavailable",
+          "executable": null
+        },
+        "diagnostics": [
+          {
+            "code": "viewer/chrome-unavailable",
+            "severity": "warning",
+            "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+            "subject": {
+              "artifact": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html"
+            },
+            "evidence": {
+              "executable": null
+            },
+            "supportedFixes": [
+              "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+            ]
+          }
+        ],
+        "containment": {
+          "status": "skipped",
+          "policy": "fit-or-reader-declared-readable-vertical-scroll",
+          "viewports": []
+        },
+        "themeStates": {
+          "status": "skipped",
+          "viewports": []
+        },
+        "readability": {
+          "status": "skipped",
+          "minimumProjectedNodeTextPx": 6,
+          "viewports": []
+        },
+        "viewerChrome": {
+          "status": "skipped",
+          "viewports": []
+        },
+        "captures": {
+          "status": "not-requested",
+          "screenshots": [],
+          "contactSheet": null
+        },
+        "sidecars": {
+          "directory": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3",
+          "receipt": "home-cloud-system.browser-check.json",
+          "files": []
+        },
+        "error": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path."
+      }
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "evidence": {
+    "receipt": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3/home-cloud-system.finalize.json",
+    "summaryReceipt": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3/home-cloud-system.finalize-summary.json",
+    "browserCheckReceipt": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3/home-cloud-system.browser-check.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "browser-check",
+  "finishedAt": "2026-10-14T17:02:50.289Z",
+  "durationMs": 711,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.1.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-14T16:48:36.324Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

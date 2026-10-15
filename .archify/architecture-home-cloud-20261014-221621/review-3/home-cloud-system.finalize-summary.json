@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "skipped",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/candidate.json",
+    "sha256": "92b6c1eb35c2cd899957ac2d5928f23740e8fc851930682cfde1c9d36348d071",
+    "bytes": 7717
+  },
+  "artifact": {
+    "path": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html",
+    "sha256": "09d07203423fab7c5192ca713ca18c25f2ad17289608728d47aad6db90aee7ea",
+    "bytes": 831912
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "skipped"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/chrome-unavailable",
+      "severity": "warning",
+      "message": "Chrome or Chromium is unavailable. Set ARCHIFY_CHROME to its executable path.",
+      "subject": {
+        "artifact": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/home-cloud-system.html"
+      },
+      "evidence": {
+        "executable": null
+      },
+      "supportedFixes": [
+        "set ARCHIFY_CHROME to a Chrome or Chromium executable and rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3/home-cloud-system.finalize.json",
+    "summaryReceipt": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3/home-cloud-system.finalize-summary.json",
+    "browserCheckReceipt": "/home/rudra-unix/dev/projects/home_cloud/.archify/architecture-home-cloud-20261014-221621/review-3/home-cloud-system.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.1.0",
+    "availableVersion": "3.1.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-14T16:48:36.324Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 711
+}
