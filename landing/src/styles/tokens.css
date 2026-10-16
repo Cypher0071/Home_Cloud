@@ -72,8 +72,8 @@
   --hc-section-pad: clamp(5rem, 3rem + 8vw, 9rem);
 
   /* ---- Layout ---- */
-  --hc-container: 1200px;
-  --hc-gutter: clamp(20px, 4vw, 56px);
+  --hc-container: clamp(1200px, 600px + 50vw, 1720px);
+  --hc-gutter: clamp(10px, 2vw, 28px);
 
   /* ---- Geometry (0/4/8/12; 16 reserved for large product surfaces) ---- */
   --hc-radius-0: 0px;
