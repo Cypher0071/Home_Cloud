@@ -255,12 +255,16 @@ font-size: 11.5px;
 
 ## Wallpaper
 
-Current wallpaper: light-edition 3D layered fluid wave topography.  
+Default wallpaper: light-edition 3D layered fluid wave topography.  
 File: `dashboard/src/assets/desktop_wallpaper.jpg`
 
-The wallpaper is deliberately high-contrast and light-toned. This makes the dark Mica panels
-stand out with strong figure-ground separation. The high contrast is also why Mica opacity
-must stay at ≥ 0.98 — any lower and wave contours bleed through.
+Additional presets live next to it (`wallpaper_night.jpg`, `wallpaper_sand.jpg`,
+`wallpaper_mist.jpg`) and can be changed from the Settings app. Choice is stored in
+`localStorage` (`home-cloud.wallpaper`); a custom photo is stored in IndexedDB.
+
+The default wallpaper is deliberately high-contrast and light-toned. This makes the dark Mica
+panels stand out with strong figure-ground separation. The high contrast is also why Mica
+opacity must stay at ≥ 0.98 — any lower and wave contours bleed through.
 
 ---
 
