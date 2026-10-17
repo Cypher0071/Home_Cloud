@@ -8,6 +8,23 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] }),
   ],
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/terminal': {
+        target: 'http://localhost:3000',
+        ws: true,
+      },
+      '/ws': {
+        target: 'http://localhost:3000',
+        ws: true,
+      },
+    },
+  },
   build: {
     rolldownOptions: {
       output: {
