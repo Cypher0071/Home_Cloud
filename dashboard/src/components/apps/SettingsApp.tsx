@@ -1,4 +1,4 @@
-import { useRef, type ChangeEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ChangeEvent } from 'react';
 import { Monitor, Plus, X } from 'lucide-react';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { FIT_OPTIONS, WALLPAPER_PRESETS } from '../../utils/wallpaper';
@@ -6,6 +6,10 @@ import styles from './settings.module.css';
 
 export default function SettingsApp() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const fitGroupRef = useRef<HTMLDivElement>(null);
+  const fitPillRef = useRef<HTMLSpanElement>(null);
+  const isFirstFitMount = useRef(true);
+
   const {
     settings,
     customUrl,
@@ -17,6 +21,75 @@ export default function SettingsApp() {
     uploadCustom,
     removeCustom,
   } = useWallpaper();
+
+  useLayoutEffect(() => {
+    const group = fitGroupRef.current;
+    const pill = fitPillRef.current;
+    if (!group || !pill) return;
+
+    const activeBtn = group.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="true"]');
+    if (!activeBtn) return;
+
+    const offsetLeft = activeBtn.offsetLeft;
+    const offsetWidth = activeBtn.offsetWidth;
+
+    if (offsetWidth === 0) {
+      requestAnimationFrame(() => {
+        if (!group || !pill) return;
+        const btn = group.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="true"]');
+        if (!btn || btn.offsetWidth === 0) return;
+        const prev = pill.style.transition;
+        pill.style.transition = 'none';
+        pill.style.transform = `translateX(${btn.offsetLeft}px)`;
+        pill.style.width = `${btn.offsetWidth}px`;
+        pill.style.opacity = '1';
+        void pill.offsetWidth;
+        pill.style.transition = prev;
+        isFirstFitMount.current = false;
+      });
+      return;
+    }
+
+    if (isFirstFitMount.current) {
+      isFirstFitMount.current = false;
+      const prevTransition = pill.style.transition;
+      pill.style.transition = 'none';
+      pill.style.transform = `translateX(${offsetLeft}px)`;
+      pill.style.width = `${offsetWidth}px`;
+      pill.style.opacity = '1';
+      void pill.offsetWidth;
+      pill.style.transition = prevTransition;
+    } else {
+      pill.style.transform = `translateX(${offsetLeft}px)`;
+      pill.style.width = `${offsetWidth}px`;
+      pill.style.opacity = '1';
+    }
+  }, [settings.fit]);
+
+  useEffect(() => {
+    const group = fitGroupRef.current;
+    const pill = fitPillRef.current;
+    if (!group || !pill) return;
+
+    const syncPill = () => {
+      const activeBtn = group.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="true"]');
+      if (!activeBtn || !pill) return;
+      const prevTransition = pill.style.transition;
+      pill.style.transition = 'none';
+      pill.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+      pill.style.width = `${activeBtn.offsetWidth}px`;
+      pill.style.opacity = '1';
+      void pill.offsetWidth;
+      pill.style.transition = prevTransition;
+    };
+
+    const ro = new ResizeObserver(syncPill);
+    ro.observe(group);
+    if ('fonts' in document) {
+      void document.fonts.ready.then(syncPill);
+    }
+    return () => ro.disconnect();
+  }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -44,7 +117,8 @@ export default function SettingsApp() {
             <p className={styles.sectionLabel} id="wallpaper-label">
               Choose a picture
             </p>
-            <div className={styles.fitGroup} role="radiogroup" aria-label="Wallpaper fit">
+            <div ref={fitGroupRef} className={styles.fitGroup} role="radiogroup" aria-label="Wallpaper fit">
+              <span ref={fitPillRef} className={styles.fitPill} aria-hidden="true" />
               {FIT_OPTIONS.map((option) => (
                 <button
                   key={option.id}
