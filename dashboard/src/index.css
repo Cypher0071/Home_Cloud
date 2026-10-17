@@ -82,6 +82,11 @@
   --app-height: 100dvh;
   --keyboard-height: 0px;
 
+  /* ─── Desktop wallpaper (overridden by Settings) ─── */
+  --desktop-wallpaper-color: #0d1522;
+  --desktop-wallpaper-image: url('./assets/desktop_wallpaper.jpg');
+  --desktop-wallpaper-size: cover;
+
   /* ─── Backward-compat aliases ─── */
   --text:        var(--text-secondary);
   --text-h:      var(--text-primary);

@@ -8,6 +8,7 @@ import {
   Box,
   Zap,
   LayoutGrid,
+  Settings,
 } from 'lucide-react';
 
 import OSWindow from '../components/OSWindow';
@@ -53,7 +54,7 @@ function WindowHost({ appId, title, retryVersion, onRetry }: WindowHostProps) {
 
 function getInitialDeepLink(): WindowAppId | null {
   const path = window.location.pathname.replace(/^\//, '') as WindowAppId;
-  const validPaths: WindowAppId[] = ['terminal', 'metrics', 'files', 'docker'];
+  const validPaths: WindowAppId[] = ['terminal', 'metrics', 'files', 'docker', 'settings'];
   return validPaths.includes(path) ? path : null;
 }
 
@@ -121,6 +122,19 @@ export default function Desktop() {
         width: 860,
         height: 520,
         zIndex: deepLink === 'docker' ? 11 : 3,
+      },
+      {
+        id: 'settings',
+        title: 'Settings',
+        icon: <Settings size={18} />,
+        isOpen: deepLink === 'settings',
+        isMinimized: false,
+        isMaximized: false,
+        x: 140,
+        y: 40,
+        width: 760,
+        height: 560,
+        zIndex: deepLink === 'settings' ? 11 : 4,
       },
     ];
   });
@@ -292,6 +306,22 @@ export default function Desktop() {
           <div className="mobile-top-time">{time}</div>
 
           <div className="mobile-top-right">
+            <button
+              type="button"
+              className={`mobile-icon-btn${
+                activeWindowId === 'settings' &&
+                (windows.find(w => w.id === 'settings')?.isOpen ?? false) &&
+                !(windows.find(w => w.id === 'settings')?.isMinimized ?? false)
+                  ? ' active'
+                  : ''
+              }`}
+              onClick={() => handleDockClick('settings')}
+              onPointerDown={() => preloadWindowApp('settings')}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings size={15} />
+            </button>
             <button
               type="button"
               className="mobile-signout-btn"
