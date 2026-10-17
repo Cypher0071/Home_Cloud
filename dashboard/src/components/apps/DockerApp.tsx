@@ -36,6 +36,7 @@ import {
 import { getLazyWindowApp } from '../../utils/windowAppRegistry';
 import WindowSkeleton from '../skeletons/WindowSkeleton';
 import WindowErrorBoundary from '../WindowErrorBoundary';
+import SlidingPillBar from '../SlidingPillBar';
 
 import styles from './docker.module.css';
 import { useNetworkDetector } from '../../hooks/useNetworkDetector';
@@ -2721,8 +2722,18 @@ export default function DockerApp() {
     <div className={styles.container}>
       {/* ── Top Level App Navigation Header ── */}
       <div className={styles.tabHeader}>
-        <div className={styles.tabNavGroup}>
+        <SlidingPillBar
+          activeKey={activeWindowTab}
+          pillClassName={styles.tabNavPill}
+          className={styles.tabNavGroup}
+          role="tablist"
+          aria-label="Docker sections"
+        >
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeWindowTab === 'containers'}
+            data-active={activeWindowTab === 'containers'}
             className={`${styles.tabBtn} ${activeWindowTab === 'containers' ? styles.tabBtnActive : ''}`}
             onClick={() => setActiveWindowTab('containers')}
           >
@@ -2731,6 +2742,10 @@ export default function DockerApp() {
             <span className={styles.tabCountBadge}>{containers.length}</span>
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeWindowTab === 'images'}
+            data-active={activeWindowTab === 'images'}
             className={`${styles.tabBtn} ${activeWindowTab === 'images' ? styles.tabBtnActive : ''}`}
             onClick={() => {
               setActiveWindowTab('images');
@@ -2742,6 +2757,10 @@ export default function DockerApp() {
             <span className={styles.tabCountBadge}>{images.length}</span>
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeWindowTab === 'compose'}
+            data-active={activeWindowTab === 'compose'}
             className={`${styles.tabBtn} ${activeWindowTab === 'compose' ? styles.tabBtnActive : ''}`}
             onClick={() => {
               setActiveWindowTab('compose');
@@ -2752,7 +2771,7 @@ export default function DockerApp() {
             <span>Compose</span>
             <span className={styles.tabCountBadge}>{composeProjects.length}</span>
           </button>
-        </div>
+        </SlidingPillBar>
 
         {/* Global Action Right */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2798,14 +2817,28 @@ export default function DockerApp() {
                 )}
               </div>
 
-              <div className={styles.filterPills}>
+              <SlidingPillBar
+                activeKey={containerStatusFilter}
+                pillClassName={styles.filterPillHighlight}
+                className={styles.filterPills}
+                role="radiogroup"
+                aria-label="Filter containers by status"
+              >
                 <button
+                  type="button"
+                  role="radio"
+                  aria-checked={containerStatusFilter === 'all'}
+                  data-active={containerStatusFilter === 'all'}
                   className={`${styles.filterPill} ${containerStatusFilter === 'all' ? styles.filterPillActive : ''}`}
                   onClick={() => setContainerStatusFilter('all')}
                 >
                   All ({containers.length})
                 </button>
                 <button
+                  type="button"
+                  role="radio"
+                  aria-checked={containerStatusFilter === 'running'}
+                  data-active={containerStatusFilter === 'running'}
                   className={`${styles.filterPill} ${containerStatusFilter === 'running' ? styles.filterPillActive : ''}`}
                   onClick={() => setContainerStatusFilter('running')}
                 >
@@ -2813,13 +2846,17 @@ export default function DockerApp() {
                   Running ({runningCount})
                 </button>
                 <button
+                  type="button"
+                  role="radio"
+                  aria-checked={containerStatusFilter === 'stopped'}
+                  data-active={containerStatusFilter === 'stopped'}
                   className={`${styles.filterPill} ${containerStatusFilter === 'stopped' ? styles.filterPillActive : ''}`}
                   onClick={() => setContainerStatusFilter('stopped')}
                 >
                   <span className={styles.liveDotStopped} />
                   Stopped ({stoppedCount})
                 </button>
-              </div>
+              </SlidingPillBar>
             </div>
 
             <div className={styles.actionRight}>
@@ -3296,26 +3333,48 @@ export default function DockerApp() {
                 </div>
 
                 {/* Sub-Tab Navigation Bar */}
-                <div className={styles.detailTabs}>
+                <SlidingPillBar
+                  activeKey={activeTab}
+                  pillClassName={styles.detailTabLine}
+                  className={styles.detailTabs}
+                  role="tablist"
+                  aria-label="Container details"
+                >
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'stats'}
+                    data-active={activeTab === 'stats'}
                     className={`${styles.detailTab} ${activeTab === 'stats' ? styles.detailTabActive : ''}`}
                     onClick={() => setActiveTab('stats')}
                   >
                     Stats
                   </button>
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'inspect'}
+                    data-active={activeTab === 'inspect'}
                     className={`${styles.detailTab} ${activeTab === 'inspect' ? styles.detailTabActive : ''}`}
                     onClick={() => setActiveTab('inspect')}
                   >
                     Inspect
                   </button>
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'logs'}
+                    data-active={activeTab === 'logs'}
                     className={`${styles.detailTab} ${activeTab === 'logs' ? styles.detailTabActive : ''}`}
                     onClick={() => setActiveTab('logs')}
                   >
                     Logs
                   </button>
                   <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'console'}
+                    data-active={activeTab === 'console'}
                     className={`${styles.detailTab} ${activeTab === 'console' ? styles.detailTabActive : ''}`}
                     onClick={() => {
                       setActiveTab('console');
@@ -3326,7 +3385,7 @@ export default function DockerApp() {
                   >
                     Console
                   </button>
-                </div>
+                </SlidingPillBar>
 
                 {/* Sub-Tab Content Area */}
                 <div className={styles.detailContent}>
@@ -3878,9 +3937,18 @@ export default function DockerApp() {
                         <Upload size={11} /> Upload YAML
                       </button>
 
-                      <div className={styles.filterPills}>
+                      <SlidingPillBar
+                        activeKey={deployMode}
+                        pillClassName={styles.filterPillHighlight}
+                        className={styles.filterPills}
+                        role="radiogroup"
+                        aria-label="Compose deploy mode"
+                      >
                         <button
                           type="button"
+                          role="radio"
+                          aria-checked={deployMode === 'form'}
+                          data-active={deployMode === 'form'}
                           className={`${styles.filterPill} ${deployMode === 'form' ? styles.filterPillActive : ''}`}
                           onClick={switchToFormView}
                           disabled={deploying}
@@ -3890,6 +3958,9 @@ export default function DockerApp() {
                         </button>
                         <button
                           type="button"
+                          role="radio"
+                          aria-checked={deployMode === 'yaml'}
+                          data-active={deployMode === 'yaml'}
                           className={`${styles.filterPill} ${deployMode === 'yaml' ? styles.filterPillActive : ''}`}
                           onClick={switchToYamlView}
                           disabled={deploying}
@@ -3897,7 +3968,7 @@ export default function DockerApp() {
                         >
                           <Code size={11} /> YAML Editor
                         </button>
-                      </div>
+                      </SlidingPillBar>
                     </div>
                   </div>
                 </div>

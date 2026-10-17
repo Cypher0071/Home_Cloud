@@ -29,6 +29,14 @@
 }
 
 .tabNavGroup {
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-scale: 0.97;
+  --press-dur: 150ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --pill-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -45,7 +53,29 @@
   display: none;
 }
 
+.tabNavPill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: 0;
+  border-radius: 6px;
+  background: #171717;
+  border: 1px solid #333333;
+  box-shadow: var(--pill-shadow);
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  will-change: transform, width;
+}
+
 .tabBtn {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -57,19 +87,28 @@
   background: transparent;
   cursor: pointer;
   border-radius: 6px;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    transform var(--press-dur) var(--ease-smooth-out),
+    color var(--tabs-dur) var(--tabs-ease);
   font-family: var(--sans, sans-serif);
 }
 
-.tabBtn:hover {
-  color: var(--text-primary, #ededed);
-  background: rgba(255, 255, 255, 0.04);
+@media (hover: hover) and (pointer: fine) {
+  .tabBtn:not(.tabBtnActive):hover {
+    color: var(--text-primary, #ededed);
+  }
+}
+
+.tabBtn:is(:active, .is-pressed) {
+  transform: scale(var(--press-scale));
 }
 
 .tabBtnActive {
   color: #ffffff;
-  background: #171717;
-  border-color: #333333;
   font-weight: 600;
 }
 
@@ -81,6 +120,10 @@
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-muted, #737373);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  transition:
+    background var(--tabs-dur) var(--tabs-ease),
+    color var(--tabs-dur) var(--tabs-ease),
+    border-color var(--tabs-dur) var(--tabs-ease);
 }
 
 .tabBtnActive .tabCountBadge {
@@ -168,6 +211,14 @@
 }
 
 .filterPills {
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-scale: 0.97;
+  --press-dur: 150ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --pill-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -175,29 +226,63 @@
   padding: 2px;
   border-radius: 6px;
   border: 1px solid #262626;
+  white-space: nowrap;
+}
+
+.filterPillHighlight {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: 4px;
+  background: #1c1c1c;
+  border: 1px solid #333333;
+  box-shadow: var(--pill-shadow);
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  will-change: transform, width;
 }
 
 .filterPill {
+  position: relative;
+  z-index: 1;
   padding: 3px 9px;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-muted, #737373);
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    transform var(--press-dur) var(--ease-smooth-out),
+    color var(--tabs-dur) var(--tabs-ease);
 }
 
-.filterPill:hover {
-  color: var(--text-primary, #ededed);
+@media (hover: hover) and (pointer: fine) {
+  .filterPill:not(.filterPillActive):hover {
+    color: var(--text-primary, #ededed);
+  }
+}
+
+.filterPill:is(:active, .is-pressed) {
+  transform: scale(var(--press-scale));
 }
 
 .filterPillActive {
-  background: #1c1c1c;
   color: #ffffff;
   font-weight: 600;
 }
@@ -779,6 +864,13 @@
 }
 
 .detailTabs {
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-scale: 0.98;
+  --press-dur: 150ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  position: relative;
   display: flex;
   background: #000000;
   border-bottom: 1px solid #262626;
@@ -786,7 +878,27 @@
   padding: 0 4px;
 }
 
+.detailTabLine {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background: #ededed;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  will-change: transform, width;
+}
+
 .detailTab {
+  position: relative;
+  z-index: 0;
   flex: 1;
   padding: 8px 4px;
   font-size: 11.5px;
@@ -796,18 +908,28 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    transform var(--press-dur) var(--ease-smooth-out),
+    color var(--tabs-dur) var(--tabs-ease);
   font-family: var(--sans, sans-serif);
 }
 
-.detailTab:hover {
-  color: var(--text-secondary, #a1a1a1);
+@media (hover: hover) and (pointer: fine) {
+  .detailTab:not(.detailTabActive):hover {
+    color: var(--text-secondary, #a1a1a1);
+  }
+}
+
+.detailTab:is(:active, .is-pressed) {
+  transform: scale(var(--press-scale));
 }
 
 .detailTabActive {
   color: #ffffff;
-  border-bottom-color: #ededed;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.02);
 }
@@ -2553,5 +2675,22 @@
   .composeGrid,
   .stacksGrid {
     grid-template-columns: 1fr !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabNavPill,
+  .filterPillHighlight,
+  .detailTabLine,
+  .tabBtn,
+  .filterPill,
+  .detailTab {
+    transition: none !important;
+  }
+
+  .tabBtn:is(:active, .is-pressed),
+  .filterPill:is(:active, .is-pressed),
+  .detailTab:is(:active, .is-pressed) {
+    transform: none !important;
   }
 }
