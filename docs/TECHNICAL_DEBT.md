@@ -138,3 +138,11 @@ This document outlines the current technical limitations, security tradeoffs, op
 * **Debt**: `cloudflared` buffers proxied responses unless the origin sends `Content-Type: text/event-stream`. Any future live-output endpoint that isn't SSE (e.g. chunked plain-text log streams or large file downloads with progress) will appear frozen until the response completes.
 * **Tradeoff**: Live features must use SSE or WebSockets (as metrics, compose deploy logs, and the terminal already do).
 * **Source**: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/troubleshoot-tunnels/common-errors/
+
+### 21. Cross-Device Settings Persistence & Server-Side Preferences Sync
+* **Debt**: Wallpaper preferences (active preset ID and fit mode) and custom wallpaper image assets are currently stored purely client-side via browser `localStorage` (`home-cloud:wallpaper`) and browser `IndexedDB` (`home-cloud/kv/custom-wallpaper`).
+* **Tradeoff**: Personalization settings and custom wallpapers are isolated to each individual browser instance. Changing settings or uploading custom wallpapers on one client (e.g. laptop) does not synchronize to other client devices (e.g. mobile phone, tablet, or another browser) upon login.
+* **Proposed Architecture**:
+  1. Add a backend user preferences API in the Node.js agent (e.g. `GET /api/settings/preferences` and `PUT /api/settings/preferences`) backed by host-side JSON storage (`~/.config/home-cloud/preferences.json` or SQLite).
+  2. Implement an asset upload endpoint for custom wallpapers (e.g. `POST /api/settings/wallpaper` saving to host storage with authentication and static delivery).
+  3. Update dashboard hooks to use client-side caching with optimistic UI updates and background server sync.
