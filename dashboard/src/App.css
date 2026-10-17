@@ -185,7 +185,7 @@
 /* ─── Window Body ─── */
 .window-body {
   flex-grow: 1;
-  overflow: auto;
+  overflow: hidden;
   position: relative;
   background: transparent;
 }
