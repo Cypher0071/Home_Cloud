@@ -5,8 +5,11 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: #0d1522 url('./assets/desktop_wallpaper.jpg') no-repeat center center;
-  background-size: cover;
+  background-color: var(--desktop-wallpaper-color, #0d1522);
+  background-image: var(--desktop-wallpaper-image);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: var(--desktop-wallpaper-size, cover);
   display: flex;
   flex-direction: column;
   color: var(--text-secondary);
@@ -746,6 +749,37 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.mobile-icon-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #ededed;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-icon-btn:active {
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+}
+
+.mobile-icon-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+.mobile-icon-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.60);
+  outline-offset: 1px;
 }
 
 .mobile-signout-btn {

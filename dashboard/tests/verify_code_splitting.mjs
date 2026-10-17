@@ -138,7 +138,7 @@ console.log('  ✔ Immediate success, retry success with backoff, and exhaustion
 // ─── 3. Test windowAppRegistry ───
 console.log('[Test 3] windowAppRegistry: App Caching & Cache-Busting');
 
-const registeredApps = ['metrics', 'files', 'terminal', 'docker', 'docker-console'];
+const registeredApps = ['metrics', 'files', 'terminal', 'docker', 'docker-console', 'settings'];
 
 for (const appId of registeredApps) {
   // Test cache identity for same version

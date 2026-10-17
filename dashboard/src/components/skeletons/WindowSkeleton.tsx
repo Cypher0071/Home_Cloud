@@ -1,7 +1,7 @@
 import styles from './WindowSkeleton.module.css';
 
 export interface WindowSkeletonProps {
-  type?: 'terminal' | 'docker' | 'files' | 'metrics' | string;
+  type?: 'terminal' | 'docker' | 'files' | 'metrics' | 'settings' | string;
 }
 
 export default function WindowSkeleton({ type = 'default' }: WindowSkeletonProps) {
@@ -94,6 +94,28 @@ export default function WindowSkeleton({ type = 'default' }: WindowSkeletonProps
               <div className={styles.shimmer} style={{ width: '30%', height: '12px' }} />
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'settings') {
+    return (
+      <div className={styles.dockerContainer} role="status" aria-label="Loading settings">
+        <div className={styles.dockerSidebar}>
+          <div className={styles.dockerNavItem}>
+            <div className={styles.shimmer} style={{ width: '16px', height: '16px', borderRadius: '4px' }} />
+            <div className={styles.shimmer} style={{ width: '72%', height: '12px' }} />
+          </div>
+        </div>
+        <div className={styles.dockerMain}>
+          <div className={styles.shimmer} style={{ width: '140px', height: '22px' }} />
+          <div className={styles.shimmer} style={{ width: '100%', height: '140px', borderRadius: '10px' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className={styles.shimmer} style={{ aspectRatio: '16 / 9', borderRadius: '8px' }} />
+            ))}
+          </div>
         </div>
       </div>
     );

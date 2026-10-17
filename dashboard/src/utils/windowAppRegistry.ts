@@ -7,7 +7,8 @@ export type WindowAppId =
   | 'files'
   | 'terminal'
   | 'docker'
-  | 'docker-console';
+  | 'docker-console'
+  | 'settings';
 
 type AppLoader = () => Promise<{ default: ComponentType<any> }>;
 
@@ -17,6 +18,7 @@ const appLoaders: Record<WindowAppId, AppLoader> = {
   terminal: () => import('../components/apps/TerminalApp'),
   docker: () => import('../components/apps/DockerApp'),
   'docker-console': () => import('../components/apps/ContainerConsoleTab'),
+  settings: () => import('../components/apps/SettingsApp'),
 };
 
 const lazyCache = new Map<string, LazyExoticComponent<ComponentType<any>>>();
