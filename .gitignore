@@ -28,16 +28,28 @@ lerna-debug.log*
 *.env.local
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-!.vscode/launch.json
+.vscode/
 .idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.swo
+*.swn
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+.ruff_cache/
+
+# Raw debug dumps and temporary artifacts
+*.raw.html
+*.raw.txt
+*.dump
 
 # OS metadata files
 .DS_Store

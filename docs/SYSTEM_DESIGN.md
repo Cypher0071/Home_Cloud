@@ -212,7 +212,7 @@ flowchart LR
   classDef engine fill:#0d3d38,stroke:#14b8a6,color:#e8eaed
 
   DEV["pnpm dev<br/>concurrently"] --> ADEV["nodemon index.js"]
-  DEV --> VITE["vite  :5173<br/>no proxy configured"]
+  DEV --> VITE["vite  :5173<br/>proxies /api & WS to :3000"]
   PROD["pnpm build + start"] --> APROD["node index.js"]
   APROD --> STATIC["serves dashboard/dist"]
   ADEV --> CF["child: cloudflared"]
@@ -637,7 +637,7 @@ These exist in `docs/implementation/` as future work, not as running processes:
 | Multi-user / RBAC | Single passcode |
 | Volume backup / watchdog / live `docker update` quotas | V3 |
 | `*.homecloud.app` central SaaS | V4 |
-| Vite dev proxy | Missing — use the Agent origin |
+| Vite dev proxy | Configured in `vite.config.ts` (proxies `/api`, `/terminal`, `/ws` to `:3000`) |
 
 Known debts that affect the picture: hardcoded `:3000`, hardcoded `BASE_DIR`, hardcoded cloudflared config path in `tunnel.js` vs `HOME`-relative path in `ingress.js`. (Resolved debts: terminal WS now features decoupled persistent PTY sessions with 5MB scrollback replay and auto-reconnect, and `/api/health` is a public CORS/PNA endpoint).
 
