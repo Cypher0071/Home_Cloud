@@ -22,19 +22,9 @@ This document outlines the current technical limitations, security tradeoffs, op
 * **Status**: Resolved.
 * **Resolution**: Refactored `dashboard/src/pages/files.tsx` and `dashboard/src/components/apps/DockerApp.tsx` along with `ContainerConsoleTab.tsx` and `useNetworkDetector.ts`. Eliminated all synchronous `setState` in `useEffect` violations via deferred updates (`setTimeout(..., 0)`), resolved all missing `useCallback` dependencies in keyboard shortcut listeners, defined strict TypeScript interfaces (`BackendFileEntry`, `DockerRawStats`, `DockerInspectData`) replacing explicit `any` usages, and safely typed `catch` blocks with `unknown`. Verified `pnpm --filter dashboard lint` and `pnpm --filter dashboard build` exit with 0 errors.
 
-### 4. Web Terminal E2E Test Suite Regressions (8 Failing Tests)
-* **Debt**: The test runner `.agents/tests/terminal_e2e.test.mjs` fails 8 out of 93 automated test cases.
-* **Details**:
-  * Failing tests:
-    1. `T1.28`: Clear button click invokes `term.clear()` and `term.focus()`
-    2. `T1.29`: Reconnect button click writes notification banner, focuses term, and executes `connect()`
-    3. `T1.40`: Proper React 19 type safety with typed `useRef` and `useState` definitions
-    4. `T2.24`: Status transitions to "disconnected" inside `socket.onerror` handler
-    5. `T2.38`: WebSocket endpoint targets `/terminal` path
-    6. `T3.1`: Font loading + xterm fit interaction ensures refit when JetBrains Mono is ready
-    7. `T3.4`: Toolbar Clear action clears xterm buffer and immediately restores terminal focus
-    8. `T3.5`: Container resizing triggers `ResizeObserver` and `FitAddon` calculation protected by try/catch
-  * **Root Cause**: Recent mobile optimization and soft-key toolbar commits (`738cd9f` & `5383e12`) refactored `dashboard/src/components/apps/TerminalApp.tsx` (introducing `SESSION_ID = 'term_main'`, soft keys, and `visualViewport` event handling), causing the component's internal structure to diverge from static test regex expectations.
+### 4. Web Terminal E2E Test Suite Regressions (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**: Updated the 8 obsolete test assertions in `.agents/tests/terminal_e2e.test.mjs` (`T1.28`, `T1.29`, `T1.40`, `T2.24`, `T2.38`, `T3.1`, `T3.4`, `T3.5`) to align with `TerminalApp.tsx`'s production implementation (shell-driven Ctrl+L screen clear, `SESSION_ID` query param, `ConnectionStatus` type alias, delegation to `onclose`, and unified `syncDimensions()` callback). All 93 test cases now pass (100% pass rate).
 
 ### 5. Dead & Hardcoded Standalone Terminal Prototype (Resolved ✅)
 * **Status**: Resolved.

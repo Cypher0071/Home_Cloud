@@ -79,13 +79,18 @@ These items **must** be resolved before the repository visibility is changed to 
 
 ---
 
-### 6. Stabilize Automated Test Suites
-* **Problem**:
-  1. Root [`package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/package.json) lacks a unified `pnpm test` script.
-  2. The E2E test runner [`.agents/tests/terminal_e2e.test.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/.agents/tests/terminal_e2e.test.mjs) currently fails 8 test cases (`T1.28`, `T1.29`, `T1.40`, `T2.24`, `T2.38`, `T3.1`, `T3.4`, `T3.5`) because the tests expect obsolete regex patterns that changed during the mobile toolbar and `SESSION_ID` refactor.
-* **Required Action**:
-  * Update terminal test assertions to match the current `TerminalApp.tsx` implementation.
-  * Add a standard `pnpm test` command in root `package.json` running agent tests and dashboard validation.
+### 6. Stabilize Automated Test Suites (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**:
+  * Modernized test assertions in [`.agents/tests/terminal_e2e.test.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/.agents/tests/terminal_e2e.test.mjs) to match the production `TerminalApp.tsx` implementation:
+    * `T1.28` & `T3.4`: Assert that toolbar Clear button sends `\x0c` (Ctrl+L) over socket for shell prompt redraw and retains terminal focus.
+    * `T1.29`: Assert that Reconnect button updates status to connecting, invokes `connectSocket(term)`, and focuses terminal.
+    * `T1.40`: Assert proper React 19 type safety with `ConnectionStatus` type alias.
+    * `T2.24`: Assert that `socket.onerror` delegates retry/status to `socket.onclose`.
+    * `T2.38`: Assert WebSocket endpoint targets `/terminal?sessionId=${encodeURIComponent(SESSION_ID)}`.
+    * `T3.1` & `T3.5`: Assert font loading and ResizeObserver trigger `syncDimensions()` protected by try/catch for PTY fit and col/row synchronization.
+  * Added unified `pnpm test` script in root [`package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/package.json) running all 3 verification tiers (`test:dashboard`, `test:agent`, `test:e2e`).
+  * Verified: All 93 terminal E2E tests pass (100%), and `pnpm test` exits cleanly with code 0 across all suites.
 
 ---
 

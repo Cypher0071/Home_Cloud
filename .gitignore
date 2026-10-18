@@ -81,7 +81,8 @@ cookies.txt
 .playwright-cli/
 .screenshots/
 /*.png
-.agents/
+.agents/*
+!.agents/tests/
 TEST_READY.md
 
 # Astro

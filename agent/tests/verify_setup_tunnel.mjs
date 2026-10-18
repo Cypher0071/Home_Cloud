@@ -341,7 +341,7 @@ ingress:
 		const logs = fs.readFileSync(logFile, "utf8");
 		assert.match(logs, /tunnel login/);
 		assert.match(logs, /tunnel create home-cloud/);
-		assert.match(logs, /tunnel route dns home-cloud dash\.myserver\.live/);
+		assert.match(logs, /tunnel route dns (--overwrite-dns )?home-cloud dash\.myserver\.live/);
 
 		console.log("  ✔ Full automated Cloudflare tunnel flow completed successfully.");
 	} finally {
