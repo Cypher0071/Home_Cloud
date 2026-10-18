@@ -47,3 +47,28 @@ This feature transforms the browser experience from a transient session into a p
   * On dashboard login or page reload, automatically restore previously opened windows in their exact positions and sizes.
   * Seamless integration with lazy code-splitting and persistent terminal sessions, reattaching terminal and container monitors smoothly on reload.
 
+---
+
+### Phase 4: One-Click Auto-Update Engine & Release Pipeline 🔄
+
+This feature allows Home Cloud to check for updates, verify release authenticity, pull upstream revisions, rebuild the client dashboard, and reload the systemd service seamlessly with zero manual terminal SSH intervention.
+
+* [ ] **Release Tag & Manifest Polling:**
+  * Background agent service periodically checks GitHub Releases API (`api.github.com/repos/:owner/:repo/releases/latest`) or Git remote tags.
+  * Compares current semantic version (`package.json`) against upstream latest release notes, changelogs, and breaking change warnings.
+  * Configurable update channels: `stable` (tagged GitHub releases only) vs `nightly`/`edge` (`main` branch commits).
+* [ ] **Safe Self-Update Execution Pipeline:**
+  * Automated migration runner executing:
+    1. Pre-flight health checks (ensures disk space via `df`, checks git clean working tree).
+    2. Git pull / fast-forward merge of latest verified release tag.
+    3. Monorepo dependency resolution (`pnpm install --frozen-lockfile`).
+    4. Frontend dashboard rebuild (`pnpm --filter dashboard build`).
+    5. Database/config schema migrations if applicable.
+    6. Systemd service restart (`systemctl restart home-cloud` via agent worker or detached supervisory spawn).
+* [ ] **Rollback Capability & Health Watchdog:**
+  * Auto-rollback to previous Git commit/tag if the post-update agent health check (`GET http://localhost:3000/api/health`) fails or throws unhandled startup exceptions within 30 seconds.
+* [ ] **Dashboard Update Management UI:**
+  * Badge indicator in Desktop Dock/Settings app alerting the user when an update is available.
+  * Modal view displaying Markdown release notes, changelog highlights, and a 1-click **"Update Now"** action with real-time SSE progress streaming.
+  * Optional toggle for automated overnight unattended updates.
+
