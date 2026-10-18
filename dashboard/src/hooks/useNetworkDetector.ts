@@ -177,7 +177,6 @@ export function useNetworkDetector(): NetworkDetectorResult {
 
   useEffect(() => {
     if (cachedResult) {
-      setState(cachedResult);
       // If cached result has incomplete metadata (e.g. from pre-auth 401 on login page),
       // trigger background revalidation so authenticated views get fresh baseDir and info.
       if (cachedResult.baseDir === null && !cachedResult.isDirectLocal && !inFlightPromise) {

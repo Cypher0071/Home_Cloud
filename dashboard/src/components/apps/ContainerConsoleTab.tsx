@@ -62,7 +62,9 @@ export default function ContainerConsoleTab({ containerId, containerName, isRunn
       term.open(terminalRef.current);
       try {
         fitAddon.fit();
-      } catch (e) {}
+      } catch {
+        // ignore resize measurement errors during initial render
+      }
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -76,7 +78,9 @@ export default function ContainerConsoleTab({ containerId, containerName, isRunn
         try {
           fitAddon.fit();
           socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-        } catch (e) {}
+        } catch {
+          // ignore resize errors if disconnected
+        }
       }
     };
 
@@ -112,7 +116,9 @@ export default function ContainerConsoleTab({ containerId, containerName, isRunn
             );
           }
         }
-      } catch (e) {}
+      } catch {
+        // ignore resize errors if container detached
+      }
     });
 
     if (terminalRef.current) {
