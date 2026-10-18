@@ -34,13 +34,16 @@ export function resetNetworkDetectorCache(): Promise<NetworkDetectorResult> {
 
 async function runDetectionOnce(): Promise<NetworkDetectorResult> {
   const hostname = window.location.hostname;
-  const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) || hostname === 'localhost';
+  const currentPort = window.location.port
+    ? parseInt(window.location.port, 10)
+    : (window.location.protocol === 'https:' ? 443 : 80);
 
   let localIp: string | null = null;
   let localPort = 3000;
   let baseDir: string | null = null;
   let cfDomain = '';
 
+  // 1. Try authenticated /api/network/info first (contains full metadata when logged in)
   try {
     const infoRes = await fetch('/api/network/info');
     if (infoRes.ok) {
@@ -49,22 +52,28 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
       localPort = info.serverLocalPort || 3000;
       baseDir = info.baseDir || null;
       cfDomain = info.cfDomain || '';
-
-      // Persist in localStorage for returning users on this browser
-      if (localIp) {
-        try {
-          localStorage.setItem(LOCAL_STORAGE_IP_KEY, localIp);
-          localStorage.setItem(LOCAL_STORAGE_PORT_KEY, String(localPort));
-        } catch {
-          /* ignore storage quota/security errors */
-        }
-      }
     }
   } catch {
-    /* network or auth error */
+    /* not authenticated or network error */
   }
 
-  // If unauthenticated or offline, use cached IP from localStorage if available
+  // 2. If unauthenticated, fetch public /api/ping to discover local IP/port
+  if (!localIp) {
+    try {
+      const pingRes = await fetch('/api/ping');
+      if (pingRes.ok) {
+        const pingData = await pingRes.json();
+        if (pingData.serverLocalIp) {
+          localIp = pingData.serverLocalIp;
+          localPort = pingData.serverLocalPort || 3000;
+        }
+      }
+    } catch {
+      /* offline or network error */
+    }
+  }
+
+  // 3. Fallback to localStorage if available
   if (!localIp) {
     try {
       const storedIp = localStorage.getItem(LOCAL_STORAGE_IP_KEY);
@@ -78,9 +87,26 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
     }
   }
 
+  // Persist discovered IP & port in localStorage for future pre-auth discovery
+  if (localIp) {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_IP_KEY, localIp);
+      localStorage.setItem(LOCAL_STORAGE_PORT_KEY, String(localPort));
+    } catch {
+      /* ignore storage quota/security errors */
+    }
+  }
+
+  // Determine if the current window is ALREADY directly loaded from the server's local IP and port
+  const isDirectLocal = Boolean(
+    localIp
+      ? hostname === localIp && currentPort === localPort
+      : (hostname === 'localhost' || hostname === '127.0.0.1') && currentPort === localPort
+  );
+
   const baseResult: NetworkDetectorResult = {
-    isLocalLAN: isIpAddress,
-    isDirectLocal: isIpAddress,
+    isLocalLAN: isDirectLocal,
+    isDirectLocal,
     serverLocalIp: localIp,
     serverLocalPort: localPort,
     baseDir,
@@ -93,13 +119,16 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
     },
   };
 
-  if (isIpAddress) {
+  // If already running directly on the local IP:port, we're done!
+  if (isDirectLocal) {
     cachedResult = baseResult;
     return baseResult;
   }
 
-  // Micro-ping check if on remote hostname
-  const stayRemote = new URLSearchParams(window.location.search).has('stay_remote');
+  // Micro-ping check if on remote hostname, proxy, or dev port
+  const stayRemote =
+    new URLSearchParams(window.location.search).has('stay_remote') ||
+    new URLSearchParams(window.location.search).has('stay_dev');
   if (localIp && !stayRemote) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 1500);
@@ -150,24 +179,43 @@ export function useNetworkDetector(): NetworkDetectorResult {
   const [state, setState] = useState<NetworkDetectorResult>(() => {
     if (cachedResult) return cachedResult;
     const hostname = window.location.hostname;
-    const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) || hostname === 'localhost';
-    if (isIpAddress) {
+    const currentPort = window.location.port
+      ? parseInt(window.location.port, 10)
+      : (window.location.protocol === 'https:' ? 443 : 80);
+
+    let storedIp: string | null = null;
+    let storedPort = 3000;
+    try {
+      storedIp = localStorage.getItem(LOCAL_STORAGE_IP_KEY);
+      storedPort = parseInt(localStorage.getItem(LOCAL_STORAGE_PORT_KEY) || '3000', 10);
+    } catch {
+      /* ignore */
+    }
+
+    const isDirectLocal = Boolean(
+      storedIp
+        ? hostname === storedIp && currentPort === storedPort
+        : /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) && hostname !== '127.0.0.1' && currentPort === 3000
+    );
+
+    if (isDirectLocal) {
       return {
         isLocalLAN: true,
         isDirectLocal: true,
-        serverLocalIp: hostname,
-        serverLocalPort: parseInt(window.location.port || '3000', 10),
+        serverLocalIp: storedIp || hostname,
+        serverLocalPort: storedPort,
         baseDir: null,
         cfDomain: '',
         checking: false,
         redirectToLocal: () => {},
       };
     }
+
     return {
       isLocalLAN: false,
       isDirectLocal: false,
-      serverLocalIp: null,
-      serverLocalPort: 3000,
+      serverLocalIp: storedIp,
+      serverLocalPort: storedPort,
       baseDir: null,
       cfDomain: '',
       checking: true,
