@@ -51,12 +51,9 @@ This document outlines the current technical limitations, security tradeoffs, op
 
 ## 🔒 Security, Authentication & Privilege Boundary Gaps
 
-### 6. Plaintext Password Comparison & Zero Login Rate Limiting
-* **Debt**: In `agent/routes/auth.js`, the passcode check uses direct string equality: `process.env.PASSWORD === req.body.password`.
-* **Tradeoff / Risk**:
-  * Vulnerable to timing attacks compared to constant-time comparisons (`crypto.timingSafeEqual`).
-  * The password is not hashed with modern key derivation functions (e.g. Argon2id or bcrypt).
-  * `POST /api/auth/login` lacks rate limiting, brute-force locking, or exponential delay backoff. If exposed without Cloudflare WAF rate limiting, the endpoint is vulnerable to automated credential stuffing.
+### 6. Plaintext Password Comparison & Zero Login Rate Limiting (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**: Replaced direct string equality with constant-time SHA-256 buffer comparison (`crypto.timingSafeEqual`) in [`agent/routes/auth.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/auth.js) to eliminate timing attack vectors. Implemented an in-memory sliding-window rate limiter on `/api/auth/login` enforcing a 5-failed-attempts limit per minute with a 5-minute IP lockout, proxy-aware IP detection (`cf-connecting-ip`, `x-forwarded-for`), and standard HTTP `429 Too Many Requests` + `Retry-After` response headers. Verified with automated test suite in [`agent/tests/verify_auth.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/tests/verify_auth.mjs).
 
 ### 7. Docker Compose Privilege Escalation vs Container Bind Mount Jail Mismatch
 * **Debt**: Single container creation (`agent/routes/docker.js`) and Compose deployments (`agent/routes/compose.js`) have conflicting security boundaries.

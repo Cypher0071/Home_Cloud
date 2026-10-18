@@ -8,7 +8,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 
 | Category | Status | Blocking Severity | Key Issues / Gaps |
 | :--- | :---: | :---: | :--- |
-| **P0: Public Release Blockers** | ❌ Action Required | **CRITICAL** | Missing open-source license, timing attack in auth, unauthenticated host leak, dead prototype code, 46 ESLint errors, 8 failing tests. |
+| **P0: Public Release Blockers** | ⚠️ Action Required | **CRITICAL** | Unauthenticated host leak, dead prototype code, 46 ESLint errors, 8 failing tests. *(License ✅, Auth hardening ✅)* |
 | **P1: Security & Privilege Boundaries** | ⚠️ High Priority | **HIGH** | Passkey (WebAuthn) login, Compose jail bypass, unrevocable 7-day JWTs, static `.env` passcode, 100MB tunnel upload cap. |
 | **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
@@ -19,30 +19,27 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 
 These items **must** be resolved before the repository visibility is changed to public. Neglecting any of these risks legal ambiguity, immediate credential vulnerability, or severe user onboarding failure.
 
-### 1. Add an Open-Source License
-* **Problem**: There is currently no `LICENSE` file in the root of the repository. While `package.json` specifies `"license": "ISC"`, an explicit license file is legally required for public open-source usage.
-* **Target Files**:
-  * Create [`LICENSE`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/LICENSE)
-  * Update [`package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/package.json#L13)
-* **Required Action**:
-  * Adopt the **MIT License** (or Apache 2.0) with standard copyright attribution (`Copyright (c) 2026 Home Cloud Contributors`).
-  * Ensure consistent SPDX license identifier in `package.json`, `agent/package.json`, and `dashboard/package.json`.
+### 1. Open-Source License Applied (Resolved ✅)
+* **Status**: Resolved (Apache License, Version 2.0).
+* **Verification**:
+  * Verified [`LICENSE`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/LICENSE) exists in root with full Apache 2.0 terms and `Copyright 2026 Rudra Agrawal (Cypher0071)`.
+  * Verified consistent SPDX identifier `"license": "Apache-2.0"` in root [`package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/package.json#L13) and [`agent/package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/package.json#L12).
+  * Tested and validated on both `Cypher-0071/siren` and `main` branches.
 
 ---
 
-### 2. Constant-Time Authentication & Login Rate Limiting
-* **Problem**:
-  1. In [`agent/routes/auth.js:L7`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/auth.js#L7), passcode comparison uses standard JavaScript string equality:
-     ```javascript
-     if (process.env.PASSWORD && process.env.PASSWORD === req.body.password)
-     ```
-     Standard string equality terminates comparison at the first mismatched byte, creating a timing attack vulnerability that allows remote attackers to infer the password byte-by-byte over high-precision HTTP ping measurements.
-  2. `POST /api/auth/login` lacks rate-limiting or exponential delay. Anyone hitting the public Cloudflare tunnel can execute automated dictionary and brute-force attacks at thousands of requests per second.
-* **Target File**:
-  * [`agent/routes/auth.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/auth.js)
-* **Required Action**:
-  * Replace direct string equality with `crypto.timingSafeEqual` comparing SHA-256 hashed buffers of `process.env.PASSWORD` and `req.body.password`.
-  * Implement an in-memory sliding window or token-bucket rate limiter on `/api/auth/login` (e.g. max 5 attempts per minute per IP with exponential delay or temporary 15-minute lockouts).
+### 2. Constant-Time Authentication & Login Rate Limiting (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**:
+  * Implemented constant-time password comparison in [`agent/routes/auth.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/auth.js) using `crypto.timingSafeEqual` with SHA-256 pre-hashed buffers. Eliminates string comparison timing attacks and variable-length buffer exceptions.
+  * Implemented an in-memory sliding window rate limiter and brute-force lockout:
+    * 5 failed attempts within 60 seconds triggers a 5-minute temporary IP lockout.
+    * Returns HTTP `429 Too Many Requests` with standard `Retry-After` header and remaining lockout seconds.
+    * Extracts client IP accurately across reverse proxies and Cloudflare Tunnels (`cf-connecting-ip`, `x-forwarded-for`, `req.ip`).
+    * Resets failed attempt counter immediately upon successful password authentication.
+    * Unref'd background garbage collector evicts expired records every 5 minutes.
+* **Verification**:
+  * Validated with automated test suite in [`agent/tests/verify_auth.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/tests/verify_auth.mjs). Verified exact match, character mismatch, length variance, non-string guards, multi-attempt lockout, retry headers, IP isolation, and post-login counter clearance.
 
 ---
 
@@ -279,8 +276,8 @@ Final polish required for public GitHub launch, contributor attraction, and fric
 ```mermaid
 flowchart TD
     subgraph P0["P0: Public Release Blockers"]
-        L[Add MIT License]
-        A[Constant-Time Auth + Rate Limit]
+        L["Apache 2.0 License (Resolved ✅)"]
+        A["Constant-Time Auth & Rate Limit (Resolved ✅)"]
         N[Patch Network Info Leak]
         T[Remove Dead Terminal Prototype]
         E[Fix 46 ESLint Errors]
@@ -317,7 +314,7 @@ flowchart TD
 ```
 
 ### Execution Phases:
-1. **Phase 1 (P0)**: Fix immediate blockers (License, timing attack, information leak, delete dead terminal prototype, fix ESLint and E2E tests).
+1. **Phase 1 (P0)**: Fix immediate blockers (License ✅, Auth hardening ✅, information leak, delete dead terminal prototype, fix ESLint and E2E tests).
 2. **Phase 2 (P1)**: Implement passkey authentication, server session revocation, and 100MB chunked uploads.
 3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, and desktop window state persistence.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.
