@@ -108,7 +108,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-function formatDate(raw: string | Date): string {
+function formatDate(raw: string | number | Date): string {
   const d = new Date(raw);
   return d.toLocaleDateString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric',
@@ -132,7 +132,22 @@ function viewerTypeFor(ext: string): 'image' | 'text' | 'pdf' | 'video' | 'audio
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
-export const fetchDrives = async (): Promise<DriveInfo[]> => {
+interface BackendFileEntry {
+  name: string;
+  isDirectory: boolean;
+  size: number;
+  modified: string | number | Date;
+  mimeType?: string | null;
+  isSymlink?: boolean;
+  isBroken?: boolean;
+  path?: string;
+}
+
+interface ApiResponseFiles {
+  files: BackendFileEntry[];
+}
+
+const fetchDrives = async (): Promise<DriveInfo[]> => {
   try {
     const response = await axios.get<DriveInfo[]>('/api/files/drives');
     return Array.isArray(response.data) ? response.data : [];
@@ -142,9 +157,8 @@ export const fetchDrives = async (): Promise<DriveInfo[]> => {
 };
 
 const fetchFiles = async (dirPath: string): Promise<FileItem[]> => {
-  const response = await axios.get('/api/files', { params: { path: dirPath } });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return response.data.files.map((f: any): FileItem => ({
+  const response = await axios.get<ApiResponseFiles>('/api/files', { params: { path: dirPath } });
+  return (response.data?.files || []).map((f: BackendFileEntry): FileItem => ({
     name: f.name,
     type: f.isDirectory ? 'folder' : 'file',
     size: f.isDirectory ? '--' : formatBytes(f.size),
@@ -502,15 +516,21 @@ export default function FileExplorer() {
 
   useEffect(() => {
     if (basePath && !currentPath) {
-      setCurrentPath(basePath);
-      setHistory([basePath]);
-      setHistoryIndex(0);
+      const timer = setTimeout(() => {
+        setCurrentPath(basePath);
+        setHistory([basePath]);
+        setHistoryIndex(0);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [basePath, currentPath]);
 
   useEffect(() => {
     if (!currentPath) return;
-    loadDirectory(currentPath);
+    const timer = setTimeout(() => {
+      loadDirectory(currentPath);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [currentPath, loadDirectory]);
 
   useEffect(() => {
@@ -520,23 +540,26 @@ export default function FileExplorer() {
   // ─── Backend search trigger effect with debounce & cancellation ───
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults([]);
-      setSearchLoading(false);
-      return;
+      const timer = setTimeout(() => {
+        setSearchResults([]);
+        setSearchLoading(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
-    setSearchLoading(true);
+    const loadTimer = setTimeout(() => {
+      setSearchLoading(true);
+    }, 0);
     const controller = new AbortController();
 
     const delayDebounceFn = setTimeout(async () => {
       try {
-        const response = await axios.get('/api/files/search', {
+        const response = await axios.get<BackendFileEntry[]>('/api/files/search', {
           params: { search: searchQuery, path: currentPath },
           signal: controller.signal,
         });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mappedResults = response.data.map((f: any): FileItem => ({
+        const mappedResults = (response.data || []).map((f: BackendFileEntry): FileItem => ({
           name: f.name,
           type: f.isDirectory ? 'folder' : 'file',
           size: f.isDirectory ? '--' : formatBytes(f.size),
@@ -548,7 +571,7 @@ export default function FileExplorer() {
         }));
 
         setSearchResults(mappedResults);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (axios.isCancel(err)) {
           return;
         }
@@ -559,6 +582,7 @@ export default function FileExplorer() {
     }, 300);
 
     return () => {
+      clearTimeout(loadTimer);
       clearTimeout(delayDebounceFn);
       controller.abort();
     };
@@ -930,8 +954,10 @@ export default function FileExplorer() {
         path: currentPath,
       });
       loadDirectory(currentPath);
-    } catch (err: any) {
-      const msg = err.response?.data?.error ?? `Failed to create ${type}`;
+    } catch (err: unknown) {
+      const msg = (axios.isAxiosError(err) && err.response?.data?.error)
+        ? String(err.response.data.error)
+        : `Failed to create ${type}`;
       alert(`Error: ${msg}`);
       loadDirectory(currentPath);
     }
@@ -1017,15 +1043,17 @@ export default function FileExplorer() {
       } else {
         loadDirectory(currentPath);
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error ?? 'Rename failed';
+    } catch (err: unknown) {
+      const msg = (axios.isAxiosError(err) && err.response?.data?.error)
+        ? String(err.response.data.error)
+        : 'Rename failed';
       alert(`Error: ${msg}`);
       setRenamingItem(null);
     }
   };
   
   // ─── Batch Copy & Cut & Paste ───
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     const selected = displayedFiles.filter(f => selectedItemNames.has(f.name));
     if (selected.length > 0) {
       const srcPath = selected[0].path
@@ -1033,9 +1061,9 @@ export default function FileExplorer() {
         : currentPath;
       setClipboard({ items: selected, sourcePath: srcPath, action: 'copy' });
     }
-  };
+  }, [displayedFiles, selectedItemNames, currentPath]);
 
-  const handleCut = () => {
+  const handleCut = useCallback(() => {
     const selected = displayedFiles.filter(f => selectedItemNames.has(f.name));
     if (selected.length > 0) {
       const srcPath = selected[0].path
@@ -1043,9 +1071,9 @@ export default function FileExplorer() {
         : currentPath;
       setClipboard({ items: selected, sourcePath: srcPath, action: 'cut' });
     }
-  };
+  }, [displayedFiles, selectedItemNames, currentPath]);
 
-  const handlePaste = async () => {
+  const handlePaste = useCallback(async () => {
     if (!clipboard || clipboard.items.length === 0) return;
     try {
       for (const item of clipboard.items) {
@@ -1063,12 +1091,14 @@ export default function FileExplorer() {
         setClipboard(null);
       }
       loadDirectory(currentPath);
-    } catch (err: any) {
-      const msg = err.response?.data?.error ?? 'Paste operation failed';
+    } catch (err: unknown) {
+      const msg = (axios.isAxiosError(err) && err.response?.data?.error)
+        ? String(err.response.data.error)
+        : 'Paste operation failed';
       alert(`Error: ${msg}`);
       loadDirectory(currentPath);
     }
-  };
+  }, [clipboard, currentPath, loadDirectory]);
 
   // Keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+A, Ctrl+L)
   useEffect(() => {
@@ -1098,7 +1128,7 @@ export default function FileExplorer() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedItemNames, clipboard, displayedFiles, currentPath]);
+  }, [selectedItemNames, clipboard, displayedFiles, currentPath, handleCopy, handleCut, handlePaste]);
 
   // ─── Context menu ───
   const handleContextMenu = (e: React.MouseEvent, item: FileItem) => {

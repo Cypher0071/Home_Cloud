@@ -113,6 +113,64 @@ interface LogLine {
   text: string;
 }
 
+export interface DockerRawStats {
+  cpu_stats?: {
+    cpu_usage?: {
+      total_usage?: number;
+      percpu_usage?: number[];
+    };
+    system_cpu_usage?: number;
+    online_cpus?: number;
+  };
+  precpu_stats?: {
+    cpu_usage?: {
+      total_usage?: number;
+    };
+    system_cpu_usage?: number;
+  };
+  memory_stats?: {
+    usage?: number;
+    limit?: number;
+  };
+  networks?: Record<string, { rx_bytes?: number; tx_bytes?: number }>;
+  blkio_stats?: {
+    io_service_bytes_recursive?: Array<{ op?: string; value?: number }>;
+  };
+  [key: string]: unknown;
+}
+
+export interface DockerInspectData {
+  Image?: string;
+  Path?: string;
+  Config?: {
+    Env?: string[];
+    [key: string]: unknown;
+  };
+  Mounts?: Array<{
+    Type?: string;
+    Source?: string;
+    Destination?: string;
+    Mode?: string;
+    RW?: boolean;
+    [key: string]: unknown;
+  }>;
+  NetworkSettings?: {
+    Gateway?: string;
+    IPAddress?: string;
+    Networks?: Record<string, { Gateway?: string; IPAddress?: string }>;
+    Ports?: Record<string, Array<{ HostIp?: string; HostPort?: string }>>;
+    [key: string]: unknown;
+  };
+  HostConfig?: {
+    RestartPolicy?: {
+      Name?: string;
+      [key: string]: unknown;
+    };
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 interface FormPort {
   id: string;
   host: string;
@@ -265,13 +323,14 @@ function parseComposeYamlToServices(yamlStr: string, existingServices: FormServi
     };
   }
 
-  let doc: any;
+  let doc: { services?: Record<string, Record<string, unknown>>; [key: string]: unknown } | null;
   try {
-    doc = yaml.load(yamlStr);
-  } catch (err: any) {
+    doc = yaml.load(yamlStr) as { services?: Record<string, Record<string, unknown>>; [key: string]: unknown } | null;
+  } catch (err: unknown) {
+    const errorObj = err as { reason?: string; message?: string };
     return {
       success: false,
-      error: `YAML syntax error: ${err.reason || err.message || 'Invalid YAML format'}`,
+      error: `YAML syntax error: ${errorObj?.reason || errorObj?.message || 'Invalid YAML format'}`,
     };
   }
 
@@ -536,7 +595,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-function calculateCpuPercent(stats: any): number {
+function calculateCpuPercent(stats: DockerRawStats | null | undefined): number {
   if (!stats) return 0;
   const cpuStats = stats.cpu_stats;
   const preCpuStats = stats.precpu_stats;
@@ -552,7 +611,7 @@ function calculateCpuPercent(stats: any): number {
   return 0;
 }
 
-function getMemoryUsage(stats: any) {
+function getMemoryUsage(stats: DockerRawStats | null | undefined) {
   if (!stats || !stats.memory_stats) return { usage: 0, limit: 0, percent: 0 };
   const usage = stats.memory_stats.usage ?? 0;
   const limit = stats.memory_stats.limit ?? 0;
@@ -560,24 +619,24 @@ function getMemoryUsage(stats: any) {
   return { usage, limit, percent: Math.min(100, percent) };
 }
 
-function getNetworkIO(stats: any) {
+function getNetworkIO(stats: DockerRawStats | null | undefined) {
   if (!stats || !stats.networks) return { rx: 0, tx: 0 };
   let rx = 0;
   let tx = 0;
-  Object.values(stats.networks).forEach((n: any) => {
+  Object.values(stats.networks).forEach((n: { rx_bytes?: number; tx_bytes?: number }) => {
     rx += n.rx_bytes ?? 0;
     tx += n.tx_bytes ?? 0;
   });
   return { rx, tx };
 }
 
-function getBlockIO(stats: any) {
+function getBlockIO(stats: DockerRawStats | null | undefined) {
   if (!stats || !stats.blkio_stats) return { read: 0, write: 0 };
   let read = 0;
   let write = 0;
   const entries = stats.blkio_stats.io_service_bytes_recursive;
   if (Array.isArray(entries)) {
-    entries.forEach((entry: any) => {
+    entries.forEach((entry: { op?: string; value?: number }) => {
       const op = entry.op?.toLowerCase();
       if (op === 'read') read += entry.value ?? 0;
       if (op === 'write') write += entry.value ?? 0;
@@ -681,7 +740,7 @@ function JsonTreeNode({
   defaultExpanded = true,
 }: {
   name?: string;
-  value: any;
+  value: unknown;
   isLast?: boolean;
   searchQuery?: string;
   level?: number;
@@ -737,7 +796,8 @@ function JsonTreeNode({
     );
   }
 
-  const keys = Object.keys(value);
+  const valObj = (value ?? {}) as Record<string, unknown>;
+  const keys = Object.keys(valObj);
   const isEmpty = keys.length === 0;
   const openBracket = isArray ? '[' : '{';
   const closeBracket = isArray ? ']' : '}';
@@ -775,7 +835,7 @@ function JsonTreeNode({
             <JsonTreeNode
               key={k}
               name={isArray ? undefined : k}
-              value={value[k]}
+              value={valObj[k]}
               isLast={idx === keys.length - 1}
               searchQuery={searchQuery}
               level={level + 1}
@@ -845,7 +905,10 @@ function ImageAutocompleteInput({
 
   // Reset highlight on query change
   useEffect(() => {
-    setHighlightIndex(-1);
+    const timer = setTimeout(() => {
+      setHighlightIndex(-1);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [value]);
 
   // Click outside to close
@@ -1225,14 +1288,14 @@ export default function DockerApp() {
   const [consoleRetryVersions, setConsoleRetryVersions]         = useState<Record<string, number>>({});
 
   // Live stats telemetry state & rolling history
-  const [statsData, setStatsData]             = useState<any | null>(null);
+  const [statsData, setStatsData]             = useState<DockerRawStats | null>(null);
   const [statsLoading, setStatsLoading]       = useState(false);
   const [statsError, setStatsError]           = useState<string | null>(null);
   const [cpuHistory, setCpuHistory]           = useState<number[]>([]);
   const [memHistory, setMemHistory]           = useState<number[]>([]);
 
   // Inspect state
-  const [inspectData, setInspectData]         = useState<any | null>(null);
+  const [inspectData, setInspectData]         = useState<DockerInspectData | null>(null);
   const [inspectLoading, setInspectLoading]   = useState(false);
   const [inspectError, setInspectError]       = useState<string | null>(null);
   const [inspectSearchQuery, setInspectSearchQuery] = useState('');
@@ -1325,8 +1388,8 @@ export default function DockerApp() {
       }
       setExposeSuccessUrl(data.url);
       fetchContainers(true);
-    } catch (err: any) {
-      setExposeError(err.message || 'Network error');
+    } catch (err: unknown) {
+      setExposeError(err instanceof Error ? err.message : 'Network error');
     } finally {
       setExposeLoading(false);
     }
@@ -1432,8 +1495,8 @@ export default function DockerApp() {
       const { images: list } = await res.json();
       setImages(list ?? []);
       setImagesError(null);
-    } catch (e: any) {
-      setImagesError(e.message);
+    } catch (e: unknown) {
+      setImagesError(e instanceof Error ? e.message : 'Failed to fetch images');
     } finally {
       if (!silent) setImagesLoading(false);
     }
@@ -1447,8 +1510,8 @@ export default function DockerApp() {
       const data = await res.json();
       setComposeProjects(data.compose ?? data.projects ?? data.stacks ?? []);
       setComposeError(null);
-    } catch (e: any) {
-      setComposeError(e.message || 'Failed to load compose projects');
+    } catch (e: unknown) {
+      setComposeError(e instanceof Error ? e.message : 'Failed to load compose projects');
     } finally {
       if (!silent) setComposeLoading(false);
     }
@@ -1468,8 +1531,8 @@ export default function DockerApp() {
       }
       fetchCompose(true);
       fetchContainers(true);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(null);
     }
@@ -1485,8 +1548,8 @@ export default function DockerApp() {
       }
       fetchCompose(true);
       fetchContainers(true);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(null);
     }
@@ -1506,8 +1569,8 @@ export default function DockerApp() {
       }
       fetchCompose(true);
       fetchContainers(true);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     } finally {
       setActionLoading(null);
       setProjectToDelete(null);
@@ -1542,7 +1605,7 @@ export default function DockerApp() {
     });
   };
 
-  const handleServiceChange = (serviceId: string, field: keyof FormService, value: any) => {
+  const handleServiceChange = (serviceId: string, field: keyof FormService, value: FormService[keyof FormService]) => {
     setFormServices((prev) => {
       const next = prev.map((s) => (s.id === serviceId ? { ...s, [field]: value } : s));
       setDeployYaml(generateComposeYamlFromServices(next));
@@ -1725,8 +1788,8 @@ export default function DockerApp() {
         const data = await res.json().catch(() => ({}));
         alert(data.error || `Failed to load Compose project '${name}'`);
       }
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -1842,8 +1905,8 @@ export default function DockerApp() {
           }
         }
       }
-    } catch (err: any) {
-      setDeployError(err.message || 'Deployment failed');
+    } catch (err: unknown) {
+      setDeployError(err instanceof Error ? err.message : 'Deployment failed');
     } finally {
       setDeploying(false);
     }
@@ -1852,12 +1915,16 @@ export default function DockerApp() {
   // Compose Logs SSE effect
   useEffect(() => {
     if (!selectedComposeLogsName) {
-      setComposeLogLines([]);
-      setComposeLogsLoading(false);
-      return;
+      const timer = setTimeout(() => {
+        setComposeLogLines([]);
+        setComposeLogsLoading(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-    setComposeLogsLoading(true);
-    setComposeLogLines([]);
+    const timer = setTimeout(() => {
+      setComposeLogsLoading(true);
+      setComposeLogLines([]);
+    }, 0);
     const es = new EventSource(`/api/docker/compose/${selectedComposeLogsName}/logs`);
 
     es.onmessage = (event) => {
@@ -1877,39 +1944,48 @@ export default function DockerApp() {
     };
 
     return () => {
+      clearTimeout(timer);
       es.close();
     };
   }, [selectedComposeLogsName]);
 
   // Polling loop
   useEffect(() => {
-    fetchContainers();
-    fetchImages();
-    fetchCompose();
+    const timer = setTimeout(() => {
+      fetchContainers();
+      fetchImages();
+      fetchCompose();
+    }, 0);
     const id = setInterval(() => {
       fetchContainers(true);
       fetchImages(true);
       fetchCompose(true);
     }, 5000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(id);
+    };
   }, [fetchContainers, fetchImages, fetchCompose]);
 
   // Tab auto-switch on selection
   useEffect(() => {
-    if (!selectedId) {
-      setStatsData(null);
-      setCpuHistory([]);
-      setMemHistory([]);
-      setInspectData(null);
-      setLogLines([]);
-      return;
-    }
-    const container = containers.find((c) => c.Id === selectedId);
-    if (container && container.State !== 'running') {
-      setActiveTab('inspect');
-    } else {
-      setActiveTab('stats');
-    }
+    const timer = setTimeout(() => {
+      if (!selectedId) {
+        setStatsData(null);
+        setCpuHistory([]);
+        setMemHistory([]);
+        setInspectData(null);
+        setLogLines([]);
+        return;
+      }
+      const container = containers.find((c) => c.Id === selectedId);
+      if (container && container.State !== 'running') {
+        setActiveTab('inspect');
+      } else {
+        setActiveTab('stats');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [selectedId, containers]);
 
   // Stream stats via SSE with rolling sparkline history
@@ -1972,8 +2048,8 @@ export default function DockerApp() {
         if (active) {
           setInspectData(data);
         }
-      } catch (err: any) {
-        if (active) setInspectError(err.message);
+      } catch (err: unknown) {
+        if (active) setInspectError(err instanceof Error ? err.message : 'Inspect failed');
       } finally {
         if (active) setInspectLoading(false);
       }
@@ -1989,10 +2065,12 @@ export default function DockerApp() {
   useEffect(() => {
     if (!selectedId || activeTab !== 'logs') return;
 
-    setLogsLoading(true);
-    setLogsError(null);
-    setLogLines([]);
-    logBufferRef.current = [];
+    const timer = setTimeout(() => {
+      setLogsLoading(true);
+      setLogsError(null);
+      setLogLines([]);
+      logBufferRef.current = [];
+    }, 0);
 
     const es = new EventSource(`/api/docker/containers/${selectedId}/logs`);
 
@@ -2022,6 +2100,7 @@ export default function DockerApp() {
     };
 
     return () => {
+      clearTimeout(timer);
       es.close();
     };
   }, [selectedId, activeTab]);
@@ -2142,7 +2221,7 @@ export default function DockerApp() {
         return;
       }
       await fetchImages(true);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Delete image failed:', e);
     } finally {
       setImageActionLoading(null);
@@ -2182,10 +2261,10 @@ export default function DockerApp() {
           isError: true,
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Prune images failed:', e);
       setPruneFeedback({
-        message: e?.message || 'Failed to prune unused images',
+        message: e instanceof Error ? e.message : 'Failed to prune unused images',
         isError: true,
       });
     } finally {
@@ -2260,8 +2339,8 @@ export default function DockerApp() {
       setRunModalImage(null);
       setActiveWindowTab('containers');
       fetchContainers(true);
-    } catch (err: any) {
-      setRunError(err.message);
+    } catch (err: unknown) {
+      setRunError(err instanceof Error ? err.message : 'Failed to create container');
     } finally {
       setRunSubmitting(false);
     }
@@ -2518,7 +2597,7 @@ export default function DockerApp() {
         {mounts.length > 0 && (
           <div className={styles.inspectGroup}>
             <span className={styles.inspectTitle}>Volume Mounts ({mounts.length})</span>
-            {mounts.map((m: any, idx: number) => (
+            {mounts.map((m, idx: number) => (
               <div key={idx} className={styles.inspectCard} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#737373' }}>
                   <span>{m.Type?.toUpperCase()}</span>

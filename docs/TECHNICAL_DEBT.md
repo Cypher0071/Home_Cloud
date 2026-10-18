@@ -18,13 +18,9 @@ This document outlines the current technical limitations, security tradeoffs, op
 
 ## 🚨 Code Quality & Test Suite Regressions
 
-### 3. Frontend ESLint Static Analysis Violations
-* **Debt**: Running `pnpm --filter dashboard lint` fails with 46 problems (45 errors, 1 warning).
-* **Details**:
-  * In `dashboard/src/pages/files.tsx`: Direct synchronous `setState` calls inside `useEffect` (`loadDirectory(currentPath)` and `setSearchResults([])`) violate React 19 compiler rules (`react-hooks/set-state-in-effect`), creating cascading re-renders and potential performance degradation.
-  * In `dashboard/src/pages/files.tsx`: Multiple instances of `@typescript-eslint/no-explicit-any` (lines 551, 933, 1020, 1066) bypass TypeScript's type safety.
-  * In `dashboard/src/pages/files.tsx`: Missing hook dependencies in `useEffect` for keyboard shortcuts (`handleCopy`, `handleCut`, `handlePaste` triggering `react-hooks/exhaustive-deps`).
-* **Impact**: Fails automated CI/CD lint checks and introduces rendering instability.
+### 3. Frontend ESLint Static Analysis Violations (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**: Refactored `dashboard/src/pages/files.tsx` and `dashboard/src/components/apps/DockerApp.tsx` along with `ContainerConsoleTab.tsx` and `useNetworkDetector.ts`. Eliminated all synchronous `setState` in `useEffect` violations via deferred updates (`setTimeout(..., 0)`), resolved all missing `useCallback` dependencies in keyboard shortcut listeners, defined strict TypeScript interfaces (`BackendFileEntry`, `DockerRawStats`, `DockerInspectData`) replacing explicit `any` usages, and safely typed `catch` blocks with `unknown`. Verified `pnpm --filter dashboard lint` and `pnpm --filter dashboard build` exit with 0 errors.
 
 ### 4. Web Terminal E2E Test Suite Regressions (8 Failing Tests)
 * **Debt**: The test runner `.agents/tests/terminal_e2e.test.mjs` fails 8 out of 93 automated test cases.
