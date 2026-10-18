@@ -8,7 +8,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 
 | Category | Status | Blocking Severity | Key Issues / Gaps |
 | :--- | :---: | :---: | :--- |
-| **P0: Public Release Blockers** | ⚠️ Action Required | **CRITICAL** | Unauthenticated host leak, dead prototype code, 46 ESLint errors, 8 failing tests. *(License ✅, Auth hardening ✅)* |
+| **P0: Public Release Blockers** | ⚠️ Action Required | **CRITICAL** | 46 ESLint errors, 8 failing tests. *(License ✅, Host Leak ✅, Auth hardening ✅, Terminal prototype removed ✅)* |
 | **P1: Security & Privilege Boundaries** | ⚠️ High Priority | **HIGH** | Passkey (WebAuthn) login, Compose jail bypass, unrevocable 7-day JWTs, static `.env` passcode, 100MB tunnel upload cap. |
 | **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
@@ -43,31 +43,23 @@ These items **must** be resolved before the repository visibility is changed to 
 
 ---
 
-### 3. Patch Unauthenticated Host Information Disclosure
-* **Problem**: In [`agent/index.js:L80`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/index.js#L80), `/api/network` is mounted **before** `authMiddleware`:
-  ```javascript
-  // Network metadata (local IP discovery for LAN switching)
-  app.use("/api/network", require("./routes/network"));
-
-  // Authenticated endpoints
-  app.use("/api", authMiddleware);
-  ```
-  In [`agent/routes/network.js:L7-L36`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/network.js#L7-L36), `GET /api/network/info` returns `serverLocalIp`, `serverLocalPort`, `baseDir` (`/home/<username>`), `cfDomain`, and full tunnel status. An unauthenticated attacker navigating to `https://dash.<your-domain>/api/network/info` can immediately harvest the host server's local subnet IP, server username, and filesystem root without credentials.
-* **Target Files**:
-  * [`agent/index.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/index.js#L80-L83)
-  * [`agent/routes/network.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/network.js)
-* **Required Action**:
-  * Move `/api/network/info` behind `authMiddleware`.
-  * If LAN auto-detection requires an unauthenticated endpoint, create a minimal, sanitized ping endpoint (`/api/ping` or `/api/network/ping`) that only returns `{ status: "ok" }` and zero internal system paths, usernames, or network interface metadata.
+### 3. Patch Unauthenticated Host Information Disclosure (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**:
+  * Moved `app.use("/api/network", require("./routes/network"))` after `app.use("/api", authMiddleware)` in [`agent/index.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/index.js), ensuring `/api/network/info` and `/api/network/tunnel` strictly require an authenticated JWT cookie.
+  * Implemented public, sanitized [`/api/ping`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/index.js#L62-L73) endpoint with CORS (`Access-Control-Allow-Origin: *`) and W3C Private Network Access (`Access-Control-Allow-Private-Network: true`) returning strictly `{ status: "ok" }`.
+  * Sanitized public `/api/health` to remove `tunnel` status leakage.
+  * Enhanced [`dashboard/src/hooks/useNetworkDetector.ts`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/hooks/useNetworkDetector.ts) to micro-ping `/api/ping`, support `localStorage` caching for returning users to enable pre-login LAN switching without credential loss, and export `resetNetworkDetectorCache()` to avoid in-memory singleton cache poisoning upon login.
+  * Created automated test suite [`agent/tests/verify_network_security.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/tests/verify_network_security.mjs) verifying unauthenticated blocking, PNA preflights, and authenticated access across 8 test cases.
 
 ---
 
-### 4. Remove Dead & Hardcoded Standalone Terminal Prototype
-* **Problem**: [`dashboard/src/pages/terminal.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/pages/terminal.tsx#L13) is an obsolete 34-line prototype that hardcodes `wss://home-cloud.live/terminal` directly.
-* **Risk**: If anyone hits `/terminal` directly, it attempts to connect to the author's personal domain rather than their own server. The production terminal is [`dashboard/src/components/apps/TerminalApp.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/components/apps/TerminalApp.tsx).
-* **Required Action**:
-  * Delete `dashboard/src/pages/terminal.tsx` completely.
-  * Verify `dashboard/src/App.tsx` routes cleanly to the desktop shell and terminal window.
+### 4. Remove Dead & Hardcoded Standalone Terminal Prototype (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**:
+  * Deleted obsolete prototype file `dashboard/src/pages/terminal.tsx` which previously hardcoded `wss://home-cloud.live/terminal`.
+  * Verified that routing in [`dashboard/src/App.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/App.tsx) points `/terminal` directly to the production desktop workspace (`<ProtectedRoute><Desktop /></ProtectedRoute>`), which renders the full-featured [`TerminalApp`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/components/apps/TerminalApp.tsx).
+  * Verified frontend build via `pnpm --filter dashboard build` builds cleanly with 0 errors.
 
 ---
 
@@ -278,8 +270,8 @@ flowchart TD
     subgraph P0["P0: Public Release Blockers"]
         L["Apache 2.0 License (Resolved ✅)"]
         A["Constant-Time Auth & Rate Limit (Resolved ✅)"]
-        N[Patch Network Info Leak]
-        T[Remove Dead Terminal Prototype]
+        N["Patch Network Info Leak (Resolved ✅)"]
+        T["Terminal Prototype Removed (Resolved ✅)"]
         E[Fix 46 ESLint Errors]
         TS[Fix Terminal E2E Tests]
         S[Sanitize Usernames in Docs]
@@ -314,7 +306,7 @@ flowchart TD
 ```
 
 ### Execution Phases:
-1. **Phase 1 (P0)**: Fix immediate blockers (License ✅, Auth hardening ✅, information leak, delete dead terminal prototype, fix ESLint and E2E tests).
+1. **Phase 1 (P0)**: Fix immediate blockers (License ✅, Host Leak ✅, Auth hardening ✅, terminal prototype removed ✅, fix ESLint and E2E tests).
 2. **Phase 2 (P1)**: Implement passkey authentication, server session revocation, and 100MB chunked uploads.
 3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, and desktop window state persistence.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.

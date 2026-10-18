@@ -40,12 +40,9 @@ This document outlines the current technical limitations, security tradeoffs, op
     8. `T3.5`: Container resizing triggers `ResizeObserver` and `FitAddon` calculation protected by try/catch
   * **Root Cause**: Recent mobile optimization and soft-key toolbar commits (`738cd9f` & `5383e12`) refactored `dashboard/src/components/apps/TerminalApp.tsx` (introducing `SESSION_ID = 'term_main'`, soft keys, and `visualViewport` event handling), causing the component's internal structure to diverge from static test regex expectations.
 
-### 5. Dead & Hardcoded Standalone Terminal Prototype
-* **Debt**: `dashboard/src/pages/terminal.tsx` contains an obsolete 34-line prototype component.
-* **Details**:
-  * Hardcodes `wss://home-cloud.live/terminal` directly, breaking compatibility with custom domains and LAN IP addresses.
-  * Lacks session resumption, error boundaries, soft keys, reconnection logic, and dynamic fitting.
-  * It is dead code: `App.tsx` and `desktop.tsx` route to `components/apps/TerminalApp.tsx`.
+### 5. Dead & Hardcoded Standalone Terminal Prototype (Resolved ✅)
+* **Status**: Resolved.
+* **Resolution**: Deleted obsolete prototype file `dashboard/src/pages/terminal.tsx` that contained a 34-line standalone component hardcoding `wss://home-cloud.live/terminal`. Verified that `/terminal` route in `dashboard/src/App.tsx` routes directly to the desktop shell containing the production `TerminalApp.tsx` component with JetBrains Mono font loading, reconnection banners, session persistence, and mobile virtual viewport support.
 
 ---
 
