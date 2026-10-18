@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useNetworkDetector } from '../hooks/useNetworkDetector';
+import { useNetworkDetector, resetNetworkDetectorCache } from '../hooks/useNetworkDetector';
 import styles from './login.module.css';
 
 export default function Login() {
@@ -33,6 +33,8 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        // Clear unauthenticated network detection cache so authenticated views receive complete metadata
+        resetNetworkDetectorCache();
         // Redirect to dashboard home on successful login
         navigate('/');
       } else {

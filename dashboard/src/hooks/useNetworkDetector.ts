@@ -11,6 +11,9 @@ export interface NetworkDetectorResult {
   redirectToLocal: () => void;
 }
 
+const LOCAL_STORAGE_IP_KEY = 'home-cloud:server_local_ip';
+const LOCAL_STORAGE_PORT_KEY = 'home-cloud:server_local_port';
+
 // Module-level Singleton Cache
 let cachedResult: NetworkDetectorResult | null = null;
 let inFlightPromise: Promise<NetworkDetectorResult> | null = null;
@@ -18,6 +21,15 @@ const listeners = new Set<(state: NetworkDetectorResult) => void>();
 
 function notifyListeners(state: NetworkDetectorResult) {
   listeners.forEach(fn => fn(state));
+}
+
+export function resetNetworkDetectorCache(): Promise<NetworkDetectorResult> {
+  cachedResult = null;
+  inFlightPromise = null;
+  return runDetectionOnce().then(res => {
+    notifyListeners(res);
+    return res;
+  });
 }
 
 async function runDetectionOnce(): Promise<NetworkDetectorResult> {
@@ -37,9 +49,33 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
       localPort = info.serverLocalPort || 3000;
       baseDir = info.baseDir || null;
       cfDomain = info.cfDomain || '';
+
+      // Persist in localStorage for returning users on this browser
+      if (localIp) {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_IP_KEY, localIp);
+          localStorage.setItem(LOCAL_STORAGE_PORT_KEY, String(localPort));
+        } catch {
+          /* ignore storage quota/security errors */
+        }
+      }
     }
   } catch {
-    /* fallback */
+    /* network or auth error */
+  }
+
+  // If unauthenticated or offline, use cached IP from localStorage if available
+  if (!localIp) {
+    try {
+      const storedIp = localStorage.getItem(LOCAL_STORAGE_IP_KEY);
+      const storedPort = parseInt(localStorage.getItem(LOCAL_STORAGE_PORT_KEY) || '3000', 10);
+      if (storedIp) {
+        localIp = storedIp;
+        localPort = storedPort;
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   const baseResult: NetworkDetectorResult = {
@@ -63,18 +99,33 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
   }
 
   // Micro-ping check if on remote hostname
-  if (localIp) {
+  const stayRemote = new URLSearchParams(window.location.search).has('stay_remote');
+  if (localIp && !stayRemote) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 1500);
 
     try {
-      const pingRes = await fetch(`http://${localIp}:${localPort}/api/health`, {
+      // Primary: ping /api/ping with PNA header; Fallback: /api/health
+      const pingUrl = `http://${localIp}:${localPort}/api/ping`;
+      const fallbackUrl = `http://${localIp}:${localPort}/api/health`;
+
+      let pingRes = await fetch(pingUrl, {
         signal: controller.signal,
         mode: 'cors',
-      });
+        // @ts-expect-error - Chromium Private Network Access specification
+        targetAddressSpace: 'private',
+      }).catch(() => null);
+
+      if (!pingRes || !pingRes.ok) {
+        pingRes = await fetch(fallbackUrl, {
+          signal: controller.signal,
+          mode: 'cors',
+        }).catch(() => null);
+      }
+
       clearTimeout(timer);
 
-      if (pingRes.ok) {
+      if (pingRes && pingRes.ok) {
         const lanResult: NetworkDetectorResult = {
           ...baseResult,
           isLocalLAN: true,
@@ -127,6 +178,15 @@ export function useNetworkDetector(): NetworkDetectorResult {
   useEffect(() => {
     if (cachedResult) {
       setState(cachedResult);
+      // If cached result has incomplete metadata (e.g. from pre-auth 401 on login page),
+      // trigger background revalidation so authenticated views get fresh baseDir and info.
+      if (cachedResult.baseDir === null && !cachedResult.isDirectLocal && !inFlightPromise) {
+        inFlightPromise = runDetectionOnce().then(res => {
+          inFlightPromise = null;
+          notifyListeners(res);
+          return res;
+        });
+      }
       return;
     }
 
@@ -134,6 +194,7 @@ export function useNetworkDetector(): NetworkDetectorResult {
 
     if (!inFlightPromise) {
       inFlightPromise = runDetectionOnce().then(res => {
+        inFlightPromise = null;
         notifyListeners(res);
         return res;
       });
