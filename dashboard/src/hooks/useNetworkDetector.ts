@@ -119,6 +119,19 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
     },
   };
 
+  // If running in development (Vite dev server) or explicitly on dev port 5173, stay on dev server
+  const isDevEnvironment = Boolean(import.meta.env.DEV || currentPort === 5173);
+  if (isDevEnvironment) {
+    const devResult: NetworkDetectorResult = {
+      ...baseResult,
+      isLocalLAN: true,
+      isDirectLocal: true,
+      checking: false,
+    };
+    cachedResult = devResult;
+    return devResult;
+  }
+
   // If already running directly on the local IP:port, we're done!
   if (isDirectLocal) {
     cachedResult = baseResult;
@@ -198,7 +211,9 @@ export function useNetworkDetector(): NetworkDetectorResult {
         : /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) && hostname !== '127.0.0.1' && currentPort === 3000
     );
 
-    if (isDirectLocal) {
+    const isDevEnvironment = Boolean(import.meta.env.DEV || currentPort === 5173);
+
+    if (isDirectLocal || isDevEnvironment) {
       return {
         isLocalLAN: true,
         isDirectLocal: true,

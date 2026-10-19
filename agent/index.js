@@ -4,6 +4,7 @@ const app = express();
 const http = require("http");
 const ws = require("ws");
 const path = require("path");
+const fs = require("fs");
 const { PORT } = require("./config");
 const {
 	startTunnel,
@@ -98,8 +99,19 @@ app.use("/api/docker/stacks", composeRoutes);
 app.use("/api/docker", require("./routes/docker"));
 app.use(express.static(path.join(__dirname, "../dashboard/dist")));
 
+const distIndexPath = path.join(__dirname, "../dashboard/dist", "index.html");
+
 app.get("/{*path}", (req, res) => {
-	res.sendFile(path.join(__dirname, "../dashboard/dist", "index.html"));
+	if (fs.existsSync(distIndexPath)) {
+		return res.sendFile(distIndexPath);
+	}
+
+	// In development, redirect to the Vite dev server if port 3000 is directly hit
+	if (process.env.NODE_ENV !== "production") {
+		return res.redirect(`http://localhost:5173${req.originalUrl}`);
+	}
+
+	res.status(503).send("Dashboard is not built. Please run 'pnpm run build'.");
 });
 
 /**
@@ -110,7 +122,8 @@ app.get("/{*path}", (req, res) => {
  * @param {string} signal
  * @param {object} [options]
  * @param {boolean} [options.exitProcess=true] Whether to trigger process.exit
- * @returns {Promise<void>}\n */
+ * @returns {Promise<void>}
+ */
 async function gracefulShutdown(signal, { exitProcess = true } = {}) {
 	if (isShuttingDown) {
 		console.log(`[agent] Shutdown already in progress (${signal})...`);
