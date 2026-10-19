@@ -73,7 +73,37 @@ export default function Login() {
           <p className={styles.subtitle}>Enter your password to unlock the workspace</p>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form
+          onSubmit={handleSubmit}
+          method="post"
+          action="/api/auth/login"
+          autoComplete="on"
+          className={styles.form}
+        >
+          {/* Paired username field for browser credential managers & Google Password Manager autofill */}
+          <input
+            type="text"
+            name="username"
+            value="admin"
+            autoComplete="username"
+            readOnly
+            tabIndex={-1}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: 'hidden',
+              clip: 'rect(0, 0, 0, 0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+              opacity: 0,
+              pointerEvents: 'none',
+            }}
+          />
+
           <div className={styles.field}>
             <label htmlFor="password" className={styles.label}>
               Password
@@ -81,6 +111,7 @@ export default function Login() {
             <div className={styles.inputWrapper}>
               <input
                 id="password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -94,7 +125,7 @@ export default function Login() {
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 className={styles.toggleButton}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Hide password' : 'Show password' }
                 disabled={isLoading}
               >
                 {showPassword ? (
