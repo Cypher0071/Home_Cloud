@@ -41,6 +41,6 @@ If you wanted to host a media server (Jellyfin) and a private cloud (Nextcloud) 
 
 ### 3. Absolute Portability
 Because containers bundle all of their dependencies, your Home Cloud OS becomes completely hardware-independent.
-* You can back up your `/home/rudra-unix/apps` folder.
+* You can back up your `/home/<user>/apps` folder.
 * Spin up a new virtual private server (VPS) anywhere in the world.
 * Run the Home Cloud agent, and click "restore". The Docker engine will pull the same images, mount the volumes, and spin up your entire cloud environment instantly with no reconfiguration.

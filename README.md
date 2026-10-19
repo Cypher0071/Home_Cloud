@@ -21,7 +21,7 @@ pnpm --filter dashboard build
 pnpm --filter agent start
 ```
 
-If `BASE_DIR` is unset, the file explorer **and container bind mounts** are jailed to **that user’s home directory**, not `/home/rudra-unix`. Compose YAML can still declare any host path — that is `docker compose`, not this form.
+If `BASE_DIR` is unset, the file explorer **and container bind mounts** are jailed to **that user’s home directory**, not `/home/<user>`. Compose YAML can still declare any host path — that is `docker compose`, not this form.
 
 Dev: `pnpm dev` (agent + Vite). Vite runs on `http://localhost:5173` with proxy configured for `/api` and WebSockets to the agent on `http://localhost:3000`.
 

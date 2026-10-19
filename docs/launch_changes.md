@@ -8,10 +8,10 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 
 | Category | Status | Blocking Severity | Key Issues / Gaps |
 | :--- | :---: | :---: | :--- |
-| **P0: Public Release Blockers** | 🟡 6/7 Resolved | **CRITICAL** | Only 1 remaining: Doc username sanitization. *(License ✅, Rate Limiter ✅, Network Leak ✅, Dead Terminal ✅, ESLint ✅, Test Suites ✅)* |
-| **P1: Security & Privilege Boundaries** | 🔴 0/5 Resolved | **HIGH** | Passkey (WebAuthn) login, Compose jail bypass, unrevocable 7-day JWTs, static `.env` passcode, 100MB tunnel upload cap. |
-| **P2: Essential V4 & Tech Debt Milestones** | 🔴 0/6 Resolved | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
-| **P3: Open-Source Polish & Governance** | 🔴 0/4 Resolved | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
+| **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
+| **P1: Security & Privilege Boundaries** | ⚠️ High Priority | **HIGH** | Passkey (WebAuthn) login, multi-drive storage scope / root access, unrevocable 7-day JWTs, static `.env` passcode, 100MB tunnel upload cap. |
+| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
+| **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
 ---
 
@@ -24,11 +24,11 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **4. Remove Dead & Hardcoded Standalone Terminal Prototype**
 - [x] **5. Fix 46 ESLint Violations in Frontend**
 - [x] **6. Stabilize Automated Test Suites**
-- [ ] **7. Sanitize Hardcoded Usernames & Example Domains in Docs**
+- [x] **7. Sanitize Hardcoded Usernames & Example Domains in Docs**
 
 ### P1: Security & Privilege Boundary Hardening
 - [ ] **1. Passkey / WebAuthn (FIDO2) Authentication Support**
-- [ ] **2. Docker Compose Privilege Escalation Protection**
+- [ ] **2. Multi-Drive Storage Scope & System Root Access Mode**
 - [ ] **3. Server-Side Session Revocation & Token Epoch**
 - [ ] **4. Dynamic Passcode Management UI & Endpoint**
 - [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)**
@@ -59,13 +59,13 @@ These items **must** be resolved before the repository visibility is changed to 
 - [x] **4. Remove Dead & Hardcoded Standalone Terminal Prototype (Resolved ✅)**
 - [x] **5. Fix 46 ESLint Violations in Frontend (Resolved ✅)**
 - [x] **6. Stabilize Automated Test Suites (Resolved ✅)**
-- [ ] **7. Sanitize Hardcoded Usernames & Example Domains in Docs**
+- [x] **7. Sanitize Hardcoded Usernames & Example Domains in Docs (Resolved ✅)**
 
 ### 1. Open-Source License Applied (Resolved ✅)
 * **Status**: [x] Resolved (Apache License, Version 2.0).
 * **Verification**:
-  * Verified [`LICENSE`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/LICENSE) exists in root with full Apache 2.0 terms and `Copyright 2026 Rudra Agrawal (Cypher0071)`.
-  * Verified consistent SPDX identifier `"license": "Apache-2.0"` in root [`package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/package.json#L13) and [`agent/package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/package.json#L12).
+  * Verified [`LICENSE`](../LICENSE) exists in root with full Apache 2.0 terms and `Copyright 2026 Rudra Agrawal (Cypher0071)`.
+  * Verified consistent SPDX identifier `"license": "Apache-2.0"` in root [`package.json`](../package.json#L13) and [`agent/package.json`](../agent/package.json#L12).
   * Tested and validated on both `Cypher-0071/siren` and `main` branches.
 
 ---
@@ -73,7 +73,7 @@ These items **must** be resolved before the repository visibility is changed to 
 ### 2. Constant-Time Authentication & Login Rate Limiting (Resolved ✅)
 * **Status**: [x] Resolved.
 * **Resolution**:
-  * Implemented constant-time password comparison in [`agent/routes/auth.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/auth.js) using `crypto.timingSafeEqual` with SHA-256 pre-hashed buffers. Eliminates string comparison timing attacks and variable-length buffer exceptions.
+  * Implemented constant-time password comparison in [`agent/routes/auth.js`](../agent/routes/auth.js) using `crypto.timingSafeEqual` with SHA-256 pre-hashed buffers. Eliminates string comparison timing attacks and variable-length buffer exceptions.
   * Implemented an in-memory sliding window rate limiter and brute-force lockout:
     * 5 failed attempts within 60 seconds triggers a 5-minute temporary IP lockout.
     * Returns HTTP `429 Too Many Requests` with standard `Retry-After` header and remaining lockout seconds.
@@ -81,18 +81,18 @@ These items **must** be resolved before the repository visibility is changed to 
     * Resets failed attempt counter immediately upon successful password authentication.
     * Unref'd background garbage collector evicts expired records every 5 minutes.
 * **Verification**:
-  * Validated with automated test suite in [`agent/tests/verify_auth.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/tests/verify_auth.mjs). Verified exact match, character mismatch, length variance, non-string guards, multi-attempt lockout, retry headers, IP isolation, and post-login counter clearance.
+  * Validated with automated test suite in [`agent/tests/verify_auth.mjs`](../agent/tests/verify_auth.mjs). Verified exact match, character mismatch, length variance, non-string guards, multi-attempt lockout, retry headers, IP isolation, and post-login counter clearance.
 
 ---
 
 ### 3. Patch Unauthenticated Host Information Disclosure (Resolved ✅)
 * **Status**: [x] Resolved.
 * **Resolution**:
-  * Moved `app.use("/api/network", require("./routes/network"))` after `app.use("/api", authMiddleware)` in [`agent/index.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/index.js), ensuring `/api/network/info` and `/api/network/tunnel` strictly require an authenticated JWT cookie.
-  * Implemented public, sanitized [`/api/ping`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/index.js#L62-L73) endpoint with CORS (`Access-Control-Allow-Origin: *`) and W3C Private Network Access (`Access-Control-Allow-Private-Network: true`) returning strictly `{ status: "ok" }`.
+  * Moved `app.use("/api/network", require("./routes/network"))` after `app.use("/api", authMiddleware)` in [`agent/index.js`](../agent/index.js), ensuring `/api/network/info` and `/api/network/tunnel` strictly require an authenticated JWT cookie.
+  * Implemented public, sanitized [`/api/ping`](../agent/index.js#L62-L73) endpoint with CORS (`Access-Control-Allow-Origin: *`) and W3C Private Network Access (`Access-Control-Allow-Private-Network: true`) returning strictly `{ status: "ok" }`.
   * Sanitized public `/api/health` to remove `tunnel` status leakage.
-  * Enhanced [`dashboard/src/hooks/useNetworkDetector.ts`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/hooks/useNetworkDetector.ts) to micro-ping `/api/ping`, support `localStorage` caching for returning users to enable pre-login LAN switching without credential loss, and export `resetNetworkDetectorCache()` to avoid in-memory singleton cache poisoning upon login.
-  * Created automated test suite [`agent/tests/verify_network_security.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/tests/verify_network_security.mjs) verifying unauthenticated blocking, PNA preflights, and authenticated access across 8 test cases.
+  * Enhanced [`dashboard/src/hooks/useNetworkDetector.ts`](../dashboard/src/hooks/useNetworkDetector.ts) to micro-ping `/api/ping`, support `localStorage` caching for returning users to enable pre-login LAN switching without credential loss, and export `resetNetworkDetectorCache()` to avoid in-memory singleton cache poisoning upon login.
+  * Created automated test suite [`agent/tests/verify_network_security.mjs`](../agent/tests/verify_network_security.mjs) verifying unauthenticated blocking, PNA preflights, and authenticated access across 8 test cases.
 
 ---
 
@@ -100,7 +100,7 @@ These items **must** be resolved before the repository visibility is changed to 
 * **Status**: [x] Resolved.
 * **Resolution**:
   * Deleted obsolete prototype file `dashboard/src/pages/terminal.tsx` which previously hardcoded `wss://home-cloud.live/terminal`.
-  * Verified that routing in [`dashboard/src/App.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/App.tsx) points `/terminal` directly to the production desktop workspace (`<ProtectedRoute><Desktop /></ProtectedRoute>`), which renders the full-featured [`TerminalApp`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/components/apps/TerminalApp.tsx).
+  * Verified that routing in [`dashboard/src/App.tsx`](../dashboard/src/App.tsx) points `/terminal` directly to the production desktop workspace (`<ProtectedRoute><Desktop /></ProtectedRoute>`), which renders the full-featured [`TerminalApp`](../dashboard/src/components/apps/TerminalApp.tsx).
   * Verified frontend build via `pnpm --filter dashboard build` builds cleanly with 0 errors.
 
 ---
@@ -108,15 +108,15 @@ These items **must** be resolved before the repository visibility is changed to 
 ### 5. Fix 46 ESLint Violations in Frontend (Resolved ✅)
 * **Status**: [x] Resolved.
 * **Resolution**:
-  * Refactored [`dashboard/src/pages/files.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/pages/files.tsx):
+  * Refactored [`dashboard/src/pages/files.tsx`](../dashboard/src/pages/files.tsx):
     * Unexported helper `fetchDrives` to satisfy Vite fast-refresh rules.
     * Replaced all explicit `any` usages with typed interfaces (`BackendFileEntry`, `ApiResponseFiles`) and type-safe `catch (err: unknown)` handlers guarded with `axios.isAxiosError`.
     * Resolved React 19 `react-hooks/set-state-in-effect` violations by deferring synchronous effect updates out of the effect body via `setTimeout(..., 0)`.
     * Wrapped `handleCopy`, `handleCut`, and `handlePaste` in `useCallback` to satisfy `react-hooks/exhaustive-deps`.
-  * Refactored [`dashboard/src/components/apps/DockerApp.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/components/apps/DockerApp.tsx):
+  * Refactored [`dashboard/src/components/apps/DockerApp.tsx`](../dashboard/src/components/apps/DockerApp.tsx):
     * Added strict interfaces `DockerRawStats` and `DockerInspectData` to eliminate 25 `@typescript-eslint/no-explicit-any` errors in stats calculations, inspect data display, and error handlers.
     * Resolved 5 React 19 `react-hooks/set-state-in-effect` violations in highlight indexing, compose logs, polling, tab switching, and container logs streaming.
-  * Refactored [`dashboard/src/components/apps/ContainerConsoleTab.tsx`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/components/apps/ContainerConsoleTab.tsx) and [`dashboard/src/hooks/useNetworkDetector.ts`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/dashboard/src/hooks/useNetworkDetector.ts) to clean up unused catch bindings and synchronous effect state updates.
+  * Refactored [`dashboard/src/components/apps/ContainerConsoleTab.tsx`](../dashboard/src/components/apps/ContainerConsoleTab.tsx) and [`dashboard/src/hooks/useNetworkDetector.ts`](../dashboard/src/hooks/useNetworkDetector.ts) to clean up unused catch bindings and synchronous effect state updates.
   * Verified: `pnpm --filter dashboard lint` and `pnpm --filter dashboard build` both pass cleanly with 0 errors and 0 warnings.
 
 ---
@@ -124,40 +124,41 @@ These items **must** be resolved before the repository visibility is changed to 
 ### 6. Stabilize Automated Test Suites (Resolved ✅)
 * **Status**: [x] Resolved.
 * **Resolution**:
-  * Modernized test assertions in [`.agents/tests/terminal_e2e.test.mjs`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/.agents/tests/terminal_e2e.test.mjs) to match the production `TerminalApp.tsx` implementation:
+  * Modernized test assertions in [`.agents/tests/terminal_e2e.test.mjs`](../.agents/tests/terminal_e2e.test.mjs) to match the production `TerminalApp.tsx` implementation:
     * `T1.28` & `T3.4`: Assert that toolbar Clear button sends `\x0c` (Ctrl+L) over socket for shell prompt redraw and retains terminal focus.
     * `T1.29`: Assert that Reconnect button updates status to connecting, invokes `connectSocket(term)`, and focuses terminal.
     * `T1.40`: Assert proper React 19 type safety with `ConnectionStatus` type alias.
-    * `T2.24`: Assert that `socket.onerror` delegates retry/status to `socket.onclose`.
+    * `T2.24`: Assert that `socket.onerror` delegates retry/status to `socket.onclose` .
     * `T2.38`: Assert WebSocket endpoint targets `/terminal?sessionId=${encodeURIComponent(SESSION_ID)}`.
     * `T3.1` & `T3.5`: Assert font loading and ResizeObserver trigger `syncDimensions()` protected by try/catch for PTY fit and col/row synchronization.
-  * Added unified `pnpm test` script in root [`package.json`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/package.json) running all 3 verification tiers (`test:dashboard`, `test:agent`, `test:e2e`).
+  * Added unified `pnpm test` script in root [`package.json`](../package.json) running all 3 verification tiers (`test:dashboard`, `test:agent`, `test:e2e`).
   * Verified: All 93 terminal E2E tests pass (100%), and `pnpm test` exits cleanly with code 0 across all suites.
 
 ---
 
-### 7. Sanitize Hardcoded Usernames & Example Domains in Docs
-* **Status**: [ ] Pending.
-* **Problem**: Documentation examples in [`docs/SYSTEM_DESIGN.md`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/SYSTEM_DESIGN.md) and [`docs/CONTEXT.md`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/CONTEXT.md) refer to `/home/rudra-unix/` and personal Cloudflare account UUIDs (`43a28f80-...`).
-* **Required Action**:
-  * Replace personal usernames with standard placeholders (`/home/<user>/` or `$HOME`).
-  * Replace specific Cloudflare tunnel UUIDs with generic `<tunnel-id>` placeholders.
+### 7. Sanitize Hardcoded Usernames & Example Domains in Docs (Resolved ✅)
+* **Status**: [x] Resolved.
+* **Resolution**:
+  * Sanitized personal usernames (`rudra-unix`) to generic `/home/<user>` or `$HOME` across all documentation and configuration references in [`docs/SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md), [`docs/CONTEXT.md`](CONTEXT.md), [`README.md`](../README.md), [`docs/TECHNICAL_DEBT.md`](TECHNICAL_DEBT.md), and `docs/learn/*.md` (`cloudflare_ingress_autowiring.md`, `cloudflare_tunnels.md`, `docker-concepts.md`, `docker.md`).
+  * Sanitized specific Cloudflare Tunnel UUIDs (`43a28f80-7711-482a-a92c-567c1e5ba95c`) to generic `<tunnel-id>` across all architecture diagrams and guides.
+  * Sanitized user privilege commands (`sudo usermod -aG docker rudra-unix`) to `$USER` / `<user>`.
+  * Removed all absolute local machine links (`file:///home/rudra-unix/...`) across `docs/launch_changes.md` and `docs/TECHNICAL_DEBT.md`, converting them to clean relative repository links.
 
 ---
 
-## 🔒 Priority 1: Security & Privilege Boundary Hardening
+## 🔐 Priority 1: Security & Privilege Boundary Hardening
 
 Production-grade self-hosted tools must withstand exposure to the open internet. The following security upgrades prevent host takeover and data leakage.
 
 - [ ] **1. Passkey / WebAuthn (FIDO2) Authentication Support**
-- [ ] **2. Docker Compose Privilege Escalation Protection**
+- [ ] **2. Multi-Drive Storage Scope & System Root Access Mode**
 - [ ] **3. Server-Side Session Revocation & Token Epoch**
 - [ ] **4. Dynamic Passcode Management UI & Endpoint**
 - [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)**
 
 ### 1. Passkey / WebAuthn (FIDO2) Authentication Support
 * **Status**: [ ] Pending.
-* **Source**: [`todo.md`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/todo.md#L4) & [`docs/TECHNICAL_DEBT.md:L101`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L101)
+* **Source**: [`todo.md`](../todo.md#L4) & [`docs/TECHNICAL_DEBT.md:L101`](TECHNICAL_DEBT.md#L101)
 * **Goal**: Enable hardware keys (YubiKey), Touch ID, Face ID, and Windows Hello via WebAuthn.
 * **Architecture**:
   * Implement `@simplewebauthn/server` in `agent/routes/auth.js` (`/api/auth/webauthn/register-options`, `/api/auth/webauthn/verify-registration`, `/api/auth/webauthn/login-options`, `/api/auth/webauthn/verify-authentication`).
@@ -167,20 +168,20 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 
 ---
 
-### 2. Docker Compose Privilege Escalation Protection
+### 2. Multi-Drive Storage Scope & System Root Access Mode
 * **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L61`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L61)
-* **Goal**: Prevent bypass of the single-container filesystem jail via Compose deployments.
+* **Source**: [`docs/TECHNICAL_DEBT.md:L61`](TECHNICAL_DEBT.md#L61)
+* **Goal**: Remove narrow `$HOME`-only jail. Replace with multi-drive storage model (`/mnt/*`, `/media/*`) and configurable full system root access (`/`) toggle in Settings.
 * **Architecture**:
-  * While single-container creation in [`agent/routes/docker.js`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/agent/routes/docker.js) validates and jails paths within `BASE_DIR`, Compose stacks (`agent/routes/compose.js`) execute raw YAML that can bind-mount `/`, `/etc/shadow`, or `/var/run/docker.sock`.
-  * Add a Compose parser/pre-flight validator that checks volume declarations.
-  * If a Compose file attempts to bind mount directories outside `BASE_DIR`, require explicit user confirmation or flag high-privilege operations in the UI.
+  * In Safe Server Mode (default), allow access to `$HOME` and all mounted disks (`/mnt/*`, `/media/*`).
+  * When System Root Access (`/`) is toggled on, allow browsing of root filesystem while respecting Linux user account permissions.
+  * Allow Docker container bind mounts to target valid storage paths rather than restricting strictly to `BASE_DIR`.
 
 ---
 
 ### 3. Server-Side Session Revocation & Token Epoch
 * **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L68`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L68)
+* **Source**: [`docs/TECHNICAL_DEBT.md:L68`](TECHNICAL_DEBT.md#L68)
 * **Goal**: Immediate invalidation of JWT cookies on logout or passcode change.
 * **Architecture**:
   * Currently, JWTs are signed with a 7-day expiration and cannot be revoked without changing `JWT_SECRET` and restarting the process.
@@ -191,7 +192,7 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 
 ### 4. Dynamic Passcode Management UI & Endpoint
 * **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L74`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L74)
+* **Source**: [`docs/TECHNICAL_DEBT.md:L74`](TECHNICAL_DEBT.md#L74)
 * **Goal**: Allow users to change their master passcode from the dashboard rather than requiring terminal SSH to edit `agent/.env`.
 * **Architecture**:
   * Endpoint `POST /api/settings/password` requiring current password + new password.
@@ -201,7 +202,7 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 
 ### 5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)
 * **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L125`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L125)
+* **Source**: [`docs/TECHNICAL_DEBT.md:L125`](TECHNICAL_DEBT.md#L125)
 * **Goal**: Enable uploading files >100MB over remote Cloudflare Tunnels without triggering HTTP `413 Request Entity Too Large`.
 * **Architecture**:
   * Cloudflare Free and Pro tunnels strictly enforce a 100MB request body limit.
@@ -223,7 +224,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ### 1. One-Click Auto-Update Engine & Release Pipeline
 * **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L50`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/implementation/v4_roadmap.md#L50)
+* **Source**: [`docs/implementation/v4_roadmap.md:L50`](implementation/v4_roadmap.md#L50)
 * **Goal**: Enable non-technical users to update Home Cloud with a single click.
 * **Architecture**:
   * Backend polling service checking GitHub Releases (`GET https://api.github.com/repos/Cypher0071/home_cloud/releases/latest`).
@@ -239,7 +240,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ### 2. Cross-Device Settings & Personalization Persistence
 * **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L142`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L142)
+* **Source**: [`docs/TECHNICAL_DEBT.md:L142`](TECHNICAL_DEBT.md#L142)
 * **Goal**: Synchronize wallpaper, theme, fit mode, and dock preferences across all user devices.
 * **Architecture**:
   * Endpoint `GET/PUT /api/settings/preferences` backed by host-side JSON storage (`~/.config/home-cloud/preferences.json`).
@@ -250,7 +251,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ### 3. Desktop Window Layout State Persistence
 * **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L39`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/implementation/v4_roadmap.md#L39)
+* **Source**: [`docs/implementation/v4_roadmap.md:L39`](implementation/v4_roadmap.md#L39)
 * **Goal**: Restore open window positions (`x`, `y`), dimensions (`width`, `height`), and z-indices across browser reloads.
 * **Architecture**:
   * Save open window state to browser `localStorage` on window move/resize with debounce.
@@ -260,7 +261,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ### 4. Container Crash Watchdog & Webhooks
 * **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L9`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/implementation/v4_roadmap.md#L9)
+* **Source**: [`docs/implementation/v4_roadmap.md:L9`](implementation/v4_roadmap.md#L9)
 * **Goal**: Automatic notifications if a Docker service crashes or enters a restart loop.
 * **Architecture**:
   * Node.js agent monitors Docker events via `docker.getEvents()`.
@@ -271,7 +272,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ### 5. Automated Volume & Database Backups
 * **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L25`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/implementation/v4_roadmap.md#L25)
+* **Source**: [`docs/implementation/v4_roadmap.md:L25`](implementation/v4_roadmap.md#L25)
 * **Goal**: Protect user container data with zero terminal complexity.
 * **Architecture**:
   * Snapshot Docker named volumes and container bind mounts into `.tar.gz` archives.
@@ -282,7 +283,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ### 6. File Explorer Usability Upgrades
 * **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L109-L121`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/docs/TECHNICAL_DEBT.md#L109-L121)
+* **Source**: [`docs/TECHNICAL_DEBT.md:L109-L121`](TECHNICAL_DEBT.md#L109-L121)
 * **Goal**: Bring File Explorer up to desktop parity.
 * **Architecture**:
   * Keyboard navigation: Arrow keys to navigate items, `Enter` to open, `Delete` / `Backspace` to delete, `F2` to rename.
@@ -304,7 +305,7 @@ Final polish required for public GitHub launch, contributor attraction, and fric
 * **Status**: [ ] Pending.
 * **Goal**: Seamless onboarding for fresh Linux servers.
 * **Architecture**:
-  * Ensure [`setup.sh`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/setup.sh) can be invoked via:
+  * Ensure [`setup.sh`](../setup.sh) can be invoked via:
     ```bash
     curl -fsSL https://raw.githubusercontent.com/Cypher0071/home_cloud/main/setup.sh | bash
     ```
@@ -315,7 +316,7 @@ Final polish required for public GitHub launch, contributor attraction, and fric
 
 ### 2. Comprehensive `README.md` Revamp
 * **Status**: [ ] Pending.
-* **Target File**: [`README.md`](file:///home/rudra-unix/orca/workspaces/home_cloud/siren/README.md)
+* **Target File**: [`README.md`](../README.md)
 * **Required Content**:
   * Hero banner, badge bar (CI, License, Node 20+, Docker).
   * High-level architectural diagram (Browser -> Cloudflare Tunnel -> Agent -> Docker/Terminal/Files).
@@ -358,12 +359,12 @@ flowchart TD
         T["[x] Terminal Prototype Removed (Resolved ✅)"]
         E["[x] Fix 46 ESLint Errors (Resolved ✅)"]
         TS["[x] Stabilize Test Suites (Resolved ✅)"]
-        S["[ ] Sanitize Usernames in Docs"]
+        S["[x] Sanitize Usernames in Docs (Resolved ✅)"]
     end
 
     subgraph P1["P1: Security Hardening"]
         W["[ ] WebAuthn Passkey Auth"]
-        J["[ ] Compose Jail Policy"]
+        J["[ ] Storage Scope & Root Access"]
         R["[ ] Session Revocation"]
         P["[ ] Dynamic Passcode UI"]
         U["[ ] 100MB Chunked Uploads"]
@@ -391,7 +392,7 @@ flowchart TD
 ```
 
 ### Execution Phases:
-1. **Phase 1 (P0)**: Fix immediate blockers ([x] License, [x] Rate Limiter, [x] Host Leak, [x] Terminal Prototype, [x] ESLint, [x] Test Suites, [ ] Doc Username Sanitization).
-2. **Phase 2 (P1)**: Implement passkey authentication, server session revocation, and 100MB chunked uploads.
+1. **Phase 1 (P0)**: Fix immediate blockers ([x] License, [x] Rate Limiter, [x] Host Leak, [x] Terminal Prototype, [x] ESLint, [x] Test Suites, [x] Doc Username Sanitization).
+2. **Phase 2 (P1)**: Implement passkey authentication, storage scope & system root mode, server session revocation, and 100MB chunked uploads.
 3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, and desktop window state persistence.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.

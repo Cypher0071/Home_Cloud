@@ -25,8 +25,8 @@ You already read about `config.yml` structure in `cloudflare_tunnels.md`. The ch
 The existing file looks like this:
 
 ```yaml
-tunnel: 43a28f80-7711-482a-a92c-567c1e5ba95c
-credentials-file: /home/rudra-unix/.cloudflared/43a28f80-7711-482a-a92c-567c1e5ba95c.json
+tunnel: <tunnel-id>
+credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
 
 ingress:
   - hostname: dash.home-cloud.live
@@ -103,7 +103,7 @@ Cloudflare has a public REST API for managing everything in your account — DNS
 CF_API_TOKEN   — Cloudflare API token with DNS edit + Zone read permissions
 CF_ZONE_ID     — The Zone ID of your domain (found in the Cloudflare dashboard right sidebar)
 CF_DOMAIN      — Your root domain, e.g. "home-cloud.live"
-CF_TUNNEL_ID   — Your tunnel UUID, e.g. "43a28f80-7711-482a-a92c-567c1e5ba95c"
+CF_TUNNEL_ID   — Your tunnel UUID, e.g. "<tunnel-id>"
 ```
 
 > These go in the `.env` file in the agent directory. Never hardcode them.
@@ -112,7 +112,7 @@ CF_TUNNEL_ID   — Your tunnel UUID, e.g. "43a28f80-7711-482a-a92c-567c1e5ba95c"
 
 When you expose a container as `jellyfin`, you need a DNS record:
 ```
-jellyfin.home-cloud.live  CNAME  43a28f80-7711-482a-a92c-567c1e5ba95c.cfargotunnel.com
+jellyfin.home-cloud.live  CNAME  <tunnel-id>.cfargotunnel.com
 ```
 
 This is done via a single `POST` to the Cloudflare API:
@@ -133,7 +133,7 @@ async function createDnsRecord(subdomain) {
       body: JSON.stringify({
         type:    'CNAME',
         name:    hostname,           // "jellyfin.home-cloud.live"
-        content: tunnelCname,        // "43a28f80-....cfargotunnel.com"
+        content: tunnelCname,        // "<tunnel-id>.cfargotunnel.com"
         proxied: true,               // must be true — routes through Cloudflare edge
         ttl:     1,                  // 1 = Auto (only valid when proxied: true)
         comment: 'Home Cloud auto-wired',

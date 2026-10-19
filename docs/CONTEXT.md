@@ -226,7 +226,7 @@ The catch-all exists because React Router handles client-side routing. Hard refr
 
 **CommonJS, not ESM** — `node-pty` and `dockerode` have native C++ `.node` bindings that use `require()` internally. ESM has no `require`. Mixing them requires `createRequire()` hacks with no benefit for a backend daemon. Stay CommonJS.
 
-**Path traversal protection** — All file routes resolve user-supplied paths with `path.resolve()` then check `startsWith(BASE_DIR + '/')`. Note the trailing slash — `startsWith('/home/rudra-unix')` alone would pass `/home/rudra-unix-evil/`. The slash prevents this.
+**Path traversal protection** — All file routes resolve user-supplied paths with `path.resolve()` then check `startsWith(BASE_DIR + '/')`. Note the trailing slash — `startsWith('/home/<user>')` alone would pass `/home/<user>-evil/`. The slash prevents this.
 
 **EXDEV on file move** — `fs.rename()` is a single atomic kernel syscall that only works within the same filesystem/mount. Moving across mounts (WSL drive to Windows mount, or to a USB drive) returns `EXDEV`. The move route falls back to `fs.cp()` + `fs.rm()` in this case.
 
@@ -301,7 +301,7 @@ If you see `gyp ERR! not found: make`, this is why.
 
 **Docker access**: Node.js process needs to be in the `docker` group to access `/var/run/docker.sock`:
 ```bash
-sudo usermod -aG docker rudra-unix
+sudo usermod -aG docker $USER
 # log out and back in
 ```
 

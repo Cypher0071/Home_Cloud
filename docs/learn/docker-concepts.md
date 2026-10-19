@@ -152,7 +152,7 @@ docker run -v /:/host alpine chroot /host
 To give your user socket access without running as root:
 
 ```bash
-sudo usermod -aG docker rudra-unix
+sudo usermod -aG docker $USER
 # then log out and back in
 ```
 
@@ -415,7 +415,7 @@ This prevents conflicts when installing multiple apps from the catalog.
 
 1. `docker stats` shows `cpu_delta = 0`. Is this always the first sample, or can it also mean the container is genuinely idle? How do you tell the difference?
 
-2. Your Node.js process needs to access `/var/run/docker.sock`. Run Node as root, or add `rudra-unix` to the `docker` group? Which and why? What's the real risk of either choice?
+2. Your Node.js process needs to access `/var/run/docker.sock`. Run Node as root, or add `<user>` to the `docker` group? Which and why? What's the real risk of either choice?
 
 3. A user wants to move a container's data from one drive to another. They think they can just `docker rename`. Why doesn't that help, and what's the actual correct approach involving volumes?
 

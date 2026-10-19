@@ -74,7 +74,7 @@ flowchart TB
     direction TB
 
     subgraph CFD["cloudflared  —  child of the Agent"]
-      TJS["tunnel.js<br/>spawn cloudflared tunnel --config<br/>/home/rudra-unix/.cloudflared/config.yml<br/>run home-cloud"]
+      TJS["tunnel.js<br/>spawn cloudflared tunnel --config<br/>$HOME/.cloudflared/config.yml<br/>run home-cloud"]
       CFG["~/.cloudflared/config.yml<br/>credentials JSON"]
       REL["reload = restartTunnel()<br/>SIGTERM old child + respawn<br/>NOT SIGHUP"]
     end
@@ -85,7 +85,7 @@ flowchart TB
       PIPE["1. express.json + cookie-parser<br/>2. /api/auth, /api/health, /api/network  PUBLIC<br/>3. /api/*      JWT middleware (/api/auth/me)<br/>4. metrics · files · compose · docker<br/>5. express.static ../dashboard/dist<br/>6. GET /{*path} → index.html"]
       AUTH["routes/auth.js + middleware/auth.js<br/>jwt.sign 7d  ·  httpOnly + secure cookie"]
       MET["routes/metrics.js<br/>SSE every 2s + :heartbeat 15s"]
-      FILES["routes/file.js<br/>BASE_DIR=/home/rudra-unix"]
+      FILES["routes/file.js<br/>BASE_DIR=$HOME"]
       DOCK["routes/docker.js<br/>dockerode → Docker Engine"]
       CMP["routes/compose.js<br/>~/.home-cloud/compose/&lt;name&gt; (legacy stacks aliased)"]
       NETR["routes/network.js<br/>os.networkInterfaces() LAN IP"]
@@ -349,7 +349,7 @@ sequenceDiagram
 |--------|------|-------|
 | GET | `/api/metrics` | SSE. `retry: 5000`. Body every 2s from `systeminformation` (`currentLoad`, `mem`, `fsSize`). Comment `: heartbeat` every 15s so Cloudflare does not idle-kill the stream. |
 
-**Files** (`routes/file.js`) — sandbox `BASE_DIR = /home/rudra-unix`
+**Files** (`routes/file.js`) — sandbox `BASE_DIR = $HOME (or /home/<user>)`
 
 | Method | Path | Notes |
 |--------|------|-------|
@@ -521,8 +521,8 @@ Container deletion (`DELETE /api/docker/containers/:id/delete`) walks published 
 Ingress file shape the agent actually edits:
 
 ```yaml
-tunnel: <uuid>
-credentials-file: /home/rudra-unix/.cloudflared/<uuid>.json
+tunnel: <tunnel-id>
+credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
 ingress:
   - hostname: dash.home-cloud.live
     service: http://localhost:3000
@@ -598,7 +598,7 @@ App containers   (data plane, own origin)
 Implications:
 
 - Anyone with the passcode has a host shell (`node-pty` as the Agent's user) and Docker (effectively host root). This is intentional for a single-owner spare PC.
-- File routes cannot leave `/home/rudra-unix` by design, but the terminal can.
+- File routes cannot leave `/home/<user>` (or `$HOME`) by design, but the terminal can.
 - Each exposed app is a separate origin (`jellyfin.home-cloud.live` vs `dash.home-cloud.live`), so cookies and storage do not leak across apps.
 - Restarting the tunnel to apply ingress drops in-flight SSE/WS on `dash` for a moment. That is the current reload strategy.
 

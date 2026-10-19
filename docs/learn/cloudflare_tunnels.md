@@ -96,8 +96,8 @@ The `cloudflared` daemon running on your Spare PC acts as a **local reverse prox
 ### Example `config.yml`
 
 ```yaml
-tunnel: 43a28f80-7711-482a-a92c-567c1e5ba95c
-credentials-file: /home/rudra-unix/.cloudflared/43a28f80-7711-482a-a92c-567c1e5ba95c.json
+tunnel: <tunnel-id>
+credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
 
 ingress:
   # Rule 1: Match subdomain "dash"
