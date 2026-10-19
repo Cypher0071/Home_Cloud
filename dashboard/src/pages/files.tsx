@@ -78,6 +78,32 @@ function isInsideBasePath(p: string, basePath: string | null): boolean {
   return p === basePath || p.startsWith(basePath + '/');
 }
 
+function isPathAllowed(
+  p: string,
+  basePath: string | null,
+  drives: DriveInfo[],
+  allowSystemRoot: boolean
+): boolean {
+  if (!p) return false;
+  const clean = p.replace(/\/+$/, '') || '/';
+  // Virtual filesystems always blocked to prevent hanging process streams
+  if (
+    clean === '/proc' || clean.startsWith('/proc/') ||
+    clean === '/sys' || clean.startsWith('/sys/') ||
+    clean === '/dev' || clean.startsWith('/dev/')
+  ) {
+    return false;
+  }
+  if (allowSystemRoot) return true;
+  if (basePath && (clean === basePath || clean.startsWith(basePath + '/'))) return true;
+  const storageRoots = ['/mnt', '/media', '/run/media', '/srv'];
+  if (storageRoots.some(root => clean === root || clean.startsWith(root + '/'))) return true;
+  if (drives.some(d => d.mount && (clean === d.mount || clean.startsWith(d.mount === '/' ? '/' : d.mount + '/')))) {
+    return true;
+  }
+  return false;
+}
+
 function isSafeEntryName(name: string): boolean {
   return !!name && name !== '.' && name !== '..' && !name.includes('/') && !name.includes('\\');
 }
@@ -190,7 +216,7 @@ function mapExtensionToLanguage(ext: string): string {
   return 'text';
 }
 
-// ─── File Viewer Modal ────────────────────────────────────────────────────────
+// ─── File Viewer Modal ───────────────────────────────────────────────────────
 
 interface ViewerProps {
   filePath: string;   // full absolute path
@@ -413,13 +439,14 @@ function FileViewer({ filePath, fileName, ext, onClose }: ViewerProps) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function FileExplorer() {
   const net = useNetworkDetector();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const basePath = net.baseDir;
+  const [allowSystemRoot, setAllowSystemRoot] = useState<boolean>(false);
   const [drives, setDrives] = useState<DriveInfo[]>([]);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [history, setHistory] = useState<string[]>([]);
@@ -506,8 +533,12 @@ export default function FileExplorer() {
     try {
       const files = await fetchFiles(dirPath);
       setCurrentFiles(files);
-    } catch {
-      setLoadError('Could not read directory. Check permissions.');
+    } catch (err: unknown) {
+      let msg = 'Could not read directory. Check permissions.';
+      if (axios.isAxiosError(err) && err.response?.data?.error) {
+        msg = String(err.response.data.error);
+      }
+      setLoadError(msg);
       setCurrentFiles([]);
     } finally {
       setLoading(false);
@@ -535,6 +566,13 @@ export default function FileExplorer() {
 
   useEffect(() => {
     fetchDrives().then(setDrives);
+    axios.get<{ allowSystemRoot: boolean }>('/api/settings/storage')
+      .then(res => {
+        if (res.data && typeof res.data.allowSystemRoot === 'boolean') {
+          setAllowSystemRoot(res.data.allowSystemRoot);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ─── Backend search trigger effect with debounce & cancellation ───
@@ -598,7 +636,7 @@ export default function FileExplorer() {
     }
   };
 
-  const currentFolderTitle = currentPath.split('/').pop() || currentPath;
+  const currentFolderTitle = currentPath.split('/').filter(Boolean).pop() || (currentPath === '/' ? 'System Root' : currentPath);
   const isLoading = loading || searchLoading;
   const rawFiles = searchQuery ? searchResults : currentFiles;
 
@@ -776,8 +814,8 @@ export default function FileExplorer() {
   // ─── Navigation ───
   const navigateToPath = (newPath: string) => {
     setRenamingItem(null);
-    const cleanPath = newPath.replace(/\/$/, '') || '/';
-    if (!isInsideBasePath(cleanPath, basePath)) return;
+    const cleanPath = newPath.replace(/\/+$/, '') || '/';
+    if (!isPathAllowed(cleanPath, basePath, drives, allowSystemRoot)) return;
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(cleanPath);
     setHistory(newHistory);
@@ -834,8 +872,8 @@ export default function FileExplorer() {
         if (resolved.length > 1 && resolved.endsWith('/')) {
           resolved = resolved.slice(0, -1);
         }
-        if (!isInsideBasePath(resolved, basePath)) {
-          alert(`Path must be inside base directory: ${basePath || '/'}`);
+        if (!isPathAllowed(resolved, basePath, drives, allowSystemRoot)) {
+          alert(`Path is outside allowed storage scope: ${resolved}`);
           return;
         }
         navigateToPath(resolved);
@@ -851,7 +889,7 @@ export default function FileExplorer() {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
       const target = history[newIndex];
-      if (!isInsideBasePath(target, basePath)) return;
+      if (!isPathAllowed(target, basePath, drives, allowSystemRoot)) return;
       setHistoryIndex(newIndex);
       setCurrentPath(target);
       setSearchQuery('');
@@ -862,7 +900,7 @@ export default function FileExplorer() {
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
       const target = history[newIndex];
-      if (!isInsideBasePath(target, basePath)) return;
+      if (!isPathAllowed(target, basePath, drives, allowSystemRoot)) return;
       setHistoryIndex(newIndex);
       setCurrentPath(target);
       setSearchQuery('');
@@ -870,13 +908,13 @@ export default function FileExplorer() {
   };
 
   const handleUp = () => {
-    if (basePath && currentPath !== basePath) {
-      const parts = currentPath.split('/');
-      parts.pop();
-      const parent = parts.join('/') || '/';
-      if (!isInsideBasePath(parent, basePath)) return;
-      navigateToPath(parent);
-    }
+    if (currentPath === '/' || !currentPath) return;
+    const parts = currentPath.split('/').filter(Boolean);
+    parts.pop();
+    const parent = '/' + parts.join('/');
+    const cleanParent = parent === '//' ? '/' : parent;
+    if (!isPathAllowed(cleanParent, basePath, drives, allowSystemRoot)) return;
+    navigateToPath(cleanParent);
   };
 
   const handleCopyPath = () => {
@@ -893,11 +931,12 @@ export default function FileExplorer() {
       alert('Cannot open: target file or directory does not exist (broken symlink).');
       return;
     }
+    const itemPath = (currentPath === '/' ? '' : currentPath) + '/' + item.name;
     if (item.type === 'folder') {
-      navigateToPath(`${currentPath}/${item.name}`);
+      navigateToPath(itemPath);
     } else {
       setViewingFile({
-        path: `${currentPath}/${item.name}`,
+        path: itemPath,
         name: item.name,
         ext: item.ext || '',
       });
@@ -975,6 +1014,18 @@ export default function FileExplorer() {
 
     if (targets.length === 0) return;
 
+    // Safety warning if operating outside user home
+    const isOutsideHome = basePath ? (!isInsideBasePath(currentPath, basePath)) : false;
+    if (isOutsideHome) {
+      const ok = window.confirm(
+        `Caution: You are about to delete items from an external or system directory outside your home folder:
+"${currentPath}"
+
+Are you sure you want to proceed?`
+      );
+      if (!ok) return;
+    }
+
     const confirmMsg =
       targets.length === 1
         ? `Delete "${targets[0].name}"? This cannot be undone.`
@@ -985,7 +1036,7 @@ export default function FileExplorer() {
     try {
       await Promise.all(
         targets.map(t => {
-          const targetPath = t.path || `${currentPath}/${t.name}`;
+          const targetPath = t.path || ((currentPath === '/' ? '' : currentPath) + '/' + t.name);
           return axios.delete('/api/files/delete', { params: { path: targetPath } });
         })
       );
@@ -996,8 +1047,11 @@ export default function FileExplorer() {
       } else {
         loadDirectory(currentPath);
       }
-    } catch {
-      alert('Failed to delete some or all selected items.');
+    } catch (err: unknown) {
+      const msg = (axios.isAxiosError(err) && err.response?.data?.error)
+        ? String(err.response.data.error)
+        : 'Failed to delete some or all selected items.';
+      alert(`Error: ${msg}`);
     }
   };
 
@@ -1029,11 +1083,11 @@ export default function FileExplorer() {
       return;
     }
 
-    const oldPath = renamingItem.path || `${currentPath}/${oldName}`;
+    const oldPath = renamingItem.path || ((currentPath === '/' ? '' : currentPath) + '/' + oldName);
     const targetDir = renamingItem.path
-      ? renamingItem.path.substring(0, renamingItem.path.lastIndexOf('/'))
+      ? (renamingItem.path.substring(0, renamingItem.path.lastIndexOf('/')) || '/')
       : currentPath;
-    const newPath = `${targetDir}/${newName}`;
+    const newPath = (targetDir === '/' ? '' : targetDir) + '/' + newName;
 
     try {
       await axios.patch('/api/files/rename', { oldPath, newPath });
@@ -1057,7 +1111,7 @@ export default function FileExplorer() {
     const selected = displayedFiles.filter(f => selectedItemNames.has(f.name));
     if (selected.length > 0) {
       const srcPath = selected[0].path
-        ? selected[0].path.substring(0, selected[0].path.lastIndexOf('/'))
+        ? (selected[0].path.substring(0, selected[0].path.lastIndexOf('/')) || '/')
         : currentPath;
       setClipboard({ items: selected, sourcePath: srcPath, action: 'copy' });
     }
@@ -1067,7 +1121,7 @@ export default function FileExplorer() {
     const selected = displayedFiles.filter(f => selectedItemNames.has(f.name));
     if (selected.length > 0) {
       const srcPath = selected[0].path
-        ? selected[0].path.substring(0, selected[0].path.lastIndexOf('/'))
+        ? (selected[0].path.substring(0, selected[0].path.lastIndexOf('/')) || '/')
         : currentPath;
       setClipboard({ items: selected, sourcePath: srcPath, action: 'cut' });
     }
@@ -1077,8 +1131,8 @@ export default function FileExplorer() {
     if (!clipboard || clipboard.items.length === 0) return;
     try {
       for (const item of clipboard.items) {
-        const src = `${clipboard.sourcePath}/${item.name}`;
-        const dest = `${currentPath}/${item.name}`;
+        const src = (clipboard.sourcePath === '/' ? '' : clipboard.sourcePath) + '/' + item.name;
+        const dest = (currentPath === '/' ? '' : currentPath) + '/' + item.name;
         if (src === dest) continue;
 
         if (clipboard.action === 'cut') {
@@ -1174,7 +1228,6 @@ export default function FileExplorer() {
 
   // ─── Breadcrumbs ───
   const pathSegments   = currentPath.split('/').filter(Boolean);
-  const baseSegments   = (basePath || '').split('/').filter(Boolean);
   const buildPathUpTo  = (index: number) => '/' + pathSegments.slice(0, index + 1).join('/');
 
   return (
@@ -1200,23 +1253,24 @@ export default function FileExplorer() {
           <button className={styles.navButton} onClick={handleForward} disabled={historyIndex >= history.length - 1} title="Forward">
             <ArrowRight size={15} />
           </button>
-          <button className={styles.navButton} onClick={handleUp} disabled={!basePath || currentPath === basePath} title="Up one folder">
+          <button className={styles.navButton} onClick={handleUp} disabled={currentPath === '/' || !currentPath} title="Up one level">
             <ArrowUp size={15} />
           </button>
           <button className={styles.navButton} onClick={() => loadDirectory(currentPath)} title="Refresh">
-            <RefreshCw size={13} style={{ animation: loading ? 'spin 0.8s linear infinite' : 'none' }} />
+            <RefreshCw size={14} className={loading ? styles.spin : ''} />
           </button>
         </div>
 
-        {/* Breadcrumb Path Bar */}
+        {/* Breadcrumb Path Box */}
         <div
-          className={styles.addressInputWrapper}
+          className={styles.breadcrumbsBox}
           onClick={() => {
             if (!isEditingPath) {
               setPathInputValue(currentPath);
               setIsEditingPath(true);
             }
           }}
+          title="Click to edit path (or press Ctrl+L)"
         >
           {isEditingPath ? (
             <input
@@ -1242,41 +1296,64 @@ export default function FileExplorer() {
                   className={`${styles.breadcrumbSegment} ${styles.breadcrumbSegmentActive}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (basePath) navigateToPath(basePath);
+                    if (allowSystemRoot) {
+                      navigateToPath('/');
+                    } else if (basePath) {
+                      navigateToPath(basePath);
+                    }
                   }}
+                  title="System Root (/)"
                 >
                   /
                 </span>
               ) : (
-                pathSegments.map((segment, index) => {
-                  const isLast = index === pathSegments.length - 1;
-                  const isBaseAncestor = index < baseSegments.length - 1;
-                  return (
-                    <React.Fragment key={index}>
-                      {isBaseAncestor ? (
-                        <span
-                          className={styles.breadcrumbSegment}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {segment}
-                        </span>
-                      ) : (
-                        <span
-                          ref={isLast ? activeBreadcrumbRef : undefined}
-                          className={`${styles.breadcrumbSegment} ${isLast ? styles.breadcrumbSegmentActive : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigateToPath(buildPathUpTo(index));
-                          }}
-                          title={buildPathUpTo(index)}
-                        >
-                          {segment}
-                        </span>
-                      )}
-                      {!isLast && <ChevronRight size={12} className={styles.breadcrumbDivider} />}
-                    </React.Fragment>
-                  );
-                })
+                <>
+                  {allowSystemRoot && (
+                    <>
+                      <span
+                        className={styles.breadcrumbSegment}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigateToPath('/');
+                        }}
+                        title="System Root (/)"
+                      >
+                        /
+                      </span>
+                      <ChevronRight size={12} className={styles.breadcrumbDivider} />
+                    </>
+                  )}
+                  {pathSegments.map((segment, index) => {
+                    const isLast = index === pathSegments.length - 1;
+                    const segmentPath = buildPathUpTo(index);
+                    const isClickable = isPathAllowed(segmentPath, basePath, drives, allowSystemRoot);
+                    return (
+                      <React.Fragment key={index}>
+                        {!isClickable ? (
+                          <span
+                            className={styles.breadcrumbSegment}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {segment}
+                          </span>
+                        ) : (
+                          <span
+                            ref={isLast ? activeBreadcrumbRef : undefined}
+                            className={`${styles.breadcrumbSegment} ${isLast ? styles.breadcrumbSegmentActive : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigateToPath(segmentPath);
+                            }}
+                            title={segmentPath}
+                          >
+                            {segment}
+                          </span>
+                        )}
+                        {!isLast && <ChevronRight size={12} className={styles.breadcrumbDivider} />}
+                      </React.Fragment>
+                    );
+                  })}
+                </>
               )}
             </div>
           )}
@@ -1366,7 +1443,8 @@ export default function FileExplorer() {
             disabled={!selectedSingleItem || selectedSingleItem.type === 'folder'}
             onClick={() => {
               if (selectedSingleItem && selectedSingleItem.type === 'file') {
-                setViewingFile({ path: `${currentPath}/${selectedSingleItem.name}`, name: selectedSingleItem.name, ext: selectedSingleItem.ext || '' });
+                const itemPath = (currentPath === '/' ? '' : currentPath) + '/' + selectedSingleItem.name;
+                setViewingFile({ path: itemPath, name: selectedSingleItem.name, ext: selectedSingleItem.ext || '' });
               }
             }}
             title="View File"
@@ -1389,17 +1467,33 @@ export default function FileExplorer() {
 
         {/* Sidebar */}
         <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
-          <div className={styles.sidebarSectionTitle}>Devices</div>
+          <div className={styles.sidebarSectionTitle}>Locations</div>
+          {basePath && (
+            <div
+              className={`${styles.sidebarItem} ${currentPath === basePath ? styles.sidebarItemActive : ''}`}
+              onClick={() => {
+                navigateToPath(basePath);
+                if (isMobile) setSidebarOpen(false);
+              }}
+              title={`Home (${basePath})`}
+            >
+              <Folder size={15} className={styles.sidebarIcon} />
+              <span>Home</span>
+            </div>
+          )}
+
+          <div className={styles.sidebarSectionTitle} style={{ marginTop: 12 }}>Devices</div>
           {Array.isArray(drives) && drives.length > 0 ? (
             drives.map((drive, index) => {
-              const driveName = drive.mount === '/' ? 'System Root (/)' : (drive.mount || drive.fs || `Drive ${index + 1}`);
-              const isActive = !!basePath && currentPath === basePath && drive.mount === '/';
+              const isRoot = drive.mount === '/';
+              const driveName = isRoot ? 'System Root (/)' : (drive.mount || drive.fs || `Drive ${index + 1}`);
+              const isActive = currentPath === drive.mount || (drive.mount !== '/' && currentPath.startsWith(drive.mount + '/'));
               return (
                 <div
                   key={drive.fs || index}
                   className={`${styles.sidebarItem} ${isActive ? styles.sidebarItemActive : ''}`}
                   onClick={() => {
-                    if (basePath) navigateToPath(basePath);
+                    navigateToPath(drive.mount || basePath || '/');
                     if (isMobile) setSidebarOpen(false);
                   }}
                   title={`${drive.fs} (${drive.type})`}
@@ -1409,18 +1503,18 @@ export default function FileExplorer() {
                 </div>
               );
             })
-          ) : (
+          ) : !basePath ? (
             <div
-              className={`${styles.sidebarItem} ${currentPath === basePath ? styles.sidebarItemActive : ''}`}
+              className={`${styles.sidebarItem} ${currentPath === '/' ? styles.sidebarItemActive : ''}`}
               onClick={() => {
-                if (basePath) navigateToPath(basePath);
+                navigateToPath('/');
                 if (isMobile) setSidebarOpen(false);
               }}
             >
               <HardDrive size={15} className={styles.sidebarIcon} />
-              <span>Home</span>
+              <span>System Root (/)</span>
             </div>
-          )}
+          ) : null}
 
           {Array.isArray(drives) && drives.length > 0 && drives[0] && (() => {
             const usePercent = Math.round(drives[0].use || 0);
@@ -1679,13 +1773,14 @@ export default function FileExplorer() {
             {contextMenu.item !== null && (() => {
               const item = contextMenu.item!;
               const isMultiSelected = selectedItemNames.size > 1;
+              const itemFullPath = (currentPath === '/' ? '' : currentPath) + '/' + item.name;
               return (
                 <>
                   {!isMultiSelected && item.type === 'file' && (
                     <div
                       className={styles.contextMenuItem}
                       onClick={() => {
-                        setViewingFile({ path: `${currentPath}/${item.name}`, name: item.name, ext: item.ext || '' });
+                        setViewingFile({ path: itemFullPath, name: item.name, ext: item.ext || '' });
                         setContextMenu(null);
                       }}
                     >
@@ -1718,7 +1813,7 @@ export default function FileExplorer() {
                   {!isMultiSelected && item.type === 'file' && (
                     <a
                       className={styles.contextMenuItem}
-                      href={`/api/files/download?path=${encodeURIComponent(`${currentPath}/${item.name}`)}`}
+                      href={`/api/files/download?path=${encodeURIComponent(itemFullPath)}`}
                       download={item.name}
                       style={{ textDecoration: 'none' }}
                       onClick={() => setContextMenu(null)}

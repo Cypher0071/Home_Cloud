@@ -91,6 +91,7 @@ app.use("/api", authMiddleware);
 app.use("/api/network", require("./routes/network"));
 app.use("/api/metrics", require("./routes/metrics"));
 app.use("/api/files", require("./routes/file"));
+app.use("/api/settings", require("./routes/settings"));
 const composeRoutes = require("./routes/compose");
 app.use("/api/docker/compose", composeRoutes);
 app.use("/api/docker/stacks", composeRoutes);
@@ -109,8 +110,7 @@ app.get("/{*path}", (req, res) => {
  * @param {string} signal
  * @param {object} [options]
  * @param {boolean} [options.exitProcess=true] Whether to trigger process.exit
- * @returns {Promise<void>}
- */
+ * @returns {Promise<void>}\n */
 async function gracefulShutdown(signal, { exitProcess = true } = {}) {
 	if (isShuttingDown) {
 		console.log(`[agent] Shutdown already in progress (${signal})...`);

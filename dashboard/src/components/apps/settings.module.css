@@ -400,6 +400,177 @@
   font-size: 12.5px;
 }
 
+/* Storage & System Settings */
+.card {
+  border: 1px solid #262626;
+  border-radius: 10px;
+  background: #0a0a0a;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cardTitle {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary, #ededed);
+  margin: 0;
+}
+
+.cardDesc {
+  font-size: 12.5px;
+  color: var(--text-muted, #737373);
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid #1a1a1a;
+}
+
+.settingRow:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.settingInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.settingName {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary, #ededed);
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingHint {
+  font-size: 12px;
+  color: var(--text-muted, #8a8a8a);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.badgeSafe {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.badgeRoot {
+  background: rgba(234, 179, 8, 0.12);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.25);
+}
+
+.switchButton {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: 1px solid #333333;
+  background: #171717;
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: background 200ms cubic-bezier(0.22, 1, 0.36, 1), border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.switchButtonActive {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+
+.switchThumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #737373;
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateX(0);
+}
+
+.switchButtonActive .switchThumb {
+  transform: translateX(20px);
+  background: #000000;
+}
+
+.switchButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.driveList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.driveCard {
+  border: 1px solid #262626;
+  border-radius: 8px;
+  background: #111111;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.driveMount {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ededed;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.driveDetails {
+  font-size: 11.5px;
+  color: #737373;
+}
+
+.statusToast {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ededed;
+  border: 1px solid #262626;
+}
+
 @container (min-width: 820px) {
   .nav {
     width: 220px;
@@ -477,7 +648,9 @@
   .navItem,
   .tile,
   .fitBtn,
-  .removeCustom {
+  .removeCustom,
+  .switchButton,
+  .switchThumb {
     transition: none;
   }
 

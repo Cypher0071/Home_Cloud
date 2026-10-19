@@ -6,20 +6,27 @@ const mime = require("mime-types");
 const multer = require("multer");
 const si = require("systeminformation");
 const { spawn } = require("child_process");
-const { stdout, stderr } = require("process");
-const { error } = require("console");
-const { resolveUnderBase, isInsideBase } = require("../paths");
+const { resolveUnderBase, isInsideAllowedScope } = require("../paths");
+const { isSystemRootAllowed } = require("../services/preferences");
 
 const resolvePath = resolveUnderBase;
+const isInsideBase = isInsideAllowedScope;
+
+function handleFsError(err, res, defaultMsg = "Filesystem error") {
+	if (err && (err.code === "EACCES" || err.code === "EPERM")) {
+		return res.status(403).json({ error: "Permission denied by host OS" });
+	}
+	return res.status(500).json({ error: err ? err.message : defaultMsg });
+}
 
 const storage = multer.diskStorage({
 	destination: (req, file, cb) => {
 		const dest = resolvePath(req.query.path);
-		// Block uploads outside BASE_DIR
+		// Block uploads outside allowed storage scope
 		if (!isInsideBase(dest)) {
 			return cb(
 				new Error(
-					"Access denied: upload destination is outside allowed directory",
+					"Access denied: upload destination is outside allowed storage scope",
 				),
 			);
 		}
@@ -44,7 +51,7 @@ const upload = multer({ storage });
 router.get("/", async (req, res) => {
 	const requestedPath = resolvePath(req.query.path);
 	if (!isInsideBase(requestedPath)) {
-		return res.status(403).json({ error: "Access denied" });
+		return res.status(403).json({ error: "Access denied: path is outside allowed storage scope" });
 	} else {
 		try {
 			const files = await fs.readdir(requestedPath);
@@ -93,6 +100,9 @@ router.get("/", async (req, res) => {
 			);
 			res.json({ path: requestedPath, files: metadata.filter(Boolean) });
 		} catch (err) {
+			if (err && (err.code === "EACCES" || err.code === "EPERM")) {
+				return res.status(403).json({ error: "Permission denied by host OS" });
+			}
 			console.log(err);
 			return res.status(403).json({ error: "Error reading directory" });
 		}
@@ -122,9 +132,7 @@ router.delete("/delete", async (req, res) => {
 			res.json({ success: "ok" });
 		} catch (err) {
 			console.error(err);
-			return res.status(500).json({
-				error: "Error deleting file",
-			});
+			return handleFsError(err, res, "Error deleting file");
 		}
 	}
 });
@@ -217,7 +225,24 @@ function _getCachedDrivesStateForTesting() {
 router.get("/drives", async (req, res) => {
 	try {
 		const drives = await getFilteredDrives();
-		res.json(drives);
+		const result = [...drives];
+
+		// If system root access is allowed, ensure a root "/" drive entry exists
+		const allowRoot = isSystemRootAllowed();
+		const hasRoot = result.some((d) => d.mount === "/");
+		if (allowRoot && !hasRoot) {
+			result.unshift({
+				fs: "rootfs",
+				type: "ext4",
+				size: 0,
+				used: 0,
+				use: 0,
+				mount: "/",
+				isSystemRoot: true,
+			});
+		}
+
+		res.json(result);
 	} catch (err) {
 		console.error("[files] Error retrieving filesystem drives:", err.message);
 		res.status(500).json({ error: "Failed to retrieve filesystem drives" });
@@ -266,7 +291,7 @@ router.post("/copy", async (req, res) => {
 		await fs.cp(src, dest, { recursive: true });
 		res.json({ success: true });
 	} catch (err) {
-		res.status(500).json({ error: err.message });
+		handleFsError(err, res, err.message);
 	}
 });
 
@@ -399,7 +424,7 @@ router.patch("/rename", async (req, res) => {
 	const oldPath = resolvePath(req.body.oldPath);
 	const newPath = resolvePath(req.body.newPath);
 
-	// Validate both paths are inside BASE_DIR
+	// Validate both paths are inside allowed scope
 	if (!isInsideBase(oldPath) || !isInsideBase(newPath)) {
 		return res.status(403).json({ error: "Access denied" });
 	}
@@ -428,7 +453,7 @@ router.patch("/rename", async (req, res) => {
 		res.json({ success: true });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ error: error.message });
+		return handleFsError(error, res, error.message);
 	}
 });
 
@@ -462,7 +487,7 @@ router.post("/folder", async (req, res) => {
 		res.json({ success: true });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ error: error.message });
+		return handleFsError(error, res, error.message);
 	}
 });
 
@@ -496,7 +521,7 @@ router.post("/file", async (req, res) => {
 		res.json({ success: true });
 	} catch (error) {
 		console.error(error);
-		res.status(500).json({ error: error.message });
+		return handleFsError(error, res, error.message);
 	}
 });
 
@@ -504,7 +529,7 @@ router.patch("/move", async (req, res) => {
 	const src = resolvePath(req.body.oldPath);
 	const dest = resolvePath(req.body.newPath);
 
-	// Validate both paths are inside BASE_DIR
+	// Validate both paths are inside allowed scope
 	if (!isInsideBase(src) || !isInsideBase(dest)) {
 		return res.status(403).json({ error: "Access denied" });
 	}
@@ -532,10 +557,10 @@ router.patch("/move", async (req, res) => {
 				await fs.rm(src, { recursive: true, force: true });
 				return res.json({ success: true });
 			} catch (fallbackErr) {
-				return res.status(500).json({ error: fallbackErr.message });
+				return handleFsError(fallbackErr, res, fallbackErr.message);
 			}
 		}
-		res.status(500).json({ error: err.message });
+		return handleFsError(err, res, err.message);
 	}
 });
 

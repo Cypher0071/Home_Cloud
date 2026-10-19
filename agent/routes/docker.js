@@ -396,7 +396,7 @@ function isNamedVolume(val) {
 				const host = jailPath(rawHost);
 				if (!host) {
 					return res.status(403).json({
-						error: `Host path must be inside ${BASE_DIR}`,
+						error: `Host path must be inside allowed storage scope`,
 					});
 				}
 				bindsArray.push(`${host}:${rawContainer}:rw`);
