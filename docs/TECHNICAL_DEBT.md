@@ -41,19 +41,18 @@ This document outlines the current technical limitations, security tradeoffs, op
 ### 7. Docker Compose Privilege Escalation vs Container Bind Mount Jail Mismatch
 * **Debt**: Single container creation (`agent/routes/docker.js`) and Compose deployments (`agent/routes/compose.js`) have conflicting security boundaries.
 * **Details**:
-  * Single-container creation strictly jails host bind mounts within `BASE_DIR` using realpath canonicalization (`jailPath()` in `agent/paths.js`).
+  * Single-container creation strictly jails host bind mounts within allowed storage scope using realpath canonicalization (`isInsideAllowedScope()` in `agent/paths.js`).
   * Compose project deployment accepts arbitrary `docker-compose.yml` payloads via `POST /api/docker/compose/deploy` and executes `docker compose up -d`. Compose files can declare bind mounts to `/`, `/etc`, or `/var/run/docker.sock`.
   * **Impact**: The filesystem jail on single containers is bypassed by any user deploying a Compose stack.
 
-### 8. Single-Tenant Authentication & Unrevocable 7-Day JWTs
-* **Debt**: Authentication relies on a single shared secret issuing 7-day JWTs (`expiresIn: '7d'`) in cookies.
-* **Tradeoff**:
-  * Multi-user tenancy, audit logs per user, and role-based access control (RBAC) do not exist.
-  * JWTs lack a server-side revocation list or session blacklist. If a token is compromised, it cannot be revoked prematurely without invalidating all sessions by changing `process.env.JWT_SECRET` and restarting the agent.
+### 8. Single-Tenant Authentication & Unrevocable 7-Day JWTs (Partially Resolved ✅)
+* **Status**: Partially Resolved.
+* **Resolution**: Token revocation and server-side session invalidation have been fully implemented via persistent `sessionEpoch` tracking in `agent/services/preferences.js`, verified across HTTP middleware and WebSocket handlers (`POST /api/auth/logout-all`, verified in `agent/tests/verify_session_revocation.mjs`).
+* **Remaining Debt**: Multi-user tenancy, audit logs per user, and role-based access control (RBAC) do not exist (single-admin security model).
 
-### 9. Hardcoded Security Passcode Configuration
-* **Debt**: The security passcode is loaded statically from environment variables (`process.env.PASSWORD`) on the agent.
-* **Tradeoff**: There is no client-side UI or API endpoint to change the security passcode dynamically. Password updates require manual editing of the `.env` file on the spare PC and restarting the agent.
+### 9. Hardcoded Security Passcode Configuration (Resolved ✅)
+* **Status**: Resolved in P1 Item 4.
+* **Resolution**: Implemented dynamic passcode management endpoint `POST /api/settings/password` with constant-time verification, atomic `0o600` `.env` updates, automatic cross-device session revocation via epoch increment, and a dedicated UI management card in SettingsApp. Verified in `agent/tests/verify_password_settings.mjs`.
 
 ### 10. Hardcoded Networking & Service Ports
 * **Debt**: The agent port `3000` is hardcoded across scripts and configurations.
@@ -74,9 +73,10 @@ This document outlines the current technical limitations, security tradeoffs, op
 
 ## ⏳ Deferred Roadmap & Feature Milestones
 
-### 12. Settings App Scope Limitation (Wallpaper / Personalization Only)
-* **Debt**: The uncommitted `dashboard/src/components/apps/SettingsApp.tsx` and accompanying files (`useWallpaper.ts`, `wallpaper.ts`) only implement browser-local wallpaper personalization stored in IndexedDB.
-* **Tradeoff**: The app does not provide actual system-level settings (server network diagnostics, password updates, port management, drive formatting, or power management).
+### 12. Settings App Scope Limitation (Partially Resolved ✅)
+* **Status**: Partially Resolved.
+* **Resolution**: `SettingsApp.tsx` has been expanded beyond browser-local wallpapers to include system-level controls: Storage Scope & System Access (`allowSystemRoot`), Session Revocation / Token Epoch (`/api/auth/logout-all`), and Master Passcode Management (`POST /api/settings/password`).
+* **Remaining Debt**: Server power management (reboot/shutdown), port management, and advanced host networking diagnostics remain deferred.
 
 ### 13. Passkey Authentication (WebAuthn / FIDO2) Not Implemented
 * **Debt**: Listed as pending in `todo.md` (`- [ ] we need to add passkey based login`), but no WebAuthn or FIDO2 implementation currently exists in `agent/routes/auth.js` or `dashboard/src/pages/login.tsx`.
@@ -102,10 +102,10 @@ This document outlines the current technical limitations, security tradeoffs, op
 
 ## 🌐 Cloudflare Tunnel Platform Limits
 
-### 18. 100 MB Upload Cap Through the Tunnel
-* **Debt**: Every request to `dash.<domain>` goes through Cloudflare's proxy, which caps the request body at **100 MB on the Free and Pro plans** (200 MB on Business). `POST /api/files/upload` in `agent/routes/file.js` sends the whole file as one `multer` request with no chunking, so any upload over 100 MB from a remote network fails with `413 Request Entity Too Large`.
-* **Tradeoff**: Large uploads only work on the direct LAN link (split-horizon mode), not remotely.
-* **Possible fix**: Chunked/resumable uploads (each part under 100 MB, reassembled on the agent, e.g. the tus protocol), and auto-prefer the LAN link for big files.
+### 18. 100 MB Upload Cap Through the Tunnel & Resumable Chunked Uploads (Deferred to Final Phase)
+* **Debt**: Every request to `dash.<domain>` goes through Cloudflare's proxy, which caps the request body at **100 MB on the Free and Pro plans** (200 MB on Business). `POST /api/files/upload` in `agent/routes/file.js` sends the whole file as a single unchunked `multer` request with no chunking, so any upload over 100 MB from a remote network fails with `413 Request Entity Too Large`.
+* **Resolution Priority**: **Deferred to the very last milestone**. Direct LAN access (split-horizon DNS / local micro-ping) already bypasses the Cloudflare proxy entirely, enabling unrestricted gigabyte-scale transfers on local networks. Remote chunked uploading (`tus` protocol or 50MB client-side chunk slicing + backend assembly) will be tackled as the final feature addition once core stability and search features are complete.
+* **Tradeoff**: Remote uploads via tunnel remain limited to <= 100 MB until chunking is implemented. Local LAN access is unaffected.
 * **Source**: https://developers.cloudflare.com/cache/concepts/default-cache-behavior/ (Upload limits)
 
 ### 19. Video Streaming Restriction on Cloudflare's CDN
@@ -126,3 +126,18 @@ This document outlines the current technical limitations, security tradeoffs, op
   1. Add a backend user preferences API in the Node.js agent (e.g. `GET /api/settings/preferences` and `PUT /api/settings/preferences`) backed by host-side JSON storage (`~/.config/home-cloud/preferences.json` or SQLite).
   2. Implement an asset upload endpoint for custom wallpapers (e.g. `POST /api/settings/wallpaper` saving to host storage with authentication and static delivery).
   3. Update dashboard hooks to use client-side caching with optimistic UI updates and background server sync.
+
+### 22. File Explorer Search Pipeline & UI Deficiencies
+* **Debt**: The current File Explorer search implementation has significant backend fragility and frontend UX gaps:
+  1. **Host CLI Dependency & Missing Fallback**: `GET /api/files/search` in `agent/routes/file.js` directly spawns `fdfind` piped to `fzf`. If either CLI binary is absent (common on standard distributions where the binary is `fd` instead of `fdfind`, or minimal server/Docker installations without `fzf`), file search operations fail with 500 errors.
+  2. **Storage Scope Compatibility Gap**: The search endpoint currently verifies paths using legacy `isInsideBase(currentDir)` instead of the modern `isInsideAllowedScope(currentDir)`. Consequently, searching within mounted storage pools (`/mnt/*`, `/media/*`, `/srv/*`) or in Full System Root Access mode (`/`) is rejected with HTTP `403 Access denied`.
+  3. **Frontend Search UX & Missing Directory Context**:
+     - In `dashboard/src/pages/files.tsx`, search results replace the current directory table but do not display the parent directory or relative path for matching files, making it impossible for users to discern where matching files reside in nested folders.
+     - Lack of search scope indicators (e.g. indicating whether search is scoped strictly to the current folder or recurses through the entire storage pool/system).
+     - No keyboard productivity shortcuts (e.g. `Ctrl+F` or `/` to focus search, `Esc` to clear search).
+     - Missing match count badges, substring highlighting, and debounced loading skeletons.
+* **Tradeoff**: File searching is brittle across different Linux environments, cannot search multi-drive storage pools or system root paths, and provides poor feedback for deep folder hierarchies.
+* **Target Fix**:
+  - Replace fragile CLI pipe with a robust Node.js recursive filesystem search stream (with optional detected `fd`/`find` acceleration).
+  - Modernize authorization to use `isInsideAllowedScope()`.
+  - Overhaul File Explorer UI: add parent directory path chips to search result items, search scope selector, match count, keyboard shortcuts, and smooth loading transitions.

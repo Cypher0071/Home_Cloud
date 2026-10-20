@@ -9,8 +9,8 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | Category | Status | Blocking Severity | Key Issues / Gaps |
 | :--- | :---: | :---: | :--- |
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
-| **P1: Security & Privilege Boundaries** | 🟡 In Progress (4/5 Resolved) | **MEDIUM** | Storage Scope, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint resolved. Remaining: 100MB chunked file uploads. |
-| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
+| **P1: Security & Privilege Boundaries** | ✅ Ready / Resolved (4/4 Resolved) | **NONE** | All 4 security gates resolved: Storage Scope & System Root Access, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint. (Chunked uploads deferred to final phase in TECHNICAL_DEBT.md). |
+| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, container crash watchdog, and automated volume backups. (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
 ---
@@ -30,16 +30,13 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **1. Google Autofill & Biometric Credential Support** (Resolved ✅)
 - [x] **2. Multi-Drive Storage Scope & System Root Access Mode** (Resolved ✅)
 - [x] **3. Server-Side Session Revocation & Token Epoch** (Resolved ✅)
-- [x] **4. Dynamic Passcode Management UI & Endpoint (Resolved ✅)**
-- [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)** (Pending)
+- [x] **4. Dynamic Passcode Management UI & Endpoint** (Resolved ✅)
 
 ### P2: Essential V4 & Tech Debt Feature Additions
 - [ ] **1. One-Click Auto-Update Engine & Release Pipeline**
 - [ ] **2. Cross-Device Settings & Personalization Persistence**
-- [ ] **3. Desktop Window Layout State Persistence**
-- [ ] **4. Container Crash Watchdog & Webhooks**
-- [ ] **5. Automated Volume & Database Backups**
-- [ ] **6. File Explorer Usability Upgrades**
+- [ ] **3. Container Crash Watchdog & Webhooks**
+- [ ] **4. Automated Volume & Database Backups**
 
 ### P3: Open-Source Distribution, Packaging & Developer Experience
 - [ ] **1. 1-Command Automated Installer (`curl | bash`)**
@@ -154,7 +151,6 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 - [x] **2. Multi-Drive Storage Scope & System Root Access Mode (Resolved ✅)**
 - [x] **3. Server-Side Session Revocation & Token Epoch (Resolved ✅)**
 - [x] **4. Dynamic Passcode Management UI & Endpoint (Resolved ✅)**
-- [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)**
 
 ### 1. Google Autofill & Biometric Credential Support (Resolved ✅)
 * **Status**: [x] Resolved (`d4ac7f5` & `82b99d5`).
@@ -244,27 +240,14 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 
 ---
 
-### 5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)
-* **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L125`](TECHNICAL_DEBT.md#L125)
-* **Goal**: Enable uploading files >100MB over remote Cloudflare Tunnels without triggering HTTP `413 Request Entity Too Large`.
-* **Architecture**:
-  * Cloudflare Free and Pro tunnels strictly enforce a 100MB request body limit.
-  * Implement client-side slicing into 50MB chunks in File Explorer (`dashboard/src/pages/files.tsx`).
-  * Implement chunk assembly endpoints (`POST /api/files/upload/chunk` and `POST /api/files/upload/complete`) using streaming append or temporary chunk caches on the agent.
-
----
-
 ## ⚡ Priority 2: Essential V4 & Tech Debt Feature Additions
 
 Features that must ship for the 1.0 release to deliver a complete, resilient self-hosted operating experience.
 
 - [ ] **1. One-Click Auto-Update Engine & Release Pipeline**
 - [ ] **2. Cross-Device Settings & Personalization Persistence**
-- [ ] **3. Desktop Window Layout State Persistence**
-- [ ] **4. Container Crash Watchdog & Webhooks**
-- [ ] **5. Automated Volume & Database Backups**
-- [ ] **6. File Explorer Usability Upgrades**
+- [ ] **3. Container Crash Watchdog & Webhooks**
+- [ ] **4. Automated Volume & Database Backups**
 
 ### 1. One-Click Auto-Update Engine & Release Pipeline
 * **Status**: [ ] Pending.
@@ -293,17 +276,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ---
 
-### 3. Desktop Window Layout State Persistence
-* **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L39`](implementation/v4_roadmap.md#L39)
-* **Goal**: Restore open window positions (`x`, `y`), dimensions (`width`, `height`), and z-indices across browser reloads.
-* **Architecture**:
-  * Save open window state to browser `localStorage` on window move/resize with debounce.
-  * Restore window positions and active states upon dashboard re-entry.
-
----
-
-### 4. Container Crash Watchdog & Webhooks
+### 3. Container Crash Watchdog & Webhooks
 * **Status**: [ ] Pending.
 * **Source**: [`docs/implementation/v4_roadmap.md:L9`](implementation/v4_roadmap.md#L9)
 * **Goal**: Automatic notifications if a Docker service crashes or enters a restart loop.
@@ -314,7 +287,7 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ---
 
-### 5. Automated Volume & Database Backups
+### 4. Automated Volume & Database Backups
 * **Status**: [ ] Pending.
 * **Source**: [`docs/implementation/v4_roadmap.md:L25`](implementation/v4_roadmap.md#L25)
 * **Goal**: Protect user container data with zero terminal complexity.
@@ -322,17 +295,6 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
   * Snapshot Docker named volumes and container bind mounts into `.tar.gz` archives.
   * Configurable backup schedules (daily/weekly) with automatic retention rotation.
   * Dashboard panel to list, trigger, and download backup archives.
-
----
-
-### 6. File Explorer Usability Upgrades
-* **Status**: [ ] Pending.
-* **Source**: [`docs/TECHNICAL_DEBT.md:L109-L121`](TECHNICAL_DEBT.md#L109-L121)
-* **Goal**: Bring File Explorer up to desktop parity.
-* **Architecture**:
-  * Keyboard navigation: Arrow keys to navigate items, `Enter` to open, `Delete` / `Backspace` to delete, `F2` to rename.
-  * Layout Switcher: Toggle between Tabular List view and Grid/Tiles view (ideal for image directories).
-  * Details Sidebar: Collapsible pane displaying file metadata, mime type, permissions, and image preview.
 
 ---
 
@@ -396,7 +358,7 @@ Final polish required for public GitHub launch, contributor attraction, and fric
 
 ```mermaid
 flowchart TD
-    subgraph P0["P0: Public Release Blockers"]
+    subgraph P0["P0: Public Release Blockers (Resolved ✅)"]
         L["[x] Apache 2.0 License (Resolved ✅)"]
         A["[x] Constant-Time Auth & Rate Limit (Resolved ✅)"]
         N["[x] Patch Network Info Leak (Resolved ✅)"]
@@ -406,21 +368,18 @@ flowchart TD
         S["[x] Sanitize Usernames in Docs (Resolved ✅)"]
     end
 
-    subgraph P1["P1: Security Hardening"]
+    subgraph P1["P1: Security Hardening (Resolved ✅)"]
         W["[x] Google Autofill & Biometrics (Resolved ✅)"]
         J["[x] Storage Scope & Root Access (Resolved ✅)"]
         R["[x] Session Revocation (Resolved ✅)"]
         P["[x] Dynamic Passcode UI (Resolved ✅)"]
-        U["[ ] 100MB Chunked Uploads"]
     end
 
     subgraph P2["P2: Essential V4 & Tech Debt"]
         AU["[ ] Auto-Update Engine"]
         SP["[ ] Cross-Device Settings"]
-        WP["[ ] Desktop Window Persistence"]
         CW["[ ] Crash Watchdog"]
         BK["[ ] Volume Backups"]
-        FE["[ ] File Explorer Usability"]
     end
 
     subgraph P3["P3: Open-Source Launch"]
@@ -437,11 +396,10 @@ flowchart TD
 
 ### Execution Phases:
 1. **Phase 1 (P0)**: Fix immediate blockers ([x] License, [x] Rate Limiter, [x] Host Leak, [x] Terminal Prototype, [x] ESLint, [x] Test Suites, [x] Doc Username Sanitization).
-2. **Phase 2 (P1)**: Security & Privilege Boundary Hardening:
+2. **Phase 2 (P1)**: Security & Privilege Boundary Hardening (100% Resolved ✅):
    - [x] Google Autofill & Biometric Credential Support (Resolved ✅)
    - [x] Storage Scope & System Root Access Mode (Resolved ✅)
    - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
    - [x] Dynamic Passcode Management UI & Endpoint (Resolved ✅)
-   - [ ] Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)
-3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, and desktop window state persistence.
+3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, crash watchdog, and volume backups.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.
