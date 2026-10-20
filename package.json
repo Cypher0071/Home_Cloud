@@ -10,7 +10,7 @@
 		"build:landing": "pnpm --filter landing build",
 		"start": "pnpm --filter agent start",
 		"test:dashboard": "pnpm --filter dashboard lint && pnpm --filter dashboard build && node dashboard/tests/verify_code_splitting.mjs",
-		"test:agent": "node agent/tests/verify_auth.mjs && node agent/tests/verify_network_security.mjs && node agent/tests/verify_drives_cache.mjs && node agent/tests/verify_setup_tunnel.mjs && node agent/tests/verify_compose.mjs && node agent/tests/verify_storage_scope.mjs && node agent/tests/verify_session_revocation.mjs",
+		"test:agent": "node agent/tests/verify_auth.mjs && node agent/tests/verify_network_security.mjs && node agent/tests/verify_drives_cache.mjs && node agent/tests/verify_setup_tunnel.mjs && node agent/tests/verify_compose.mjs && node agent/tests/verify_storage_scope.mjs && node agent/tests/verify_session_revocation.mjs && node agent/tests/verify_password_settings.mjs",
 		"test:e2e": "node .agents/tests/terminal_e2e.test.mjs && node .agents/tests/compose_refactor_e2e.test.mjs",
 		"test": "pnpm run test:dashboard && pnpm run test:agent && pnpm run test:e2e"
 	},

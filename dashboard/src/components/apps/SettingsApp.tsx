@@ -1,6 +1,6 @@
-import { useState, useEffect, useLayoutEffect, useRef, type ChangeEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, HardDrive, Plus, X, ShieldCheck, AlertTriangle, CheckCircle2, Shield, LogOut } from 'lucide-react';
+import { Monitor, HardDrive, Plus, X, ShieldCheck, AlertTriangle, CheckCircle2, Shield, LogOut, KeyRound, Eye, EyeOff } from 'lucide-react';
 import axios from 'axios';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { FIT_OPTIONS, WALLPAPER_PRESETS } from '../../utils/wallpaper';
@@ -38,6 +38,17 @@ export default function SettingsApp() {
   // Security session revocation state
   const [isRevoking, setIsRevoking] = useState(false);
   const [securityFeedback, setSecurityFeedback] = useState<string | null>(null);
+
+  // Change master passcode state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   const {
     settings,
@@ -118,6 +129,49 @@ export default function SettingsApp() {
         : 'Failed to revoke sessions';
       setSecurityFeedback(`Error: ${msg}`);
       setIsRevoking(false);
+    }
+  };
+
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (isChangingPassword) return;
+
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!currentPassword) {
+      setPasswordError('Current passcode is required');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New passcode must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await axios.post('/api/settings/password', {
+        currentPassword,
+        newPassword,
+      });
+      setPasswordSuccess('Passcode updated successfully! All sessions revoked. Redirecting to login…');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        navigate('/login');
+      }, 1500);
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) && err.response?.data?.error
+        ? String(err.response.data.error)
+        : 'Failed to update passcode';
+      setPasswordError(msg);
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -437,6 +491,117 @@ export default function SettingsApp() {
             <p className={styles.pageHint}>
               Manage active authorization sessions, token revocation, and device access boundaries.
             </p>
+
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Change Master Passcode</h2>
+              </div>
+              <p className={styles.cardDesc}>
+                Update the administrative password used to sign into Home Cloud and access system services.
+              </p>
+
+              <form onSubmit={handleChangePassword} className={styles.passwordForm}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="current-password" className={styles.formLabel}>
+                    Current Passcode
+                  </label>
+                  <div className={styles.inputWrapper}>
+                    <input
+                      id="current-password"
+                      type={showCurrent ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      className={styles.inputField}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      disabled={isChangingPassword}
+                    />
+                    <button
+                      type="button"
+                      className={styles.passwordToggle}
+                      onClick={() => setShowCurrent(!showCurrent)}
+                      aria-label={showCurrent ? 'Hide current passcode' : 'Show current passcode'}
+                    >
+                      {showCurrent ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="new-password" className={styles.formLabel}>
+                    New Passcode
+                  </label>
+                  <div className={styles.inputWrapper}>
+                    <input
+                      id="new-password"
+                      type={showNew ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="At least 8 characters"
+                      className={styles.inputField}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={isChangingPassword}
+                    />
+                    <button
+                      type="button"
+                      className={styles.passwordToggle}
+                      onClick={() => setShowNew(!showNew)}
+                      aria-label={showNew ? 'Hide new passcode' : 'Show new passcode'}
+                    >
+                      {showNew ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label htmlFor="confirm-password" className={styles.formLabel}>
+                    Confirm New Passcode
+                  </label>
+                  <div className={styles.inputWrapper}>
+                    <input
+                      id="confirm-password"
+                      type={showConfirm ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      placeholder="Repeat new passcode"
+                      className={styles.inputField}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={isChangingPassword}
+                    />
+                    <button
+                      type="button"
+                      className={styles.passwordToggle}
+                      onClick={() => setShowConfirm(!showConfirm)}
+                      aria-label={showConfirm ? 'Hide confirm passcode' : 'Show confirm passcode'}
+                    >
+                      {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+
+                {passwordError && (
+                  <div className={styles.passwordError} role="alert">
+                    <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
+
+                {passwordSuccess && (
+                  <div className={styles.passwordSuccess} role="status">
+                    <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
+                    <span>{passwordSuccess}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className={styles.primaryButton}
+                  disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
+                >
+                  <KeyRound size={13} />
+                  {isChangingPassword ? 'Updating…' : 'Update Passcode'}
+                </button>
+              </form>
+            </div>
 
             <div className={styles.card}>
               <div className={styles.cardHeader}>

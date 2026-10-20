@@ -9,7 +9,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | Category | Status | Blocking Severity | Key Issues / Gaps |
 | :--- | :---: | :---: | :--- |
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
-| **P1: Security & Privilege Boundaries** | 🟡 In Progress (3/5 Resolved) | **MEDIUM** | Storage Scope, Google Autofill Biometrics, and Server-Side Session Revocation / Token Epoch resolved. Remaining: dynamic passcode management UI, 100MB chunked file uploads. |
+| **P1: Security & Privilege Boundaries** | 🟡 In Progress (4/5 Resolved) | **MEDIUM** | Storage Scope, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint resolved. Remaining: 100MB chunked file uploads. |
 | **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
@@ -30,7 +30,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **1. Google Autofill & Biometric Credential Support** (Resolved ✅)
 - [x] **2. Multi-Drive Storage Scope & System Root Access Mode** (Resolved ✅)
 - [x] **3. Server-Side Session Revocation & Token Epoch** (Resolved ✅)
-- [ ] **4. Dynamic Passcode Management UI & Endpoint** (Pending)
+- [x] **4. Dynamic Passcode Management UI & Endpoint (Resolved ✅)**
 - [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)** (Pending)
 
 ### P2: Essential V4 & Tech Debt Feature Additions
@@ -153,7 +153,7 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 - [x] **1. Google Autofill & Biometric Credential Support (Resolved ✅)**
 - [x] **2. Multi-Drive Storage Scope & System Root Access Mode (Resolved ✅)**
 - [x] **3. Server-Side Session Revocation & Token Epoch (Resolved ✅)**
-- [ ] **4. Dynamic Passcode Management UI & Endpoint**
+- [x] **4. Dynamic Passcode Management UI & Endpoint (Resolved ✅)**
 - [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)**
 
 ### 1. Google Autofill & Biometric Credential Support (Resolved ✅)
@@ -221,16 +221,26 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 
 ---
 
-### 4. Dynamic Passcode Management UI & Endpoint
-* **Status**: [ ] Pending.
+### 4. Dynamic Passcode Management UI & Endpoint (Resolved ✅)
+* **Status**: [x] Resolved.
 * **Source**: [`docs/TECHNICAL_DEBT.md:L74`](TECHNICAL_DEBT.md#L74)
-* **Goal**: Allow users to change their master passcode from the dashboard rather than requiring terminal SSH to edit `agent/.env`.
-* **Architecture**:
-  * Endpoint `POST /api/settings/password` requiring current password + new password.
-  * Constant-time verification of current password.
-  * Update `process.env.PASSWORD` in memory and update `PASSWORD` in `agent/.env` (retaining existing keys and formatting).
-  * Automatically increment `session_epoch` upon passcode change to revoke all active sessions.
-  * Add "Change Password" section in Settings App UI.
+* **Resolution**:
+  * **Endpoint Contract** in [`agent/routes/settings.js`](../agent/routes/settings.js):
+    * Implemented `POST /api/settings/password` requiring `{ currentPassword, newPassword }` with strict type checking and validation (minimum 8 characters, disallowing identical new password).
+    * Timing attack defense via SHA-256 pre-hashed `crypto.timingSafeEqual` through `constantTimeCompare(process.env.PASSWORD || '', currentPassword)`.
+    * Synchronous in-memory update to `process.env.PASSWORD = trimmedNewPassword`.
+  * **Atomic File Updates & Permissions**:
+    * Implemented `updateEnvPassword(envPath, newPassword)` in [`agent/routes/settings.js`](../agent/routes/settings.js): writes to a temporary file with strict `0o600` permissions and atomically renames over `agent/.env`.
+    * Preserves all other environment variables, formatting, and comments; cleanly appends or initializes missing `.env` based on `.env.example`.
+  * **Automatic Session Revocation & Epoch Increment**:
+    * Integrates directly into [`agent/services/preferences.js`](../agent/services/preferences.js) via `preferences.incrementSessionEpoch()`.
+    * Clears auth cookie via `res.clearCookie('token')`, automatically revoking all active browser and WebSocket sessions across all devices immediately.
+  * **Dashboard UI in Settings App** ([`dashboard/src/components/apps/SettingsApp.tsx`](../dashboard/src/components/apps/SettingsApp.tsx)):
+    * Added **Master Passcode Management** card in the **Security & Sessions** tab.
+    * Features current password and new password fields with reveal/hide toggles, live client-side validation (minimum 8 characters, non-identical password matching), error banners, loading indicators, and toast notifications.
+    * Automatically clears state and redirects the user to `/login` upon successful passcode change.
+* **Verification**:
+  * Built comprehensive automated test suite in [`agent/tests/verify_password_settings.mjs`](../agent/tests/verify_password_settings.mjs) covering isolated file updates, 0600 permission checks, unauthenticated 401 rejection, payload validation, incorrect current password rejection, password length constraints, identical password rejection, atomic .env/process.env update, cookie clearing, cross-device session revocation, and login verification with new credentials (100% pass).
 
 ---
 
@@ -400,7 +410,7 @@ flowchart TD
         W["[x] Google Autofill & Biometrics (Resolved ✅)"]
         J["[x] Storage Scope & Root Access (Resolved ✅)"]
         R["[x] Session Revocation (Resolved ✅)"]
-        P["[ ] Dynamic Passcode UI"]
+        P["[x] Dynamic Passcode UI (Resolved ✅)"]
         U["[ ] 100MB Chunked Uploads"]
     end
 
@@ -431,7 +441,7 @@ flowchart TD
    - [x] Google Autofill & Biometric Credential Support (Resolved ✅)
    - [x] Storage Scope & System Root Access Mode (Resolved ✅)
    - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
-   - [ ] Dynamic Passcode Management UI & Endpoint
+   - [x] Dynamic Passcode Management UI & Endpoint (Resolved ✅)
    - [ ] Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)
 3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, and desktop window state persistence.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.
