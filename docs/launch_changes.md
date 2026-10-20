@@ -10,7 +10,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | :--- | :---: | :---: | :--- |
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
 | **P1: Security & Privilege Boundaries** | ✅ Ready / Resolved (4/4 Resolved) | **NONE** | All 4 security gates resolved: Storage Scope & System Root Access, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint. (Chunked uploads deferred to final phase in TECHNICAL_DEBT.md). |
-| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress (1/4 Resolved) | **MEDIUM** | Auto-update engine resolved ✅. Cross-device settings persistence, container crash watchdog, and automated volume backups pending. (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
+| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress (2/4 Resolved) | **MEDIUM** | Auto-update engine and cross-device settings persistence resolved ✅. Container crash watchdog and automated volume backups pending. (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
 ---
@@ -34,7 +34,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 
 ### P2: Essential V4 & Tech Debt Feature Additions
 - [x] **1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)**
-- [ ] **2. Cross-Device Settings & Personalization Persistence**
+- [x] **2. Cross-Device Settings & Personalization Persistence (Resolved ✅)**
 - [ ] **3. Container Crash Watchdog & Webhooks**
 - [ ] **4. Automated Volume & Database Backups**
 
@@ -245,7 +245,7 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 Features that must ship for the 1.0 release to deliver a complete, resilient self-hosted operating experience.
 
 - [x] **1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)**
-- [ ] **2. Cross-Device Settings & Personalization Persistence**
+- [x] **2. Cross-Device Settings & Personalization Persistence (Resolved ✅)**
 - [ ] **3. Container Crash Watchdog & Webhooks**
 - [ ] **4. Automated Volume & Database Backups**
 
@@ -285,14 +285,28 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ---
 
-### 2. Cross-Device Settings & Personalization Persistence
-* **Status**: [ ] Pending.
+### 2. Cross-Device Settings & Personalization Persistence (Resolved ✅)
+* **Status**: [x] Resolved.
 * **Source**: [`docs/TECHNICAL_DEBT.md:L142`](TECHNICAL_DEBT.md#L142)
 * **Goal**: Synchronize wallpaper, theme, fit mode, and dock preferences across all user devices.
-* **Architecture**:
-  * Endpoint `GET/PUT /api/settings/preferences` backed by host-side JSON storage (`~/.config/home-cloud/preferences.json`).
-  * Asset endpoint `POST /api/settings/wallpaper` to store custom wallpaper images on the host server.
-  * Update frontend hooks (`useWallpaper.ts`) to use optimistic UI updates with background server synchronization.
+* **Resolution**:
+  * **Server-Side Preferences Schema & Service** in [`agent/services/preferences.js`](../agent/services/preferences.js):
+    * Extended default configuration schema with `personalization: { presetId: "macos-sonoma", fit: "cover", hasCustomWallpaper: false, customWallpaperExt: null }`.
+    * Implemented atomic JSON persistence on disk at `~/.config/home-cloud/preferences.json` (or customizable `HOMECLOUD_CONFIG_DIR`) with automatic fallback to defaults if corrupt or missing.
+    * Added dedicated getter and mutation helpers: `getPersonalization()`, `updatePersonalization(updates)`, and custom wallpaper file management utilities (`getCustomWallpaperInfo()`, `deleteCustomWallpaper()`).
+  * **REST Endpoints & Wallpaper Asset Pipeline** in [`agent/routes/settings.js`](../agent/routes/settings.js):
+    * `GET /api/settings/preferences`: Retrieves full user preferences including server-side personalization state.
+    * `PUT /api/settings/preferences`: Persists updated user preferences with deep-merge and input validation.
+    * `POST /api/settings/wallpaper`: Multipart upload handling for custom desktop wallpapers with strict 15MB file size limit (`limits: { fileSize: 15 * 1024 * 1024 }`), image MIME-type validation (`image/jpeg`, `image/png`, `image/webp`, `image/avif`), automatic cleanup of previous wallpaper assets on disk, and synchronization with server personalization state.
+    * `GET /api/settings/wallpaper`: Static asset streaming with HTTP static caching headers (`Cache-Control: public, max-age=86400, stale-while-revalidate=3600`) and `ETag` generation based on file stats for zero-flicker client caching.
+    * `DELETE /api/settings/wallpaper`: Removes custom wallpaper files from the host filesystem and resets personalization state to default presets.
+  * **Frontend Optimistic Synchronization Hook** in [`dashboard/src/hooks/useWallpaper.ts`](../dashboard/src/hooks/useWallpaper.ts):
+    * **0ms Instant Render**: Retains fast local `localStorage` and `IndexedDB` caching for instantaneous desktop paint upon reload with zero flicker.
+    * **Automatic Server Sync**: Automatically synchronizes with `/api/settings/preferences` upon mount, reconciling differences between local cache and server state.
+    * **Cross-Tab & Cross-View Event Bus**: Emits and listens to `homecloud:wallpaper-change` Window CustomEvents to keep multiple open browser tabs and nested apps in immediate sync.
+    * Transparently handles custom wallpaper upload to `/api/settings/wallpaper`, resetting custom wallpaper, and switching presets with background persistence.
+* **Verification**:
+  * Built comprehensive automated test suite in [`agent/tests/verify_personalization_settings.mjs`](../agent/tests/verify_personalization_settings.mjs) testing service initialization, preference mutations, file upload with size/mime validation, static asset streaming, cache-control headers, overwrite behavior, asset deletion, and unauthenticated endpoint protection (100% pass).
 
 ---
 
@@ -397,7 +411,7 @@ flowchart TD
 
     subgraph P2["P2: Essential V4 & Tech Debt"]
         AU["[x] Auto-Update Engine (Resolved ✅)"]
-        SP["[ ] Cross-Device Settings"]
+        SP["[x] Cross-Device Settings (Resolved ✅)"]
         CW["[ ] Crash Watchdog"]
         BK["[ ] Volume Backups"]
     end
@@ -421,5 +435,5 @@ flowchart TD
    - [x] Storage Scope & System Root Access Mode (Resolved ✅)
    - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
    - [x] Dynamic Passcode Management UI & Endpoint (Resolved ✅)
-3. **Phase 3 (P2)**: Implement Auto-Update Engine ([x] Resolved ✅), cross-device settings persistence, crash watchdog, and volume backups.
+3. **Phase 3 (P2)**: Implement Auto-Update Engine ([x] Resolved ✅), cross-device settings persistence ([x] Resolved ✅), crash watchdog, and volume backups.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.

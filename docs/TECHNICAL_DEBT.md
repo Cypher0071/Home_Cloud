@@ -32,7 +32,7 @@ This document outlines the current technical limitations, security tradeoffs, op
 
 ---
 
-## 🔒 Security, Authentication & Privilege Boundary Gaps
+## 🔐 Security, Authentication & Privilege Boundary Gaps
 
 ### 6. Plaintext Password Comparison & Zero Login Rate Limiting (Resolved ✅)
 * **Status**: Resolved.
@@ -119,13 +119,13 @@ This document outlines the current technical limitations, security tradeoffs, op
 * **Tradeoff**: Live features must use SSE or WebSockets (as metrics, compose deploy logs, and the terminal already do).
 * **Source**: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/troubleshoot-tunnels/common-errors/
 
-### 21. Cross-Device Settings Persistence & Server-Side Preferences Sync
-* **Debt**: Wallpaper preferences (active preset ID and fit mode) and custom wallpaper image assets are currently stored purely client-side via browser `localStorage` (`home-cloud:wallpaper`) and browser `IndexedDB` (`home-cloud/kv/custom-wallpaper`).
-* **Tradeoff**: Personalization settings and custom wallpapers are isolated to each individual browser instance. Changing settings or uploading custom wallpapers on one client (e.g. laptop) does not synchronize to other client devices (e.g. mobile phone, tablet, or another browser) upon login.
-* **Proposed Architecture**:
-  1. Add a backend user preferences API in the Node.js agent (e.g. `GET /api/settings/preferences` and `PUT /api/settings/preferences`) backed by host-side JSON storage (`~/.config/home-cloud/preferences.json` or SQLite).
-  2. Implement an asset upload endpoint for custom wallpapers (e.g. `POST /api/settings/wallpaper` saving to host storage with authentication and static delivery).
-  3. Update dashboard hooks to use client-side caching with optimistic UI updates and background server sync.
+### 21. Cross-Device Settings Persistence & Server-Side Preferences Sync (Resolved ✅)
+* **Status**: Resolved in P2 Item 2.
+* **Resolution**: Implemented persistent server-side user preferences and custom wallpaper asset storage in the Node.js agent:
+  - Extended `agent/services/preferences.js` with `personalization: { presetId, fit, hasCustomWallpaper, customWallpaperExt }` stored atomically on disk in `~/.config/home-cloud/preferences.json`.
+  - Added REST endpoints `GET/PUT /api/settings/preferences` and `POST/GET/DELETE /api/settings/wallpaper` with 15MB file size limit, strict MIME type validation (`image/jpeg`, `image/png`, `image/webp`, `image/avif`), automatic old file cleanup, and static HTTP caching (`Cache-Control: public, max-age=86400`).
+  - Upgraded frontend `dashboard/src/hooks/useWallpaper.ts` to provide 0ms instant initial paint via optimistic local cache, background synchronization with server on mount, and real-time cross-tab / cross-view window event bus (`homecloud:wallpaper-change`).
+  - Verified with comprehensive test suite in `agent/tests/verify_personalization_settings.mjs` (all suites passing).
 
 ### 22. File Explorer Search Pipeline & UI Deficiencies
 * **Debt**: The current File Explorer search implementation has significant backend fragility and frontend UX gaps:

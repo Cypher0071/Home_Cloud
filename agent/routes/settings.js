@@ -3,6 +3,8 @@ const path = require("path");
 const crypto = require("crypto");
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const mime = require("mime-types");
 const { constantTimeCompare } = require("./auth");
 const {
 	getPreferences,
@@ -10,6 +12,9 @@ const {
 	isSystemRootAllowed,
 	incrementSessionEpoch,
 	getSessionEpoch,
+	getWallpaperPath,
+	removeCustomWallpaperFiles,
+	PREFERENCES_DIR,
 } = require("../services/preferences");
 const { BASE_DIR, DEFAULT_STORAGE_ROOTS } = require("../paths");
 const {
@@ -20,6 +25,31 @@ const {
 	isUpdating,
 	updateEmitter,
 } = require("../services/updateManager");
+
+const MIME_TO_EXT = {
+	"image/jpeg": "jpg",
+	"image/png": "png",
+	"image/webp": "webp",
+	"image/gif": "gif",
+};
+
+const ALLOWED_MIME_TYPES = Object.keys(MIME_TO_EXT);
+
+const upload = multer({
+	storage: multer.memoryStorage(),
+	limits: {
+		fileSize: 15 * 1024 * 1024, // 15MB
+	},
+	fileFilter: (req, file, cb) => {
+		if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+			cb(null, true);
+		} else {
+			const err = new Error("Invalid file type. Only JPEG, PNG, WEBP, and GIF images are allowed.");
+			err.status = 400;
+			cb(err);
+		}
+	},
+});
 
 /**
  * Safely and atomically updates the PASSWORD in the .env file.
@@ -66,6 +96,148 @@ function updateEnvPassword(envPath, newPassword) {
 	} catch (_) {}
 	fs.renameSync(tmpFile, envPath);
 }
+
+// GET /api/settings/preferences
+router.get("/preferences", (req, res) => {
+	try {
+		const preferences = getPreferences();
+		res.json({
+			status: "ok",
+			preferences,
+		});
+	} catch (err) {
+		res.status(500).json({ error: err.message || "Failed to load preferences" });
+	}
+});
+
+// PUT /api/settings/preferences
+router.put("/preferences", (req, res) => {
+	try {
+		const { personalization, allowSystemRoot, customStoragePaths } = req.body || {};
+		const update = {};
+
+		if (typeof allowSystemRoot === "boolean") {
+			update.allowSystemRoot = allowSystemRoot;
+		}
+
+		if (Array.isArray(customStoragePaths)) {
+			update.customStoragePaths = customStoragePaths.map(String).filter(Boolean);
+		}
+
+		if (personalization && typeof personalization === "object" && !Array.isArray(personalization)) {
+			update.personalization = personalization;
+		}
+
+		const updated = updatePreferences(update);
+		res.json({
+			status: "ok",
+			preferences: updated,
+		});
+	} catch (err) {
+		res.status(500).json({ error: err.message || "Failed to update preferences" });
+	}
+});
+
+// POST /api/settings/wallpaper
+router.post("/wallpaper", (req, res) => {
+	upload.single("file")(req, res, (err) => {
+		if (err) {
+			if (err.code === "LIMIT_FILE_SIZE") {
+				return res.status(400).json({ error: "File too large. Maximum size is 15MB." });
+			}
+			return res.status(400).json({ error: err.message || "Failed to upload wallpaper" });
+		}
+
+		try {
+			if (!req.file) {
+				return res.status(400).json({ error: "No image file provided" });
+			}
+
+			const ext = MIME_TO_EXT[req.file.mimetype];
+			if (!ext) {
+				return res.status(400).json({ error: "Invalid image format. Allowed formats: JPEG, PNG, WEBP, GIF." });
+			}
+
+			if (!fs.existsSync(PREFERENCES_DIR)) {
+				fs.mkdirSync(PREFERENCES_DIR, { recursive: true });
+			}
+
+			// Remove any previous custom wallpaper files first
+			removeCustomWallpaperFiles();
+
+			// Save the uploaded wallpaper file
+			const targetFilename = `wallpaper.${ext}`;
+			const targetPath = path.join(PREFERENCES_DIR, targetFilename);
+			fs.writeFileSync(targetPath, req.file.buffer);
+
+			// Update preferences
+			const currentPrefs = getPreferences();
+			updatePreferences({
+				personalization: {
+					...(currentPrefs.personalization || {}),
+					hasCustomWallpaper: true,
+					customWallpaperExt: ext,
+				},
+			});
+
+			return res.json({
+				success: true,
+				url: `/api/settings/wallpaper?t=${Date.now()}`,
+			});
+		} catch (saveErr) {
+			return res.status(500).json({ error: saveErr.message || "Failed to save wallpaper" });
+		}
+	});
+});
+
+// GET /api/settings/wallpaper
+router.get("/wallpaper", (req, res) => {
+	try {
+		const wallpaperPath = getWallpaperPath();
+		if (!wallpaperPath || !fs.existsSync(wallpaperPath)) {
+			return res.status(404).json({ error: "Custom wallpaper not found" });
+		}
+
+		const stat = fs.statSync(wallpaperPath);
+		const contentType = mime.lookup(wallpaperPath) || "image/jpeg";
+
+		res.setHeader("Content-Type", contentType);
+		res.setHeader("Content-Length", stat.size);
+		res.setHeader("Cache-Control", "public, max-age=86400");
+
+		const stream = fs.createReadStream(wallpaperPath);
+		stream.on("error", (err) => {
+			if (!res.headersSent) {
+				res.status(500).json({ error: "Failed to read wallpaper file" });
+			}
+		});
+		stream.pipe(res);
+	} catch (err) {
+		if (!res.headersSent) {
+			res.status(500).json({ error: err.message || "Failed to retrieve wallpaper" });
+		}
+	}
+});
+
+// DELETE /api/settings/wallpaper
+router.delete("/wallpaper", (req, res) => {
+	try {
+		removeCustomWallpaperFiles();
+
+		const currentPrefs = getPreferences();
+		updatePreferences({
+			personalization: {
+				...(currentPrefs.personalization || {}),
+				hasCustomWallpaper: false,
+				customWallpaperExt: null,
+			},
+		});
+
+		return res.json({ success: true });
+	} catch (err) {
+		return res.status(500).json({ error: err.message || "Failed to remove wallpaper" });
+	}
+});
 
 // GET /api/settings/storage
 router.get("/storage", (req, res) => {

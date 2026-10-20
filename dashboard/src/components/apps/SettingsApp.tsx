@@ -640,7 +640,7 @@ export default function SettingsApp() {
         {activeTab === 'personalization' ? (
           <div className={styles.content}>
             <h1 className={styles.pageTitle}>Background</h1>
-            <p className={styles.pageHint}>Desktop wallpaper for this browser.</p>
+            <p className={styles.pageHint}>Personalize your desktop background across all your devices.</p>
 
             <div className={styles.preview} aria-hidden="true" />
 
@@ -720,7 +720,7 @@ export default function SettingsApp() {
                 disabled={uploading}
               >
                 <span className={styles.browseFace}>
-                  <Plus size={18} />
+                  {uploading ? <Loader2 size={18} className={styles.spin} /> : <Plus size={18} />}
                 </span>
                 <span className={styles.tileName}>{uploading ? 'Adding…' : hasCustom ? 'Replace' : 'Browse'}</span>
               </button>
