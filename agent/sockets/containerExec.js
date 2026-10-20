@@ -2,6 +2,7 @@ const Docker = require("dockerode");
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 const cookie = require("cookie");
 const jwt = require("jsonwebtoken");
+const preferences = require("../services/preferences");
 
 function handleContainerExec(ws, request) {
 	const cookies = cookie.parse(request.headers.cookie || "");
@@ -12,7 +13,7 @@ function handleContainerExec(ws, request) {
 	}
 
 	jwt.verify(token, process.env.JWT_SECRET, async (err, decodedtoken) => {
-		if (err) {
+		if (err || !decodedtoken || decodedtoken.epoch !== preferences.getSessionEpoch()) {
 			ws.close();
 			return;
 		}

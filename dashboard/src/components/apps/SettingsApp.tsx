@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, type ChangeEvent } from 'react';
-import { Monitor, HardDrive, Plus, X, ShieldCheck, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Monitor, HardDrive, Plus, X, ShieldCheck, AlertTriangle, CheckCircle2, Shield, LogOut } from 'lucide-react';
 import axios from 'axios';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { FIT_OPTIONS, WALLPAPER_PRESETS } from '../../utils/wallpaper';
@@ -21,7 +22,8 @@ interface StorageSettings {
 }
 
 export default function SettingsApp() {
-  const [activeTab, setActiveTab] = useState<'personalization' | 'storage'>('personalization');
+  const [activeTab, setActiveTab] = useState<'personalization' | 'storage' | 'security'>('personalization');
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const fitGroupRef = useRef<HTMLDivElement>(null);
   const fitPillRef = useRef<HTMLSpanElement>(null);
@@ -32,6 +34,10 @@ export default function SettingsApp() {
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageSaving, setStorageSaving] = useState(false);
   const [storageFeedback, setStorageFeedback] = useState<string | null>(null);
+
+  // Security session revocation state
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [securityFeedback, setSecurityFeedback] = useState<string | null>(null);
 
   const {
     settings,
@@ -93,6 +99,25 @@ export default function SettingsApp() {
       setStorageFeedback(`Error: ${msg}`);
     } finally {
       setStorageSaving(false);
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (isRevoking) return;
+    setIsRevoking(true);
+    setSecurityFeedback(null);
+    try {
+      await axios.post('/api/auth/logout-all');
+      setSecurityFeedback('All active sessions revoked. Redirecting to login…');
+      setTimeout(() => {
+        navigate('/login');
+      }, 1000);
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) && err.response?.data?.error
+        ? String(err.response.data.error)
+        : 'Failed to revoke sessions';
+      setSecurityFeedback(`Error: ${msg}`);
+      setIsRevoking(false);
     }
   };
 
@@ -196,6 +221,15 @@ export default function SettingsApp() {
         >
           <HardDrive size={15} />
           Storage & System
+        </button>
+        <button
+          type="button"
+          className={`${styles.navItem} ${activeTab === 'security' ? styles.navItemActive : ''}`}
+          onClick={() => setActiveTab('security')}
+          aria-current={activeTab === 'security' ? 'page' : undefined}
+        >
+          <Shield size={15} />
+          Security & Sessions
         </button>
       </nav>
 
@@ -305,7 +339,7 @@ export default function SettingsApp() {
               </p>
             ) : null}
           </div>
-        ) : (
+        ) : activeTab === 'storage' ? (
           <div className={styles.content}>
             <h1 className={styles.pageTitle}>Storage & System</h1>
             <p className={styles.pageHint}>
@@ -393,6 +427,55 @@ export default function SettingsApp() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.content}>
+            <h1 className={styles.pageTitle}>Security & Sessions</h1>
+            <p className={styles.pageHint}>
+              Manage active authorization sessions, token revocation, and device access boundaries.
+            </p>
+
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Session Revocation & Token Epoch</h2>
+                <span className={`${styles.badge} ${styles.badgeSafe}`}>
+                  <ShieldCheck size={12} />
+                  Token Epoch Active
+                </span>
+              </div>
+              <p className={styles.cardDesc}>
+                Home Cloud issues cryptographically signed JWT tokens containing a server-side Token Epoch.
+                Revoking sessions immediately invalidates active tokens across all browsers, phones, and devices
+                without changing your master password.
+              </p>
+
+              <div className={styles.settingRow}>
+                <div className={styles.settingInfo}>
+                  <div className={styles.settingName}>Revoke All Active Sessions</div>
+                  <p className={styles.settingHint}>
+                    Immediately invalidates all existing authorization cookies on every device.
+                    You will be required to authenticate again.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  onClick={() => void handleLogoutAll()}
+                  disabled={isRevoking}
+                >
+                  <LogOut size={13} />
+                  {isRevoking ? 'Revoking…' : 'Log Out Everywhere'}
+                </button>
+              </div>
+
+              {securityFeedback && (
+                <div className={styles.statusToast} role="status">
+                  <CheckCircle2 size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: -2 }} />
+                  {securityFeedback}
                 </div>
               )}
             </div>

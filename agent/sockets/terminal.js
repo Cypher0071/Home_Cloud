@@ -2,6 +2,7 @@ const pty = require("node-pty");
 const os = require("os");
 const cookie = require("cookie");
 const jwt = require("jsonwebtoken");
+const preferences = require("../services/preferences");
 
 const BUFFER_BYTES = 5 * 1024 * 1024;
 const MAX_SESSIONS = 16;
@@ -318,7 +319,11 @@ function handleSystemTerminal(ws, request) {
 	}
 
 	try {
-		jwt.verify(token, process.env.JWT_SECRET);
+		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		if (!decoded || decoded.epoch !== preferences.getSessionEpoch()) {
+			ws.close();
+			return;
+		}
 	} catch {
 		ws.close();
 		return;

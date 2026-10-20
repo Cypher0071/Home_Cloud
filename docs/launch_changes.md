@@ -9,7 +9,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | Category | Status | Blocking Severity | Key Issues / Gaps |
 | :--- | :---: | :---: | :--- |
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
-| **P1: Security & Privilege Boundaries** | ⚠️ High Priority | **HIGH** | Passkey (WebAuthn) login, multi-drive storage scope / root access, unrevocable 7-day JWTs, static `.env` passcode, 100MB tunnel upload cap. |
+| **P1: Security & Privilege Boundaries** | 🟡 In Progress (3/5 Resolved) | **MEDIUM** | Storage Scope, Google Autofill Biometrics, and Server-Side Session Revocation / Token Epoch resolved. Remaining: dynamic passcode management UI, 100MB chunked file uploads. |
 | **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, desktop window state restoration, crash watchdog, file explorer keyboard nav. |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
@@ -27,11 +27,11 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **7. Sanitize Hardcoded Usernames & Example Domains in Docs**
 
 ### P1: Security & Privilege Boundary Hardening
-- [ ] **1. Passkey / WebAuthn (FIDO2) Authentication Support**
-- [ ] **2. Multi-Drive Storage Scope & System Root Access Mode**
-- [ ] **3. Server-Side Session Revocation & Token Epoch**
-- [ ] **4. Dynamic Passcode Management UI & Endpoint**
-- [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)**
+- [x] **1. Google Autofill & Biometric Credential Support** (Resolved ✅)
+- [x] **2. Multi-Drive Storage Scope & System Root Access Mode** (Resolved ✅)
+- [x] **3. Server-Side Session Revocation & Token Epoch** (Resolved ✅)
+- [ ] **4. Dynamic Passcode Management UI & Endpoint** (Pending)
+- [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)** (Pending)
 
 ### P2: Essential V4 & Tech Debt Feature Additions
 - [ ] **1. One-Click Auto-Update Engine & Release Pipeline**
@@ -150,43 +150,74 @@ These items **must** be resolved before the repository visibility is changed to 
 
 Production-grade self-hosted tools must withstand exposure to the open internet. The following security upgrades prevent host takeover and data leakage.
 
-- [ ] **1. Passkey / WebAuthn (FIDO2) Authentication Support**
-- [ ] **2. Multi-Drive Storage Scope & System Root Access Mode**
-- [ ] **3. Server-Side Session Revocation & Token Epoch**
+- [x] **1. Google Autofill & Biometric Credential Support (Resolved ✅)**
+- [x] **2. Multi-Drive Storage Scope & System Root Access Mode (Resolved ✅)**
+- [x] **3. Server-Side Session Revocation & Token Epoch (Resolved ✅)**
 - [ ] **4. Dynamic Passcode Management UI & Endpoint**
 - [ ] **5. Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)**
 
-### 1. Passkey / WebAuthn (FIDO2) Authentication Support
-* **Status**: [ ] Pending.
-* **Source**: [`todo.md`](../todo.md#L4) & [`docs/TECHNICAL_DEBT.md:L101`](TECHNICAL_DEBT.md#L101)
-* **Goal**: Enable hardware keys (YubiKey), Touch ID, Face ID, and Windows Hello via WebAuthn.
-* **Architecture**:
-  * Implement `@simplewebauthn/server` in `agent/routes/auth.js` (`/api/auth/webauthn/register-options`, `/api/auth/webauthn/verify-registration`, `/api/auth/webauthn/login-options`, `/api/auth/webauthn/verify-authentication`).
-  * Implement `@simplewebauthn/browser` in `dashboard/src/pages/login.tsx`.
-  * Store credentials in host storage (`~/.config/home-cloud/webauthn.json`).
-  * Maintain password login as a fallback.
+### 1. Google Autofill & Biometric Credential Support (Resolved ✅)
+* **Status**: [x] Resolved (`d4ac7f5` & `82b99d5`).
+* **Resolution**:
+  * Form Semantics & Identity Pairing in [`dashboard/src/pages/login.tsx`](../dashboard/src/pages/login.tsx):
+    * Configured `<form>` with explicit `method="post"`, `action="/api/auth/login"`, and `autoComplete="on"`.
+    * Added paired, accessible visually hidden `admin` identity field (`name="username"`, `autoComplete="username"`).
+    * Tagged password input with `name="password"` and `autoComplete="current-password"`.
+    * Enables Google Password Manager, Chrome Autofill, Android Autofill, Samsung Pass, and Apple Keychain to reliably prompt *"Save password to Google Account?"* and offer biometric unlock (Windows Hello PIN/Fingerprint, Android Fingerprint/Face Unlock).
+  * Dev Environment Resilience:
+    * Patched [`dashboard/src/hooks/useNetworkDetector.ts`](../dashboard/src/hooks/useNetworkDetector.ts) to detect `import.meta.env.DEV` and port 5173, preventing unwanted auto-redirects from the Vite dev server to the backend port during local development.
+    * Enhanced [`agent/index.js`](../agent/index.js) with `fs.existsSync` fallback on the catch-all SPA route: redirects to `http://localhost:5173` in dev when `dist/index.html` is unbuilt, and returns a clean 503 in production instead of throwing an unhandled `NotFoundError` stack trace.
+* **Verification**:
+  * Inspected live page rendering and form submissions with `playwright-cli`. Verified zero unwanted redirects on `localhost:5173` and clean form handling.
 
 ---
 
-### 2. Multi-Drive Storage Scope & System Root Access Mode
-* **Status**: [ ] Pending.
+### 2. Multi-Drive Storage Scope & System Root Access Mode (Resolved ✅)
+* **Status**: [x] Resolved (`707940e`).
 * **Source**: [`docs/TECHNICAL_DEBT.md:L61`](TECHNICAL_DEBT.md#L61)
-* **Goal**: Remove narrow `$HOME`-only jail. Replace with multi-drive storage model (`/mnt/*`, `/media/*`) and configurable full system root access (`/`) toggle in Settings.
-* **Architecture**:
-  * In Safe Server Mode (default), allow access to `$HOME` and all mounted disks (`/mnt/*`, `/media/*`).
-  * When System Root Access (`/`) is toggled on, allow browsing of root filesystem while respecting Linux user account permissions.
-  * Allow Docker container bind mounts to target valid storage paths rather than restricting strictly to `BASE_DIR`.
+* **Resolution**:
+  * **Preferences Service** in [`agent/services/preferences.js`](../agent/services/preferences.js):
+    * Manages persistent server settings in `~/.config/home-cloud/preferences.json`.
+    * Configures `allowSystemRoot` (boolean, default: `false`, overridable via `ALLOW_SYSTEM_ROOT=true` in `.env`).
+  * **Storage Scope & Virtual FS Safeguards** in [`agent/paths.js`](../agent/paths.js):
+    * Replaced narrow `BASE_DIR`-only jail with dynamic `isInsideAllowedScope(resolvedPath)`.
+    * Safe Server Mode (default): permits access to `$HOME` and all mounted storage drives (`/mnt/*`, `/media/*`, `/srv/*`, `/run/media/*`). Blocks system directories (`/etc`, `/usr`, `/var`, `/`).
+    * Full System Root Access mode: permits access to entire filesystem root (`/`) while strictly respecting host OS user permissions.
+    * Hard Kernel Block: virtual kernel filesystems (`/proc`, `/sys`, `/dev`) remain permanently blocked under all modes to prevent hanging Node.js event loop or leaking host device descriptors.
+  * **Settings REST API** in [`agent/routes/settings.js`](../agent/routes/settings.js):
+    * `GET /api/settings/storage`: returns current storage configuration, active scope mode, base dir, and detected drive list.
+    * `PUT /api/settings/storage`: allows toggling `allowSystemRoot` with immediate preference persistence.
+  * **File Explorer & Docker Integration**:
+    * Updated [`agent/routes/file.js`](../agent/routes/file.js) to resolve paths via `isInsideAllowedScope` and surface OS permission errors as HTTP 403 (`"Permission denied by host OS"`) rather than generic 500 errors.
+    * Updated [`agent/routes/docker.js`](../agent/routes/docker.js) to validate container bind mounts against allowed storage paths.
+  * **Dashboard UI** in [`dashboard/src/components/apps/SettingsApp.tsx`](../dashboard/src/components/apps/SettingsApp.tsx):
+    * Added **Storage Scope & System Access** configuration card in Settings App with live toggle, security badge indicator, and connected storage drives overview.
+* **Verification**:
+  * Created and passed comprehensive test suite in [`agent/tests/verify_storage_scope.mjs`](../agent/tests/verify_storage_scope.mjs). Verified virtual FS blocking, safe mode boundaries, root access activation, settings API endpoints, and Linux permission handling.
 
 ---
 
-### 3. Server-Side Session Revocation & Token Epoch
-* **Status**: [ ] Pending.
+### 3. Server-Side Session Revocation & Token Epoch (Resolved ✅)
+* **Status**: [x] Resolved.
 * **Source**: [`docs/TECHNICAL_DEBT.md:L68`](TECHNICAL_DEBT.md#L68)
-* **Goal**: Immediate invalidation of JWT cookies on logout or passcode change.
-* **Architecture**:
-  * Currently, JWTs are signed with a 7-day expiration and cannot be revoked without changing `JWT_SECRET` and restarting the process.
-  * Introduce a lightweight `session_epoch` integer or token blacklist persisted in agent memory / local config file.
-  * When the user clicks **Logout** or changes their passcode, increment the epoch so all previous tokens fail verification immediately.
+* **Resolution**:
+  * **Persistent Token Epoch** in [`agent/services/preferences.js`](../agent/services/preferences.js):
+    * Configured `sessionEpoch: 1` persisted atomically in `~/.config/home-cloud/preferences.json`.
+    * Exported `getSessionEpoch()` and `incrementSessionEpoch()` helpers with integer validation (>= 1).
+  * **JWT Payload Stamping** in [`agent/routes/auth.js`](../agent/routes/auth.js):
+    * When signing tokens during `POST /api/auth/login`, included `epoch: preferences.getSessionEpoch()` in the JWT payload.
+    * In `GET /api/auth/me`, verified `decodedtoken.epoch === preferences.getSessionEpoch()`, returning HTTP 401 on mismatch.
+  * **Middleware Verification** in [`agent/middleware/auth.js`](../agent/middleware/auth.js):
+    * Validates that `decodedtoken.epoch === preferences.getSessionEpoch()`.
+    * Immediately rejects legacy tokens without an epoch (`undefined`) and tokens from revoked epochs with HTTP 401 `{ error: "Session has been revoked" }`.
+  * **WebSocket Authentication Hardening**:
+    * Hardened [`agent/sockets/terminal.js`](../agent/sockets/terminal.js) and [`agent/sockets/containerExec.js`](../agent/sockets/containerExec.js) to verify token epoch on connection and reject revoked tokens immediately.
+  * **All-Device Revocation Endpoint**:
+    * Implemented `POST /api/auth/logout-all` (guarded by `authMiddleware`): increments `sessionEpoch`, clears the auth cookie, and returns `{ success: true, message: "All active sessions revoked", sessionEpoch: newEpoch }`.
+  * **Dashboard UI in Settings App** ([`dashboard/src/components/apps/SettingsApp.tsx`](../dashboard/src/components/apps/SettingsApp.tsx)):
+    * Added dedicated **Security & Sessions** tab with active Token Epoch badge, explanation, and **Log Out Everywhere** danger button that calls `POST /api/auth/logout-all` and redirects to `/login`.
+* **Verification**:
+  * Created automated test suite [`agent/tests/verify_session_revocation.mjs`](../agent/tests/verify_session_revocation.mjs) testing 9 distinct scenarios: initial state, login epoch stamping, protected route verification, mismatched epoch rejection, legacy token rejection, logout-all revocation, post-revocation re-login, disk persistence, and WebSocket rejection (100% pass).
 
 ---
 
@@ -196,7 +227,10 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 * **Goal**: Allow users to change their master passcode from the dashboard rather than requiring terminal SSH to edit `agent/.env`.
 * **Architecture**:
   * Endpoint `POST /api/settings/password` requiring current password + new password.
-  * Safe in-place update of `agent/.env` (retaining comments and formatting) with immediate session revocation.
+  * Constant-time verification of current password.
+  * Update `process.env.PASSWORD` in memory and update `PASSWORD` in `agent/.env` (retaining existing keys and formatting).
+  * Automatically increment `session_epoch` upon passcode change to revoke all active sessions.
+  * Add "Change Password" section in Settings App UI.
 
 ---
 
@@ -363,9 +397,9 @@ flowchart TD
     end
 
     subgraph P1["P1: Security Hardening"]
-        W["[ ] WebAuthn Passkey Auth"]
-        J["[ ] Storage Scope & Root Access"]
-        R["[ ] Session Revocation"]
+        W["[x] Google Autofill & Biometrics (Resolved ✅)"]
+        J["[x] Storage Scope & Root Access (Resolved ✅)"]
+        R["[x] Session Revocation (Resolved ✅)"]
         P["[ ] Dynamic Passcode UI"]
         U["[ ] 100MB Chunked Uploads"]
     end
@@ -393,6 +427,11 @@ flowchart TD
 
 ### Execution Phases:
 1. **Phase 1 (P0)**: Fix immediate blockers ([x] License, [x] Rate Limiter, [x] Host Leak, [x] Terminal Prototype, [x] ESLint, [x] Test Suites, [x] Doc Username Sanitization).
-2. **Phase 2 (P1)**: Implement passkey authentication, storage scope & system root mode, server session revocation, and 100MB chunked uploads.
+2. **Phase 2 (P1)**: Security & Privilege Boundary Hardening:
+   - [x] Google Autofill & Biometric Credential Support (Resolved ✅)
+   - [x] Storage Scope & System Root Access Mode (Resolved ✅)
+   - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
+   - [ ] Dynamic Passcode Management UI & Endpoint
+   - [ ] Resumable Chunked File Uploads (100MB Cloudflare Tunnel Cap)
 3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, and desktop window state persistence.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.

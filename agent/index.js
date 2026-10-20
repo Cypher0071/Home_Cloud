@@ -89,6 +89,9 @@ app.all("/api/health", (req, res) => {
 
 // Authenticated endpoints
 app.use("/api", authMiddleware);
+app.get("/api/me", (req, res) => {
+	res.json({ authorized: true, user: req.user });
+});
 app.use("/api/network", require("./routes/network"));
 app.use("/api/metrics", require("./routes/metrics"));
 app.use("/api/files", require("./routes/file"));
