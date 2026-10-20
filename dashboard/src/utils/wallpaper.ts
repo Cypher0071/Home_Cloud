@@ -4,7 +4,10 @@ import sandSrc from '../assets/wallpaper_sand.jpg';
 import mistSrc from '../assets/wallpaper_mist.jpg';
 
 export const WALLPAPER_STORAGE_KEY = 'home-cloud.wallpaper';
-export const WALLPAPER_EVENT = 'home-cloud:wallpaper';
+export const WALLPAPER_CUSTOM_URL_KEY = 'home-cloud.wallpaper.custom-url';
+export const WALLPAPER_HAS_CUSTOM_KEY = 'home-cloud.wallpaper.has-custom';
+export const WALLPAPER_EVENT = 'homecloud:wallpaper-change';
+export const LEGACY_WALLPAPER_EVENT = 'home-cloud:wallpaper';
 
 export type WallpaperFit = 'fill' | 'fit' | 'stretch' | 'center';
 export type WallpaperId = 'waves' | 'night' | 'sand' | 'mist' | 'charcoal' | 'custom';
@@ -76,7 +79,7 @@ export const FIT_OPTIONS: { id: WallpaperFit; label: string; hint: string }[] = 
 ];
 
 const DEFAULT_SETTINGS: WallpaperSettings = { id: 'waves', fit: 'fill' };
-const VALID_IDS = new Set<WallpaperId>([
+export const VALID_IDS = new Set<WallpaperId>([
   'waves',
   'night',
   'sand',
@@ -84,7 +87,7 @@ const VALID_IDS = new Set<WallpaperId>([
   'charcoal',
   'custom',
 ]);
-const VALID_FITS = new Set<WallpaperFit>(['fill', 'fit', 'stretch', 'center']);
+export const VALID_FITS = new Set<WallpaperFit>(['fill', 'fit', 'stretch', 'center']);
 
 const DB_NAME = 'home-cloud';
 const DB_VERSION = 1;
@@ -114,8 +117,36 @@ export function saveWallpaperSettings(settings: WallpaperSettings): void {
   localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(settings));
 }
 
-export function notifyWallpaperChange(): void {
-  window.dispatchEvent(new Event(WALLPAPER_EVENT));
+export function loadCachedCustomWallpaper(): { hasCustom: boolean; customUrl: string | null } {
+  if (typeof localStorage === 'undefined') return { hasCustom: false, customUrl: null };
+  try {
+    const hasCustom = localStorage.getItem(WALLPAPER_HAS_CUSTOM_KEY) === 'true';
+    const customUrl = localStorage.getItem(WALLPAPER_CUSTOM_URL_KEY) || (hasCustom ? '/api/settings/wallpaper' : null);
+    return { hasCustom, customUrl };
+  } catch {
+    return { hasCustom: false, customUrl: null };
+  }
+}
+
+export function saveCachedCustomWallpaper(hasCustom: boolean, customUrl: string | null): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(WALLPAPER_HAS_CUSTOM_KEY, hasCustom ? 'true' : 'false');
+    if (customUrl) {
+      localStorage.setItem(WALLPAPER_CUSTOM_URL_KEY, customUrl);
+    } else {
+      localStorage.removeItem(WALLPAPER_CUSTOM_URL_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function notifyWallpaperChange(detail?: { settings?: WallpaperSettings; customUrl?: string | null }): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(WALLPAPER_EVENT, { detail }));
+    window.dispatchEvent(new CustomEvent(LEGACY_WALLPAPER_EVENT, { detail }));
+  }
 }
 
 function fitToBackgroundSize(fit: WallpaperFit): string {

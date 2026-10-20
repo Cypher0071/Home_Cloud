@@ -396,6 +396,26 @@
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
 }
 
+/* Update Available Amber Notification Dot */
+.dock-notification-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+  border: 1.5px solid rgba(0, 0, 0, 0.8);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.mobile-nav-icon-wrap .dock-notification-dot {
+  top: -2px;
+  right: -4px;
+}
+
 /* Tooltip — Win11 Fluent */
 .dock-tooltip {
   position: absolute;
@@ -752,6 +772,7 @@
 }
 
 .mobile-icon-btn {
+  position: relative;
   width: 34px;
   height: 34px;
   display: flex;

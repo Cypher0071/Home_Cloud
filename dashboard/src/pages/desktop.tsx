@@ -1,5 +1,6 @@
 import { useState, useEffect, createElement, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   Activity,
   Terminal as TerminalIcon,
@@ -67,6 +68,7 @@ export default function Desktop() {
   const [activeWindowId, setActiveWindowId] = useState<string | null>(() => getInitialDeepLink());
   const [maxZIndex, setMaxZIndex] = useState(() => (getInitialDeepLink() ? 11 : 10));
   const [retryVersions, setRetryVersions] = useState<Record<string, number>>({});
+  const [hasUpdateAvailable, setHasUpdateAvailable] = useState<boolean>(false);
 
   const [windows, setWindows] = useState<WindowState[]>(() => {
     const deepLink = getInitialDeepLink();
@@ -159,6 +161,41 @@ export default function Desktop() {
     updateTime();
     const id = setInterval(updateTime, 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // Check for software updates on mount and listen for update status events
+  useEffect(() => {
+    let active = true;
+
+    const checkUpdateStatus = () => {
+      axios
+        .get<{ updateAvailable?: boolean; update?: { updateAvailable?: boolean } }>(
+          '/api/settings/update/status',
+        )
+        .then(res => {
+          if (!active) return;
+          const isAvailable = Boolean(res.data?.updateAvailable ?? res.data?.update?.updateAvailable);
+          setHasUpdateAvailable(isAvailable);
+        })
+        .catch(() => {});
+    };
+
+    checkUpdateStatus();
+
+    const handleUpdateStatusEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ updateAvailable?: boolean }>;
+      if (typeof customEvent.detail?.updateAvailable === 'boolean') {
+        setHasUpdateAvailable(customEvent.detail.updateAvailable);
+      } else {
+        checkUpdateStatus();
+      }
+    };
+
+    window.addEventListener('homecloud:update-status', handleUpdateStatusEvent);
+    return () => {
+      active = false;
+      window.removeEventListener('homecloud:update-status', handleUpdateStatusEvent);
+    };
   }, []);
 
   // Dynamic visualViewport management for mobile virtual keyboard handling
@@ -321,6 +358,7 @@ export default function Desktop() {
               title="Settings"
             >
               <Settings size={15} />
+              {hasUpdateAvailable && <span className="dock-notification-dot" />}
             </button>
             <button
               type="button"
@@ -401,6 +439,9 @@ export default function Desktop() {
               >
                 <div className="mobile-nav-icon-wrap">
                   {tab.icon}
+                  {tab.id === 'settings' && hasUpdateAvailable && (
+                    <span className="dock-notification-dot" />
+                  )}
                   {isActive && <span className="mobile-nav-dot" />}
                 </div>
                 <span className="mobile-nav-label">{tab.label}</span>
@@ -439,6 +480,9 @@ export default function Desktop() {
                     aria-label={win.title}
                   >
                     {win.icon}
+                    {win.id === 'settings' && hasUpdateAvailable && (
+                      <span className="dock-notification-dot" />
+                    )}
                     <span className="dock-tooltip">{win.title}</span>
                     {win.isOpen && <span className="dock-item-dot" />}
                   </button>

@@ -4,11 +4,19 @@ const os = require("os");
 
 const PREFERENCES_DIR = path.join(os.homedir(), ".config", "home-cloud");
 const PREFERENCES_FILE = path.join(PREFERENCES_DIR, "preferences.json");
+const WALLPAPER_FILE_PREFIX = path.join(PREFERENCES_DIR, "wallpaper");
+const SUPPORTED_WALLPAPER_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 
 const DEFAULT_PREFERENCES = {
 	allowSystemRoot: false,
 	customStoragePaths: [],
 	sessionEpoch: 1,
+	personalization: {
+		presetId: "macos-sonoma",
+		fit: "cover",
+		hasCustomWallpaper: false,
+		customWallpaperExt: null,
+	},
 };
 
 let inMemoryPreferences = null;
@@ -21,7 +29,14 @@ function ensurePreferencesDir() {
 
 function getPreferences() {
 	if (inMemoryPreferences !== null) {
-		return { ...inMemoryPreferences };
+		return {
+			...inMemoryPreferences,
+			personalization: {
+				...DEFAULT_PREFERENCES.personalization,
+				...(inMemoryPreferences.personalization || {}),
+			},
+			customStoragePaths: [...(inMemoryPreferences.customStoragePaths || [])],
+		};
 	}
 
 	try {
@@ -34,19 +49,34 @@ function getPreferences() {
 				Number.isInteger(epochNum) && epochNum >= 1
 					? epochNum
 					: DEFAULT_PREFERENCES.sessionEpoch;
+			const personalization = {
+				...DEFAULT_PREFERENCES.personalization,
+				...(parsed.personalization && typeof parsed.personalization === "object"
+					? parsed.personalization
+					: {}),
+			};
 			inMemoryPreferences = {
 				...DEFAULT_PREFERENCES,
 				...parsed,
 				sessionEpoch,
+				personalization,
 			};
 		} else {
-			inMemoryPreferences = { ...DEFAULT_PREFERENCES };
+			inMemoryPreferences = {
+				...DEFAULT_PREFERENCES,
+				personalization: { ...DEFAULT_PREFERENCES.personalization },
+				customStoragePaths: [...DEFAULT_PREFERENCES.customStoragePaths],
+			};
 			// Write default file
 			fs.writeFileSync(PREFERENCES_FILE, JSON.stringify(inMemoryPreferences, null, 2), "utf8");
 		}
 	} catch (err) {
 		console.warn("[preferences] Notice: could not load preferences.json, using defaults:", err.message);
-		inMemoryPreferences = { ...DEFAULT_PREFERENCES };
+		inMemoryPreferences = {
+			...DEFAULT_PREFERENCES,
+			personalization: { ...DEFAULT_PREFERENCES.personalization },
+			customStoragePaths: [...DEFAULT_PREFERENCES.customStoragePaths],
+		};
 	}
 
 	// Environment variable override takes precedence if set
@@ -54,7 +84,14 @@ function getPreferences() {
 		inMemoryPreferences.allowSystemRoot = process.env.ALLOW_SYSTEM_ROOT === "true";
 	}
 
-	return { ...inMemoryPreferences };
+	return {
+		...inMemoryPreferences,
+		personalization: {
+			...DEFAULT_PREFERENCES.personalization,
+			...(inMemoryPreferences.personalization || {}),
+		},
+		customStoragePaths: [...(inMemoryPreferences.customStoragePaths || [])],
+	};
 }
 
 function updatePreferences(partial = {}) {
@@ -69,7 +106,7 @@ function updatePreferences(partial = {}) {
 	}
 
 	if (Array.isArray(partial.customStoragePaths)) {
-		updated.customStoragePaths = partial.customStoragePaths.map(String);
+		updated.customStoragePaths = partial.customStoragePaths.map(String).filter(Boolean);
 	}
 
 	if (partial.sessionEpoch !== undefined) {
@@ -83,13 +120,28 @@ function updatePreferences(partial = {}) {
 		updated.sessionEpoch = current.sessionEpoch ?? DEFAULT_PREFERENCES.sessionEpoch;
 	}
 
+	if (partial.personalization && typeof partial.personalization === "object") {
+		updated.personalization = {
+			...(current.personalization || DEFAULT_PREFERENCES.personalization),
+			...partial.personalization,
+		};
+	} else {
+		updated.personalization = {
+			...(current.personalization || DEFAULT_PREFERENCES.personalization),
+		};
+	}
+
 	ensurePreferencesDir();
 	const tmpFile = `${PREFERENCES_FILE}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
 	fs.writeFileSync(tmpFile, JSON.stringify(updated, null, 2), "utf8");
 	fs.renameSync(tmpFile, PREFERENCES_FILE);
 
 	inMemoryPreferences = updated;
-	return { ...updated };
+	return {
+		...updated,
+		personalization: { ...updated.personalization },
+		customStoragePaths: [...(updated.customStoragePaths || [])],
+	};
 }
 
 function isSystemRootAllowed() {
@@ -112,6 +164,62 @@ function incrementSessionEpoch() {
 	return newEpoch;
 }
 
+function getWallpaperPath() {
+	ensurePreferencesDir();
+
+	const prefs = getPreferences();
+	if (prefs.personalization && prefs.personalization.customWallpaperExt) {
+		const rawExt = prefs.personalization.customWallpaperExt;
+		const ext = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
+		const specificPath = `${WALLPAPER_FILE_PREFIX}${ext}`;
+		if (fs.existsSync(specificPath)) {
+			return specificPath;
+		}
+	}
+
+	for (const ext of SUPPORTED_WALLPAPER_EXTENSIONS) {
+		const candidate = `${WALLPAPER_FILE_PREFIX}${ext}`;
+		if (fs.existsSync(candidate)) {
+			return candidate;
+		}
+	}
+
+	try {
+		if (fs.existsSync(PREFERENCES_DIR)) {
+			const files = fs.readdirSync(PREFERENCES_DIR);
+			for (const file of files) {
+				if (file.startsWith("wallpaper.")) {
+					const full = path.join(PREFERENCES_DIR, file);
+					if (fs.statSync(full).isFile()) {
+						return full;
+					}
+				}
+			}
+		}
+	} catch (_) {}
+
+	return null;
+}
+
+function removeCustomWallpaperFiles() {
+	ensurePreferencesDir();
+	try {
+		if (fs.existsSync(PREFERENCES_DIR)) {
+			const files = fs.readdirSync(PREFERENCES_DIR);
+			for (const file of files) {
+				if (file.startsWith("wallpaper.")) {
+					const full = path.join(PREFERENCES_DIR, file);
+					try {
+						if (fs.statSync(full).isFile()) {
+							fs.unlinkSync(full);
+						}
+					} catch (_) {}
+				}
+			}
+		}
+	} catch (_) {}
+}
+
 function _resetForTesting(customPrefs = null) {
 	if (customPrefs) {
 		const epochNum = Number(customPrefs.sessionEpoch);
@@ -123,6 +231,10 @@ function _resetForTesting(customPrefs = null) {
 			...DEFAULT_PREFERENCES,
 			...customPrefs,
 			sessionEpoch,
+			personalization: {
+				...DEFAULT_PREFERENCES.personalization,
+				...(customPrefs.personalization || {}),
+			},
 		};
 	} else {
 		inMemoryPreferences = null;
@@ -137,5 +249,10 @@ module.exports = {
 	incrementSessionEpoch,
 	PREFERENCES_FILE,
 	PREFERENCES_DIR,
+	DEFAULT_PREFERENCES,
+	WALLPAPER_FILE_PREFIX,
+	SUPPORTED_WALLPAPER_EXTENSIONS,
+	getWallpaperPath,
+	removeCustomWallpaperFiles,
 	_resetForTesting,
 };
