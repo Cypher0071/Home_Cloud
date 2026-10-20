@@ -8,6 +8,7 @@ const PREFERENCES_FILE = path.join(PREFERENCES_DIR, "preferences.json");
 const DEFAULT_PREFERENCES = {
 	allowSystemRoot: false,
 	customStoragePaths: [],
+	sessionEpoch: 1,
 };
 
 let inMemoryPreferences = null;
@@ -28,9 +29,15 @@ function getPreferences() {
 		if (fs.existsSync(PREFERENCES_FILE)) {
 			const raw = fs.readFileSync(PREFERENCES_FILE, "utf8");
 			const parsed = JSON.parse(raw);
+			const epochNum = Number(parsed.sessionEpoch);
+			const sessionEpoch =
+				Number.isInteger(epochNum) && epochNum >= 1
+					? epochNum
+					: DEFAULT_PREFERENCES.sessionEpoch;
 			inMemoryPreferences = {
 				...DEFAULT_PREFERENCES,
 				...parsed,
+				sessionEpoch,
 			};
 		} else {
 			inMemoryPreferences = { ...DEFAULT_PREFERENCES };
@@ -65,8 +72,19 @@ function updatePreferences(partial = {}) {
 		updated.customStoragePaths = partial.customStoragePaths.map(String);
 	}
 
+	if (partial.sessionEpoch !== undefined) {
+		const parsedEpoch = Number(partial.sessionEpoch);
+		if (Number.isInteger(parsedEpoch) && parsedEpoch >= 1) {
+			updated.sessionEpoch = parsedEpoch;
+		} else {
+			updated.sessionEpoch = current.sessionEpoch ?? DEFAULT_PREFERENCES.sessionEpoch;
+		}
+	} else if (!Number.isInteger(Number(updated.sessionEpoch)) || Number(updated.sessionEpoch) < 1) {
+		updated.sessionEpoch = current.sessionEpoch ?? DEFAULT_PREFERENCES.sessionEpoch;
+	}
+
 	ensurePreferencesDir();
-	const tmpFile = `${PREFERENCES_FILE}.${Date.now()}.tmp`;
+	const tmpFile = `${PREFERENCES_FILE}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
 	fs.writeFileSync(tmpFile, JSON.stringify(updated, null, 2), "utf8");
 	fs.renameSync(tmpFile, PREFERENCES_FILE);
 
@@ -78,14 +96,45 @@ function isSystemRootAllowed() {
 	return Boolean(getPreferences().allowSystemRoot);
 }
 
+function getSessionEpoch() {
+	const prefs = getPreferences();
+	const epoch = Number(prefs.sessionEpoch);
+	if (Number.isInteger(epoch) && epoch >= 1) {
+		return epoch;
+	}
+	return DEFAULT_PREFERENCES.sessionEpoch;
+}
+
+function incrementSessionEpoch() {
+	const currentEpoch = getSessionEpoch();
+	const newEpoch = currentEpoch + 1;
+	updatePreferences({ sessionEpoch: newEpoch });
+	return newEpoch;
+}
+
 function _resetForTesting(customPrefs = null) {
-	inMemoryPreferences = customPrefs ? { ...customPrefs } : null;
+	if (customPrefs) {
+		const epochNum = Number(customPrefs.sessionEpoch);
+		const sessionEpoch =
+			Number.isInteger(epochNum) && epochNum >= 1
+				? epochNum
+				: (customPrefs.sessionEpoch !== undefined ? DEFAULT_PREFERENCES.sessionEpoch : DEFAULT_PREFERENCES.sessionEpoch);
+		inMemoryPreferences = {
+			...DEFAULT_PREFERENCES,
+			...customPrefs,
+			sessionEpoch,
+		};
+	} else {
+		inMemoryPreferences = null;
+	}
 }
 
 module.exports = {
 	getPreferences,
 	updatePreferences,
 	isSystemRootAllowed,
+	getSessionEpoch,
+	incrementSessionEpoch,
 	PREFERENCES_FILE,
 	PREFERENCES_DIR,
 	_resetForTesting,

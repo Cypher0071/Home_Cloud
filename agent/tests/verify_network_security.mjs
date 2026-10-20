@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+import { createRequire } from "node:module";
 import jwt from "jsonwebtoken";
 import { app } from "../index.js";
+
+const require = createRequire(import.meta.url);
+const preferences = require("../services/preferences.js");
 
 console.log("--- Running Network Security & Ping Endpoint Verification Tests ---");
 
@@ -14,7 +18,11 @@ await new Promise((resolve) => testServer.listen(0, "127.0.0.1", resolve));
 const address = testServer.address();
 const baseUrl = `http://127.0.0.1:${address.port}`;
 
-const validToken = jwt.sign({ authorized: true }, JWT_SECRET, { expiresIn: "1h" });
+const validToken = jwt.sign(
+	{ authorized: true, epoch: preferences.getSessionEpoch() },
+	JWT_SECRET,
+	{ expiresIn: "1h" }
+);
 
 try {
 	// Test 1: GET /api/ping unauthenticated -> 200 { status: "ok" } + CORS + PNA headers

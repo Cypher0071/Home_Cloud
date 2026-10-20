@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const express = require('express');
 const router = express.Router();
 const { COOKIE_SECURE } = require('../config');
+const preferences = require('../services/preferences');
+const authMiddleware = require('../middleware/auth');
 
 // Rate limiting configuration
 const MAX_ATTEMPTS = 5;
@@ -134,7 +136,11 @@ router.post('/login', (req, res) => {
 
     if (isMatch) {
         recordSuccessfulLogin(clientIp);
-        const token = jwt.sign({ authorized: true }, process.env.JWT_SECRET, { expiresIn: '7d' });
+        const token = jwt.sign(
+            { authorized: true, epoch: preferences.getSessionEpoch() },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
         const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
         res.cookie('token', token, {
             httpOnly: true,
@@ -163,6 +169,16 @@ router.post('/logout', (req, res) => {
     res.json({ success: true });
 });
 
+router.post('/logout-all', authMiddleware, (req, res) => {
+    const newEpoch = preferences.incrementSessionEpoch();
+    res.clearCookie('token');
+    res.json({
+        success: true,
+        message: 'All active sessions revoked',
+        sessionEpoch: newEpoch,
+    });
+});
+
 router.get('/me', (req, res) => {
     const token = req.cookies && req.cookies.token;
     if (!token) {
@@ -171,6 +187,9 @@ router.get('/me', (req, res) => {
     jwt.verify(token, process.env.JWT_SECRET, (err, decodedtoken) => {
         if (err) {
             return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!decodedtoken || decodedtoken.epoch !== preferences.getSessionEpoch()) {
+            return res.status(401).json({ error: 'Session has been revoked' });
         }
         res.json({ authorized: true, user: decodedtoken });
     });

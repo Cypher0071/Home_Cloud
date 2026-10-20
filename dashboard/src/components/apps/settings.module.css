@@ -174,8 +174,8 @@
   transform: scale(0.97);
 }
 
-.tile[aria-checked='true'],
-.tile:has([aria-checked='true']) {
+.tile[aria-checked="true"],
+.tile:has([aria-checked="true"]) {
   border-color: #ffffff;
   box-shadow: 0 0 0 1px #ffffff;
 }
@@ -231,8 +231,8 @@
   color: var(--text-secondary, #a1a1a1);
 }
 
-.tile[aria-checked='true'] .tileName,
-.tile:has([aria-checked='true']) .tileName {
+.tile[aria-checked="true"] .tileName,
+.tile:has([aria-checked="true"]) .tileName {
   color: #ffffff;
 }
 
@@ -283,7 +283,6 @@
   outline: 2px solid rgba(255, 255, 255, 0.60);
   outline-offset: 1px;
 }
-
 
 .fitGroup {
   --tabs-dur: 250ms;
@@ -345,12 +344,12 @@
     color var(--tabs-dur) var(--tabs-ease);
 }
 
-.fitBtn[aria-checked='true'] {
+.fitBtn[aria-checked="true"] {
   color: #ffffff;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .fitBtn:not([aria-checked='true']):hover {
+  .fitBtn:not([aria-checked="true"]):hover {
     color: var(--text-primary, #ededed);
   }
 }
@@ -362,17 +361,6 @@
 .fitBtn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px #171717, 0 0 0 4px rgba(255, 255, 255, 0.6);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fitPill,
-  .fitBtn {
-    transition: none !important;
-  }
-
-  .fitBtn:is(:active, .is-pressed) {
-    transform: none;
-  }
 }
 
 .fileInput {
@@ -561,6 +549,41 @@
   color: #737373;
 }
 
+.dangerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  font: 500 12.5px/1 var(--sans);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out-quart);
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+}
+
+.dangerButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.dangerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dangerButton:focus-visible {
+  outline: 2px solid rgba(239, 68, 68, 0.6);
+  outline-offset: 2px;
+}
+
 .statusToast {
   margin-top: 12px;
   padding: 8px 12px;
@@ -569,6 +592,163 @@
   background: rgba(255, 255, 255, 0.06);
   color: #ededed;
   border: 1px solid #262626;
+}
+
+/* Change Master Passcode Card Styles */
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 440px;
+  margin-top: 4px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formLabel {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary, #a1a1a1);
+  letter-spacing: -0.01em;
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: #111111;
+  border: 1px solid #262626;
+  border-radius: 6px;
+  transition:
+    border-color var(--duration-fast, 140ms) var(--ease-out-quart),
+    background var(--duration-fast, 140ms) var(--ease-out-quart),
+    box-shadow var(--duration-fast, 140ms) var(--ease-out-quart);
+}
+
+.inputWrapper:hover {
+  border-color: #383838;
+}
+
+.inputWrapper:focus-within {
+  border-color: #525252;
+  box-shadow: 0 0 0 1px #525252, 0 0 0 4px rgba(255, 255, 255, 0.05);
+  background: #141414;
+}
+
+.inputField {
+  flex: 1;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #ededed;
+  font: 400 13px/1.4 var(--sans);
+  padding: 8px 12px;
+  outline: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.inputField::placeholder {
+  color: #525252;
+}
+
+.passwordToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #737373;
+  padding: 0 10px;
+  height: 32px;
+  cursor: pointer;
+  border-radius: 0 5px 5px 0;
+  transition: color var(--duration-fast, 140ms) var(--ease-out-quart);
+  flex-shrink: 0;
+}
+
+.passwordToggle:hover {
+  color: #ededed;
+}
+
+.passwordToggle:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.60);
+  outline-offset: -2px;
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 550;
+  border-radius: 6px;
+  height: 32px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--sans);
+  margin-top: 4px;
+  align-self: flex-start;
+  transition:
+    background var(--duration-fast, 140ms) var(--ease-out-quart),
+    transform var(--duration-fast, 140ms) var(--ease-out-quart),
+    opacity var(--duration-fast, 140ms) var(--ease-out-quart);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #eaeaea;
+}
+
+.primaryButton:active:not(:disabled) {
+  background: #d4d4d4;
+  transform: scale(0.98);
+}
+
+.primaryButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.primaryButton:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.passwordSuccess {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  line-height: 1.4;
+}
+
+.passwordError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  line-height: 1.4;
 }
 
 @container (min-width: 820px) {
@@ -614,6 +794,10 @@
     padding: 8px 10px 9px;
     font-size: 12px;
   }
+
+  .passwordForm {
+    max-width: 480px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -642,21 +826,35 @@
   .preview {
     max-height: 120px;
   }
+
+  .passwordForm {
+    max-width: 100%;
+  }
+
+  .primaryButton {
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .fitPill,
+  .fitBtn,
   .navItem,
   .tile,
-  .fitBtn,
   .removeCustom,
   .switchButton,
-  .switchThumb {
-    transition: none;
+  .switchThumb,
+  .inputWrapper,
+  .passwordToggle,
+  .primaryButton {
+    transition: none !important;
   }
 
   .navItem:active,
   .tile:active,
-  .fitBtn:active {
+  .fitBtn:active,
+  .fitBtn:is(:active, .is-pressed),
+  .primaryButton:active {
     transform: none;
   }
 }
