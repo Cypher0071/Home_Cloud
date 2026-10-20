@@ -12,6 +12,14 @@ const {
 	getSessionEpoch,
 } = require("../services/preferences");
 const { BASE_DIR, DEFAULT_STORAGE_ROOTS } = require("../paths");
+const {
+	getUpdateStatus,
+	checkForUpdates,
+	applyUpdate,
+	getLastProgress,
+	isUpdating,
+	updateEmitter,
+} = require("../services/updateManager");
 
 /**
  * Safely and atomically updates the PASSWORD in the .env file.
@@ -143,6 +151,88 @@ router.post("/password", (req, res) => {
 	} catch (err) {
 		return res.status(500).json({ error: err.message || "Failed to update password" });
 	}
+});
+
+// ==========================================
+// Auto-Update Engine Endpoints
+// ==========================================
+
+// GET /api/settings/update/status
+router.get("/update/status", (req, res) => {
+	try {
+		const status = getUpdateStatus();
+		res.json({
+			status: "ok",
+			...status,
+		});
+	} catch (err) {
+		res.status(500).json({ error: err.message });
+	}
+});
+
+// POST /api/settings/update/check
+router.post("/update/check", async (req, res) => {
+	try {
+		const result = await checkForUpdates({ force: true });
+		res.json({
+			status: "ok",
+			...result,
+		});
+	} catch (err) {
+		res.status(500).json({ error: err.message });
+	}
+});
+
+// POST /api/settings/update/apply
+router.post("/update/apply", (req, res) => {
+	try {
+		if (isUpdating()) {
+			return res.status(409).json({ error: "Update already in progress" });
+		}
+
+		const { targetTag } = req.body || {};
+
+		// Trigger update asynchronously
+		applyUpdate(null, { targetTag }).catch((err) => {
+			console.error("[settings/update] Asynchronous update error:", err.message);
+		});
+
+		res.status(202).json({
+			status: "ok",
+			message: "Update initiated successfully",
+		});
+	} catch (err) {
+		res.status(400).json({ error: err.message });
+	}
+});
+
+// GET /api/settings/update/progress
+router.get("/update/progress", (req, res) => {
+	res.setHeader("Content-Type", "text/event-stream");
+	res.setHeader("Cache-Control", "no-cache");
+	res.setHeader("Connection", "keep-alive");
+	if (typeof res.flushHeaders === "function") {
+		res.flushHeaders();
+	}
+
+	// Immediately send current/cached progress state
+	const initial = getLastProgress() || {
+		stage: isUpdating() ? "updating" : "idle",
+		message: isUpdating() ? "Update in progress" : "No update in progress",
+		percent: isUpdating() ? 50 : 0,
+		isUpdating: isUpdating(),
+	};
+	res.write(`data: ${JSON.stringify(initial)}\n\n`);
+
+	const onProgress = (data) => {
+		res.write(`data: ${JSON.stringify(data)}\n\n`);
+	};
+
+	updateEmitter.on("progress", onProgress);
+
+	req.on("close", () => {
+		updateEmitter.off("progress", onProgress);
+	});
 });
 
 router.updateEnvPassword = updateEnvPassword;

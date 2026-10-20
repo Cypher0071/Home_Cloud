@@ -1,6 +1,24 @@
 import { useState, useEffect, useLayoutEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, HardDrive, Plus, X, ShieldCheck, AlertTriangle, CheckCircle2, Shield, LogOut, KeyRound, Eye, EyeOff } from 'lucide-react';
+import {
+  Monitor,
+  HardDrive,
+  Plus,
+  X,
+  ShieldCheck,
+  AlertTriangle,
+  CheckCircle2,
+  Shield,
+  LogOut,
+  KeyRound,
+  Eye,
+  EyeOff,
+  ArrowUpCircle,
+  RefreshCw,
+  Loader2,
+  ArrowRight,
+  ExternalLink,
+} from 'lucide-react';
 import axios from 'axios';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { FIT_OPTIONS, WALLPAPER_PRESETS } from '../../utils/wallpaper';
@@ -21,8 +39,81 @@ interface StorageSettings {
   drives: StorageDrive[];
 }
 
+export interface UpdateStatus {
+  currentVersion: string;
+  latestVersion: string;
+  tagName?: string;
+  updateAvailable: boolean;
+  releaseNotes?: string;
+  publishedAt?: string;
+  htmlUrl?: string;
+  lastChecked?: string;
+  isUpdating?: boolean;
+  error?: string | null;
+}
+
+export interface UpdateProgress {
+  stage: string;
+  message: string;
+  percent?: number;
+}
+
+const UPDATE_STAGES = [
+  { id: 'checkout', label: 'Pre-flight & Git Checkout' },
+  { id: 'dependencies', label: 'Installing Dependencies' },
+  { id: 'build', label: 'Compiling Dashboard' },
+  { id: 'restart', label: 'Restarting Service' },
+] as const;
+
+function getStageIndex(stage: string): number {
+  const s = stage.toLowerCase();
+  if (s.includes('check') || s.includes('git') || s.includes('preflight') || s.includes('fetch') || s === '0' || s === '1') {
+    return 0;
+  }
+  if (s.includes('depend') || s.includes('pnpm') || s.includes('dep') || s.includes('install') || s === '2') {
+    return 1;
+  }
+  if (s.includes('build') || s.includes('compil') || s.includes('dash') || s === '3') {
+    return 2;
+  }
+  if (s.includes('restart') || s.includes('reboot') || s.includes('reload') || s === '4') {
+    return 3;
+  }
+  if (s.includes('complete') || s.includes('done') || s.includes('finish') || s.includes('success')) {
+    return 4;
+  }
+  return 0;
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function broadcastUpdateStatus(isAvailable: boolean) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('homecloud:update-status', {
+        detail: { updateAvailable: isAvailable },
+      })
+    );
+  }
+}
+
 export default function SettingsApp() {
-  const [activeTab, setActiveTab] = useState<'personalization' | 'storage' | 'security'>('personalization');
+  const [activeTab, setActiveTab] = useState<'personalization' | 'storage' | 'security' | 'updates'>('personalization');
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const fitGroupRef = useRef<HTMLDivElement>(null);
@@ -49,6 +140,20 @@ export default function SettingsApp() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  // Update Management state
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isUpdateComplete, setIsUpdateComplete] = useState(false);
+
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const watchdogRef = useRef<number | null>(null);
 
   const {
     settings,
@@ -175,6 +280,213 @@ export default function SettingsApp() {
     }
   };
 
+  // Update handlers
+  const fetchUpdateStatus = async () => {
+    setCheckingUpdate(true);
+    setUpdateError(null);
+    try {
+      const res = await axios.get<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/status');
+      const data = 'update' in res.data ? res.data.update : res.data;
+      setUpdateStatus(data);
+      broadcastUpdateStatus(Boolean(data?.updateAvailable));
+      if (data?.isUpdating && !applyingUpdate) {
+        setApplyingUpdate(true);
+        setUpdateModalOpen(true);
+        startReconnectingWatchdog();
+      }
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) && err.response?.data?.error
+        ? String(err.response.data.error)
+        : 'Failed to check update status';
+      setUpdateError(msg);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateError(null);
+    try {
+      const res = await axios.post<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/check');
+      const data = 'update' in res.data ? res.data.update : res.data;
+      setUpdateStatus(data);
+      broadcastUpdateStatus(Boolean(data?.updateAvailable));
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) && err.response?.data?.error
+        ? String(err.response.data.error)
+        : 'Failed to check for updates';
+      setUpdateError(msg);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const startReconnectingWatchdog = () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    setUpdateProgress({
+      stage: 'restart',
+      message: 'Home Cloud is restarting. Waiting for service to become responsive...',
+      percent: 95,
+    });
+
+    if (watchdogRef.current) {
+      clearInterval(watchdogRef.current);
+    }
+
+    setTimeout(() => {
+      watchdogRef.current = window.setInterval(async () => {
+        try {
+          const res = await axios.get<{ status: string }>(`/api/ping?_t=${Date.now()}`, {
+            timeout: 2000,
+          });
+          if (res.data?.status === 'ok') {
+            if (watchdogRef.current) {
+              clearInterval(watchdogRef.current);
+              watchdogRef.current = null;
+            }
+            setIsUpdateComplete(true);
+            broadcastUpdateStatus(false);
+            setUpdateProgress({
+              stage: 'complete',
+              message: 'Update complete! Reloading dashboard…',
+              percent: 100,
+            });
+            setTimeout(() => {
+              window.location.reload();
+            }, 1200);
+          }
+        } catch {
+          // Expected while server is offline / restarting
+        }
+      }, 1500);
+    }, 1500);
+  };
+
+  const handleApplyUpdate = async () => {
+    if (applyingUpdate) return;
+    setApplyingUpdate(true);
+    setUpdateError(null);
+    setIsUpdateComplete(false);
+    setReconnecting(false);
+    setUpdateProgress({
+      stage: 'checkout',
+      message: 'Initiating update and verifying git branch...',
+      percent: 10,
+    });
+    setUpdateModalOpen(true);
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource('/api/settings/update/progress');
+      eventSourceRef.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.error || data.stage === 'rollback') {
+            setUpdateError(String(data.error || data.message || 'Update failed and was rolled back'));
+            setApplyingUpdate(false);
+            if (es) es.close();
+            return;
+          }
+          setUpdateProgress({
+            stage: data.stage || 'checkout',
+            message: data.message || '',
+            percent: typeof data.percent === 'number' ? data.percent : undefined,
+          });
+          if (data.stage === 'restart' || data.done || data.stage === 'complete') {
+            if (es) es.close();
+            startReconnectingWatchdog();
+          }
+        } catch {
+          if (event.data) {
+            setUpdateProgress(prev => ({
+              stage: prev?.stage || 'checkout',
+              message: String(event.data),
+            }));
+          }
+        }
+      };
+
+      es.addEventListener('progress', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.error || data.stage === 'rollback') {
+            setUpdateError(String(data.error || data.message || 'Update failed and was rolled back'));
+            setApplyingUpdate(false);
+            if (es) es.close();
+            return;
+          }
+          setUpdateProgress({
+            stage: data.stage || 'checkout',
+            message: data.message || '',
+            percent: typeof data.percent === 'number' ? data.percent : undefined,
+          });
+          if (data.stage === 'restart') {
+            if (es) es.close();
+            startReconnectingWatchdog();
+          }
+        } catch {
+          // ignore
+        }
+      });
+
+      es.addEventListener('error', () => {
+        if (es) es.close();
+        startReconnectingWatchdog();
+      });
+    } catch {
+      startReconnectingWatchdog();
+    }
+
+    try {
+      await axios.post('/api/settings/update/apply');
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) && err.response?.data?.error
+        ? String(err.response.data.error)
+        : 'Failed to initiate update process';
+      setUpdateError(msg);
+      setApplyingUpdate(false);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    axios.get<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/status')
+      .then(res => {
+        if (!active) return;
+        const data = 'update' in res.data ? res.data.update : res.data;
+        setUpdateStatus(data);
+        broadcastUpdateStatus(Boolean(data?.updateAvailable));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (watchdogRef.current) {
+        clearInterval(watchdogRef.current);
+      }
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (activeTab !== 'personalization') return;
     const group = fitGroupRef.current;
@@ -252,6 +564,28 @@ export default function SettingsApp() {
     if (file) void uploadCustom(file);
   };
 
+  const currentStageIdx = getStageIndex(updateProgress?.stage || 'checkout');
+
+  const displayPercent = (() => {
+    if (isUpdateComplete) return 100;
+    if (reconnecting) return 95;
+    if (typeof updateProgress?.percent === 'number' && !isNaN(updateProgress.percent)) {
+      return Math.min(100, Math.max(0, updateProgress.percent));
+    }
+    switch (currentStageIdx) {
+      case 0:
+        return 25;
+      case 1:
+        return 50;
+      case 2:
+        return 75;
+      case 3:
+        return 90;
+      default:
+        return 10;
+    }
+  })();
+
   return (
     <div className={styles.shell}>
       <nav className={styles.nav} aria-label="Settings">
@@ -284,6 +618,21 @@ export default function SettingsApp() {
         >
           <Shield size={15} />
           Security & Sessions
+        </button>
+        <button
+          type="button"
+          className={`${styles.navItem} ${activeTab === 'updates' ? styles.navItemActive : ''}`}
+          onClick={() => {
+            setActiveTab('updates');
+            if (!updateStatus && !checkingUpdate) {
+              void fetchUpdateStatus();
+            }
+          }}
+          aria-current={activeTab === 'updates' ? 'page' : undefined}
+        >
+          <ArrowUpCircle size={15} />
+          Updates & System
+          {updateStatus?.updateAvailable && <span className={styles.navNotificationDot} />}
         </button>
       </nav>
 
@@ -485,7 +834,7 @@ export default function SettingsApp() {
               )}
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'security' ? (
           <div className={styles.content}>
             <h1 className={styles.pageTitle}>Security & Sessions</h1>
             <p className={styles.pageHint}>
@@ -645,8 +994,373 @@ export default function SettingsApp() {
               )}
             </div>
           </div>
+        ) : (
+          <div className={styles.content}>
+            <h1 className={styles.pageTitle}>Updates & System</h1>
+            <p className={styles.pageHint}>
+              Manage Home Cloud core releases, review version changelogs, and perform zero-downtime upgrades.
+            </p>
+
+            {updateError && !updateModalOpen && (
+              <div className={styles.passwordError} role="alert" style={{ marginBottom: 16 }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                <span>{updateError}</span>
+              </div>
+            )}
+
+            <div className={`${styles.updateCard} ${updateStatus?.updateAvailable ? styles.updateCardAvailable : ''}`}>
+              <div className={styles.cardHeader}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h2 className={styles.cardTitle}>Home Cloud Core</h2>
+                  {checkingUpdate ? (
+                    <span className={`${styles.versionBadge} ${styles.badgeChecking}`}>
+                      <Loader2 size={12} className={styles.spin} />
+                      Checking…
+                    </span>
+                  ) : updateStatus?.updateAvailable ? (
+                    <span className={`${styles.versionBadge} ${styles.badgeAvailable}`}>
+                      <ArrowUpCircle size={12} />
+                      Update Available
+                    </span>
+                  ) : (
+                    <span className={`${styles.versionBadge} ${styles.badgeUpToDate}`}>
+                      <CheckCircle2 size={12} />
+                      Up to Date
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => void handleCheckUpdate()}
+                  disabled={checkingUpdate || applyingUpdate}
+                >
+                  <RefreshCw size={13} className={checkingUpdate ? styles.spin : ''} />
+                  {checkingUpdate ? 'Checking…' : 'Check for Updates'}
+                </button>
+              </div>
+
+              <p className={styles.cardDesc}>
+                Home Cloud tracks updates and official release milestones directly from GitHub.
+              </p>
+
+              <div className={styles.versionInfo}>
+                <div className={styles.versionColumn}>
+                  <span className={styles.versionLabel}>Current Version</span>
+                  <span className={styles.versionNumber}>
+                    {updateStatus?.currentVersion || (checkingUpdate ? 'Checking…' : 'Loading…')}
+                  </span>
+                </div>
+
+                <div className={styles.versionDivider}>
+                  <ArrowRight size={14} />
+                </div>
+
+                <div className={styles.versionColumn}>
+                  <span className={styles.versionLabel}>Latest Version</span>
+                  <span className={styles.versionNumber}>
+                    {updateStatus?.latestVersion || updateStatus?.tagName || updateStatus?.currentVersion || '—'}
+                  </span>
+                </div>
+
+                {updateStatus?.lastChecked && (
+                  <div className={styles.versionCheckedInfo}>
+                    <span className={styles.versionLabel}>Last Checked</span>
+                    <span className={styles.versionCheckedDate}>
+                      {formatDate(updateStatus.lastChecked)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {updateStatus?.updateAvailable ? (
+                <>
+                  {updateStatus.releaseNotes && (
+                    <div className={styles.releaseNotesWrapper}>
+                      <div className={styles.releaseNotesHeader}>
+                        <span className={styles.releaseNotesTitle}>
+                          Release Notes {updateStatus.tagName ? `(${updateStatus.tagName})` : ''}
+                        </span>
+                        {updateStatus.htmlUrl && (
+                          <a
+                            href={updateStatus.htmlUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={styles.releaseLink}
+                          >
+                            View on GitHub <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                      <div className={styles.releaseNotesContainer}>
+                        <pre className={styles.releaseNotesText}>
+                          {updateStatus.releaseNotes}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={styles.updateActionRow}>
+                    <button
+                      type="button"
+                      className={styles.primaryButton}
+                      onClick={() => setConfirmDialogOpen(true)}
+                      disabled={applyingUpdate || checkingUpdate}
+                    >
+                      <ArrowUpCircle size={14} />
+                      Update Now
+                    </button>
+                    <span className={styles.updateActionHint}>
+                      Automates git checkout, dependency installation, dashboard compilation, and daemon restart.
+                    </span>
+                  </div>
+                </>
+              ) : !checkingUpdate && updateStatus ? (
+                <div className={styles.upToDateBanner}>
+                  <CheckCircle2 size={16} className={styles.upToDateIcon} />
+                  <div>
+                    <div className={styles.upToDateTitle}>Your Home Cloud is up to date</div>
+                    <div className={styles.upToDateDesc}>
+                      You are running version {updateStatus.currentVersion}. No updates are available at this time.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
         )}
       </div>
+
+      {confirmDialogOpen && (
+        <div
+          className={styles.updateModalOverlay}
+          onClick={() => setConfirmDialogOpen(false)}
+        >
+          <div
+            className={styles.updateModal}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-modal-title"
+          >
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle} id="confirm-modal-title">
+                <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
+                Confirm System Update
+              </div>
+              <button
+                type="button"
+                className={styles.modalCloseBtn}
+                onClick={() => setConfirmDialogOpen(false)}
+                aria-label="Close dialog"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <p className={styles.modalWarningText}>
+                Home Cloud will download dependencies, rebuild the dashboard, and restart the service. Active sessions will momentarily reconnect.
+              </p>
+
+              <div className={styles.modalVersionPills}>
+                <div className={styles.modalVersionPill}>
+                  <span className={styles.modalVersionLabel}>Current Version</span>
+                  <span className={styles.modalVersionValue}>{updateStatus?.currentVersion || 'Installed'}</span>
+                </div>
+                <ArrowRight size={14} className={styles.modalVersionArrow} />
+                <div className={styles.modalVersionPill}>
+                  <span className={styles.modalVersionLabel}>Target Version</span>
+                  <span className={styles.modalVersionValue}>
+                    {updateStatus?.latestVersion || updateStatus?.tagName || 'Latest'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => setConfirmDialogOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => {
+                  setConfirmDialogOpen(false);
+                  void handleApplyUpdate();
+                }}
+              >
+                <ArrowUpCircle size={13} />
+                Proceed with Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {updateModalOpen && (
+        <div className={styles.updateModalOverlay}>
+          <div
+            className={styles.updateModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="progress-modal-title"
+          >
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle} id="progress-modal-title">
+                {updateError ? (
+                  <AlertTriangle size={18} style={{ color: '#f87171' }} />
+                ) : isUpdateComplete ? (
+                  <CheckCircle2 size={18} style={{ color: '#4ade80' }} />
+                ) : (
+                  <Loader2 size={18} className={styles.spin} style={{ color: '#60a5fa' }} />
+                )}
+                {updateError
+                  ? 'Update Failed'
+                  : isUpdateComplete
+                  ? 'Update Complete!'
+                  : reconnecting
+                  ? 'Restarting Service…'
+                  : 'Applying System Update'}
+              </div>
+              {updateError && (
+                <button
+                  type="button"
+                  className={styles.modalCloseBtn}
+                  onClick={() => {
+                    setUpdateModalOpen(false);
+                    setApplyingUpdate(false);
+                    setReconnecting(false);
+                  }}
+                  aria-label="Close dialog"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.progressContainer}>
+                <div className={styles.progressHeader}>
+                  <span className={styles.progressLabel}>
+                    {reconnecting
+                      ? 'Restarting & Reconnecting'
+                      : updateProgress?.message || 'In progress…'}
+                  </span>
+                  <span className={styles.progressPercent}>{displayPercent}%</span>
+                </div>
+                <div className={styles.progressBar}>
+                  <div
+                    className={`${styles.progressBarFill} ${
+                      updateError
+                        ? styles.progressBarFillError
+                        : isUpdateComplete
+                        ? styles.progressBarFillSuccess
+                        : ''
+                    }`}
+                    style={{ width: `${displayPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.updateStepList}>
+                {UPDATE_STAGES.map((step, idx) => {
+                  const isCompleted =
+                    isUpdateComplete ||
+                    (reconnecting && idx < 3) ||
+                    (!updateError && currentStageIdx > idx);
+                  const isActive =
+                    !isUpdateComplete &&
+                    !updateError &&
+                    (reconnecting ? idx === 3 : currentStageIdx === idx);
+                  const isFailed = Boolean(updateError && currentStageIdx === idx);
+
+                  return (
+                    <div
+                      key={step.id}
+                      className={`${styles.updateStepItem} ${
+                        isCompleted
+                          ? styles.stepCompleted
+                          : isActive
+                          ? styles.stepActive
+                          : isFailed
+                          ? styles.stepFailed
+                          : styles.stepPending
+                      }`}
+                    >
+                      <div className={styles.stepIconWrapper}>
+                        {isCompleted ? (
+                          <CheckCircle2 size={15} className={styles.stepSuccessIcon} />
+                        ) : isActive ? (
+                          <Loader2 size={15} className={styles.spin} />
+                        ) : isFailed ? (
+                          <AlertTriangle size={15} className={styles.stepFailedIcon} />
+                        ) : (
+                          <span className={styles.stepNumber}>{idx + 1}</span>
+                        )}
+                      </div>
+                      <div className={styles.stepInfo}>
+                        <span className={styles.stepTitle}>{step.label}</span>
+                        {isActive && updateProgress?.message && (
+                          <span className={styles.stepSubtext}>{updateProgress.message}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {updateProgress?.message && !updateError && (
+                <div className={styles.liveLogMessage}>
+                  <span className={styles.liveLogDot} />
+                  <span className={styles.liveLogText}>{updateProgress.message}</span>
+                </div>
+              )}
+
+              {reconnecting && (
+                <div className={styles.reconnectingBanner}>
+                  <Loader2 size={14} className={styles.spin} />
+                  <span>Polling Home Cloud service at /api/ping…</span>
+                </div>
+              )}
+
+              {updateError && (
+                <div className={styles.modalErrorBox} role="alert">
+                  <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                  <div className={styles.modalErrorText}>{updateError}</div>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.modalFooter}>
+              {updateError ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setUpdateModalOpen(false);
+                    setApplyingUpdate(false);
+                    setReconnecting(false);
+                  }}
+                >
+                  Close & Retry
+                </button>
+              ) : isUpdateComplete ? (
+                <span className={styles.modalFooterStatus}>Reloading in a moment…</span>
+              ) : (
+                <span className={styles.modalFooterStatus}>
+                  Please keep this window open while updates are applied.
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

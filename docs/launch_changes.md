@@ -10,7 +10,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | :--- | :---: | :---: | :--- |
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
 | **P1: Security & Privilege Boundaries** | ✅ Ready / Resolved (4/4 Resolved) | **NONE** | All 4 security gates resolved: Storage Scope & System Root Access, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint. (Chunked uploads deferred to final phase in TECHNICAL_DEBT.md). |
-| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress | **MEDIUM** | Auto-update engine, cross-device settings persistence, container crash watchdog, and automated volume backups. (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
+| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress (1/4 Resolved) | **MEDIUM** | Auto-update engine resolved ✅. Cross-device settings persistence, container crash watchdog, and automated volume backups pending. (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
 ---
@@ -33,7 +33,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **4. Dynamic Passcode Management UI & Endpoint** (Resolved ✅)
 
 ### P2: Essential V4 & Tech Debt Feature Additions
-- [ ] **1. One-Click Auto-Update Engine & Release Pipeline**
+- [x] **1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)**
 - [ ] **2. Cross-Device Settings & Personalization Persistence**
 - [ ] **3. Container Crash Watchdog & Webhooks**
 - [ ] **4. Automated Volume & Database Backups**
@@ -227,7 +227,7 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
     * Synchronous in-memory update to `process.env.PASSWORD = trimmedNewPassword`.
   * **Atomic File Updates & Permissions**:
     * Implemented `updateEnvPassword(envPath, newPassword)` in [`agent/routes/settings.js`](../agent/routes/settings.js): writes to a temporary file with strict `0o600` permissions and atomically renames over `agent/.env`.
-    * Preserves all other environment variables, formatting, and comments; cleanly appends or initializes missing `.env` based on `.env.example`.
+    * Preserves all other environment variables, formatting, and comments; cleanly appends or initializes missing `.env` based on `.env.example` .
   * **Automatic Session Revocation & Epoch Increment**:
     * Integrates directly into [`agent/services/preferences.js`](../agent/services/preferences.js) via `preferences.incrementSessionEpoch()`.
     * Clears auth cookie via `res.clearCookie('token')`, automatically revoking all active browser and WebSocket sessions across all devices immediately.
@@ -244,24 +244,44 @@ Production-grade self-hosted tools must withstand exposure to the open internet.
 
 Features that must ship for the 1.0 release to deliver a complete, resilient self-hosted operating experience.
 
-- [ ] **1. One-Click Auto-Update Engine & Release Pipeline**
+- [x] **1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)**
 - [ ] **2. Cross-Device Settings & Personalization Persistence**
 - [ ] **3. Container Crash Watchdog & Webhooks**
 - [ ] **4. Automated Volume & Database Backups**
 
-### 1. One-Click Auto-Update Engine & Release Pipeline
-* **Status**: [ ] Pending.
+### 1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)
+* **Status**: [x] Resolved.
 * **Source**: [`docs/implementation/v4_roadmap.md:L50`](implementation/v4_roadmap.md#L50)
 * **Goal**: Enable non-technical users to update Home Cloud with a single click.
-* **Architecture**:
-  * Backend polling service checking GitHub Releases (`GET https://api.github.com/repos/Cypher0071/home_cloud/releases/latest`).
-  * Update runner executing:
-    1. Git fetch and checkout of verified release tag.
-    2. `pnpm install --frozen-lockfile`.
-    3. `pnpm --filter dashboard build`.
-    4. Service reload via `systemctl restart home-cloud`.
-  * Auto-rollback if post-update health check fails within 30 seconds.
-  * Dashboard notification badge and release notes preview modal.
+* **Resolution**:
+  * **GitHub Releases Polling Service** in [`agent/services/updateManager.js`](../agent/services/updateManager.js):
+    * Implemented in-memory caching with 24-hour TTL (`CACHE_TTL_MS = 24 * 60 * 60 * 1000`) and on-demand force-refresh via GitHub Releases API (`GET https://api.github.com/repos/Cypher0071/home_cloud/releases/latest`).
+    * Parses semantic version numbers, detects available updates against current `package.json` version, and retrieves release notes / changelog.
+  * **Multi-Stage Resilient Update Pipeline**:
+    * Structured into 4 distinct progress stages streamed via SSE:
+      1. `PREFLIGHT` & Snapshot: Verifies clean working tree or safe branch state, captures rollback commit snapshot (`git rev-parse HEAD`), and checks lockfile.
+      2. `FETCH`: Fetches git tags (`git fetch --tags origin`) and checks out target release tag or pulls latest commit.
+      3. `BUILD`: Executes `pnpm install --frozen-lockfile` and production frontend build `pnpm --filter dashboard build`.
+      4. `RESTART`: Schedules a detached delayed service restart process (using systemd `systemctl restart home-cloud` or PM2 / Node supervisor process) that survives parent process exit without aborting.
+    * **Automated Rollback Engine**:
+      * Wraps every installation and build step with try/catch failure detection.
+      * If `pnpm install` or `pnpm build` fails, automatically rolls back git state to the snapshot commit (`git checkout <snapshot-commit>`) and emits an error event.
+    * **Concurrency & Lock Guard**:
+      * In-memory update lock prevents concurrent executions; returns HTTP 409 Conflict if an update is already running.
+  * **REST & SSE Endpoints** in [`agent/routes/settings.js`](../agent/routes/settings.js):
+    * `GET /api/settings/update/status`: Returns current version, latest version, update availability, last checked timestamp, changelog, and active progress status.
+    * `POST /api/settings/update/check`: Forces an immediate check against GitHub API bypassing the 24-hour cache.
+    * `POST /api/settings/update/apply`: Triggers the asynchronous update pipeline (guarded by admin auth). Returns HTTP 202 Accepted.
+    * `GET /api/settings/update/progress`: Server-Sent Events (SSE) stream broadcasting real-time pipeline stage, percentage completion, logs, and final restart state.
+  * **Dashboard UI in Settings App** ([`dashboard/src/components/apps/SettingsApp.tsx`](../dashboard/src/components/apps/SettingsApp.tsx)):
+    * Added **Auto-Update & Release Management** card in Settings:
+      * Current version badge, latest version badge, and "Up to date" / "Update Available" indicator.
+      * Manual "Check for Updates" button with loading spinners.
+      * Release notes / changelog accordion viewer for target version.
+      * "Install Update" action modal featuring a 4-stage visual progress stepper (`Preflight`, `Fetch`, `Build`, `Restarting`), real-time SSE progress percentage, and live build logs.
+      * `/api/ping` reconnect watchdog during service restart that continuously polls the server and automatically refreshes the browser when the newly updated agent comes back online.
+* **Verification**:
+  * Built comprehensive automated test suite in [`agent/tests/verify_update_manager.mjs`](../agent/tests/verify_update_manager.mjs) testing semver comparisons, cache TTL expiration, force refresh, status formatting, lock guards, multi-stage pipeline progression, failure rollback restoration, and all REST/SSE endpoints (100% pass).
 
 ---
 
@@ -376,7 +396,7 @@ flowchart TD
     end
 
     subgraph P2["P2: Essential V4 & Tech Debt"]
-        AU["[ ] Auto-Update Engine"]
+        AU["[x] Auto-Update Engine (Resolved ✅)"]
         SP["[ ] Cross-Device Settings"]
         CW["[ ] Crash Watchdog"]
         BK["[ ] Volume Backups"]
@@ -401,5 +421,5 @@ flowchart TD
    - [x] Storage Scope & System Root Access Mode (Resolved ✅)
    - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
    - [x] Dynamic Passcode Management UI & Endpoint (Resolved ✅)
-3. **Phase 3 (P2)**: Implement Auto-Update Engine (V4 Phase 4), cross-device settings persistence, crash watchdog, and volume backups.
+3. **Phase 3 (P2)**: Implement Auto-Update Engine ([x] Resolved ✅), cross-device settings persistence, crash watchdog, and volume backups.
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.
