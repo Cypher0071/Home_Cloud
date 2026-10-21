@@ -10,7 +10,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | :--- | :---: | :---: | :--- |
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
 | **P1: Security & Privilege Boundaries** | ✅ Ready / Resolved (4/4 Resolved) | **NONE** | All 4 security gates resolved: Storage Scope & System Root Access, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint. (Chunked uploads deferred to final phase in TECHNICAL_DEBT.md). |
-| **P2: Essential V4 & Tech Debt Milestones** | ⏳ In Progress (2/4 Resolved) | **MEDIUM** | Auto-update engine and cross-device settings persistence resolved ✅. Container crash watchdog and automated volume backups pending. (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
+| **P2: Essential V4 & Tech Debt Milestones** | ✅ Ready / Resolved (2/2 Resolved for 1.0) | **NONE** | Auto-update engine and cross-device settings persistence resolved ✅. Container crash watchdog and automated volume backups deferred to post-1.0 roadmap in [`docs/future_roadmap.md`](future_roadmap.md). (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
 | **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
 
 ---
@@ -33,10 +33,10 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **4. Dynamic Passcode Management UI & Endpoint** (Resolved ✅)
 
 ### P2: Essential V4 & Tech Debt Feature Additions
-- [x] **1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)**
-- [x] **2. Cross-Device Settings & Personalization Persistence (Resolved ✅)**
-- [ ] **3. Container Crash Watchdog & Webhooks**
-- [ ] **4. Automated Volume & Database Backups**
+- [x] **1. One-Click Auto-Update Engine & Release Pipeline** (Resolved ✅)
+- [x] **2. Cross-Device Settings & Personalization Persistence** (Resolved ✅)
+- [x] **3. Container Crash Watchdog & Webhooks** (Deferred to Post-1.0 Roadmap 📋 — see [`docs/future_roadmap.md`](future_roadmap.md))
+- [x] **4. Automated Volume & Database Backups** (Deferred to Post-1.0 Roadmap 📋 — see [`docs/future_roadmap.md`](future_roadmap.md))
 
 ### P3: Open-Source Distribution, Packaging & Developer Experience
 - [ ] **1. 1-Command Automated Installer (`curl | bash`)**
@@ -246,8 +246,8 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 - [x] **1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)**
 - [x] **2. Cross-Device Settings & Personalization Persistence (Resolved ✅)**
-- [ ] **3. Container Crash Watchdog & Webhooks**
-- [ ] **4. Automated Volume & Database Backups**
+- [x] **3. Container Crash Watchdog & Webhooks (Deferred to Post-1.0 📋)**
+- [x] **4. Automated Volume & Database Backups (Deferred to Post-1.0 📋)**
 
 ### 1. One-Click Auto-Update Engine & Release Pipeline (Resolved ✅)
 * **Status**: [x] Resolved.
@@ -310,25 +310,24 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 ---
 
-### 3. Container Crash Watchdog & Webhooks
-* **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L9`](implementation/v4_roadmap.md#L9)
+### 3. Container Crash Watchdog & Webhooks (Deferred to Post-1.0 📋)
+* **Status**: [x] Deferred to Post-1.0 ([`docs/future_roadmap.md`](future_roadmap.md#milestone-1-container-crash-watchdogs--webhook-notifications)).
+* **Source**: [`docs/future_roadmap.md`](future_roadmap.md)
 * **Goal**: Automatic notifications if a Docker service crashes or enters a restart loop.
 * **Architecture**:
-  * Node.js agent monitors Docker events via `docker.getEvents()`.
-  * Detect non-zero container exit codes, unhealthy states, and OOM kills.
-  * Dispatch alert cards to Telegram and Discord webhooks with container name, status, and trailing log lines.
+  * Detailed in [`docs/future_roadmap.md`](future_roadmap.md).
+  * Node.js agent monitors Docker events (`docker.getEvents()`), detects non-zero exit codes, OOM kills, and unhealthy transitions with debounce against restart storms.
+  * Dispatches rich alert cards to Telegram, Discord, Gotify, and browser Web Push notifications.
 
 ---
 
-### 4. Automated Volume & Database Backups
-* **Status**: [ ] Pending.
-* **Source**: [`docs/implementation/v4_roadmap.md:L25`](implementation/v4_roadmap.md#L25)
+### 4. Automated Volume & Database Backups (Deferred to Post-1.0 📋)
+* **Status**: [x] Deferred to Post-1.0 ([`docs/future_roadmap.md`](future_roadmap.md#milestone-2-automated-docker-volume--database-snapshots)).
+* **Source**: [`docs/future_roadmap.md`](future_roadmap.md)
 * **Goal**: Protect user container data with zero terminal complexity.
 * **Architecture**:
-  * Snapshot Docker named volumes and container bind mounts into `.tar.gz` archives.
-  * Configurable backup schedules (daily/weekly) with automatic retention rotation.
-  * Dashboard panel to list, trigger, and download backup archives.
+  * Detailed in [`docs/future_roadmap.md`](future_roadmap.md).
+  * Application-consistent database pre-dumps (`pg_dump`/`mysqldump`), transient read-only helper container (`alpine` mounting volumes `:ro` to output `.tar.gz`), multi-drive storage scope support, scheduled retention policies, and browser dashboard downloads.
 
 ---
 
@@ -409,11 +408,11 @@ flowchart TD
         P["[x] Dynamic Passcode UI (Resolved ✅)"]
     end
 
-    subgraph P2["P2: Essential V4 & Tech Debt"]
+    subgraph P2["P2: Essential V4 & Tech Debt (Resolved ✅)"]
         AU["[x] Auto-Update Engine (Resolved ✅)"]
         SP["[x] Cross-Device Settings (Resolved ✅)"]
-        CW["[ ] Crash Watchdog"]
-        BK["[ ] Volume Backups"]
+        CW["[x] Crash Watchdog (Deferred)"]
+        BK["[x] Volume Backups (Deferred)"]
     end
 
     subgraph P3["P3: Open-Source Launch"]
@@ -435,5 +434,5 @@ flowchart TD
    - [x] Storage Scope & System Root Access Mode (Resolved ✅)
    - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
    - [x] Dynamic Passcode Management UI & Endpoint (Resolved ✅)
-3. **Phase 3 (P2)**: Implement Auto-Update Engine ([x] Resolved ✅), cross-device settings persistence ([x] Resolved ✅), crash watchdog, and volume backups.
+3. **Phase 3 (P2)**: Implement Auto-Update Engine ([x] Resolved ✅) and cross-device settings persistence ([x] Resolved ✅). (Crash watchdog and volume backups deferred to [`docs/future_roadmap.md`](future_roadmap.md)).
 4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.
