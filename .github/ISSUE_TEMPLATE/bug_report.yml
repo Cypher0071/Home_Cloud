@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in Home Cloud is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open File Explorer
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Home Cloud version or commit
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Files, Docker / App store, Terminal, Auth / Settings, Setup / Install, Auto-update, Other]
+  - type: input
+    id: env
+    attributes:
+      label: Host OS and browser
+      placeholder: Ubuntu 24.04, Chrome 130
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Agent logs or browser console output. Remove any passwords or tokens.
+      render: shell
