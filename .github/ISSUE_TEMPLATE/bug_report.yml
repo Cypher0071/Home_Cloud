@@ -1,0 +1,110 @@
+name: Bug Report
+description: File a bug report to help us improve Home Cloud
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please fill out the form below to help us diagnose and resolve the problem.
+  - type: checkboxes
+    id: pre-checks
+    attributes:
+      label: Pre-submission Checks
+      description: Please verify the following before submitting.
+      options:
+        - label: I have searched existing issues to ensure this bug has not already been reported.
+          required: true
+        - label: I confirm that no sensitive secrets, passwords, private keys, or auth tokens are included in the logs or description below.
+          required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Issue
+      description: A clear and concise description of what the bug is.
+      placeholder: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the problem.
+      placeholder: |
+        1. Navigate to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected-vs-actual
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen, and what actually happened?
+      placeholder: |
+        Expected:
+
+        Actual:
+    validations:
+      required: true
+  - type: dropdown
+    id: host-os
+    attributes:
+      label: Host OS
+      description: The operating system running the Home Cloud host server.
+      options:
+        - Ubuntu 24.04 / 22.04
+        - Debian 12
+        - Fedora 40+
+        - Arch Linux
+        - Alpine Linux
+        - WSL2 Ubuntu
+        - Other Linux
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      description: Host Node.js version (e.g. `node -v`).
+      placeholder: "e.g. v20.18.0"
+    validations:
+      required: false
+  - type: input
+    id: docker-version
+    attributes:
+      label: Docker Version
+      description: Host Docker engine version (e.g. `docker --version`).
+      placeholder: "e.g. Docker version 27.3.1"
+    validations:
+      required: false
+  - type: dropdown
+    id: connection-method
+    attributes:
+      label: Connection Method
+      description: How are you connecting to your Home Cloud instance?
+      options:
+        - Cloudflare Tunnel
+        - Local LAN IP
+        - Tailscale / WireGuard
+        - Reverse Proxy
+    validations:
+      required: true
+  - type: input
+    id: client-env
+    attributes:
+      label: Browser & Client OS
+      description: Your client device/browser used to access Home Cloud.
+      placeholder: "e.g. Chrome 130 on macOS / Firefox on Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Terminal Output
+      description: Relevant service logs (`journalctl -u home-cloud -n 50`) and browser console errors if applicable.
+      render: shell
+      placeholder: |
+        Paste logs here...
+    validations:
+      required: false

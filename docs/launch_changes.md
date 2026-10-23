@@ -39,9 +39,9 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **4. Automated Volume & Database Backups** (Deferred to Post-1.0 Roadmap 📋 — see [`docs/future_roadmap.md`](future_roadmap.md))
 
 ### P3: Open-Source Distribution, Packaging & Developer Experience
-- [ ] **1. 1-Command Automated Installer (`curl | bash`)**
-- [ ] **2. Comprehensive `README.md` Revamp**
-- [ ] **3. Open-Source Community Guidelines & Templates**
+- [x] **1. 1-Command Automated Installer (`curl | bash`)** (Resolved ✅)
+- [x] **2. Comprehensive `README.md` Revamp** (Resolved ✅)
+- [x] **3. Open-Source Community Guidelines & Templates** (Resolved ✅)
 - [ ] **4. GitHub Actions CI/CD Pipeline**
 
 ---
@@ -335,44 +335,61 @@ Features that must ship for the 1.0 release to deliver a complete, resilient sel
 
 Final polish required for public GitHub launch, contributor attraction, and friction-free user onboarding.
 
-- [ ] **1. 1-Command Automated Installer (`curl | bash`)**
-- [ ] **2. Comprehensive `README.md` Revamp**
+- [x] **1. 1-Command Automated Installer (`curl | bash`)** (Resolved ✅)
+- [x] **2. Comprehensive `README.md` Revamp** (Resolved ✅)
 - [ ] **3. Open-Source Community Guidelines & Templates**
 - [ ] **4. GitHub Actions CI/CD Pipeline**
 
-### 1. 1-Command Automated Installer (`curl | bash`)
-* **Status**: [ ] Pending.
-* **Goal**: Seamless onboarding for fresh Linux servers.
-* **Architecture**:
-  * Ensure [`setup.sh`](../setup.sh) can be invoked via:
-    ```bash
-    curl -fsSL https://raw.githubusercontent.com/Cypher0071/home_cloud/main/setup.sh | bash
-    ```
-  * Verify automated dependency resolution across Ubuntu, Debian 12, Fedora, and Arch Linux.
-  * Provide non-interactive flags (e.g. `--domain example.com --tunnel my-tunnel --password mypass`).
+### 1. 1-Command Automated Installer (`curl | bash`) (Resolved ✅)
+* **Status**: [x] Resolved.
+* **Target File**: [`setup.sh`](../setup.sh)
+* **Resolution**:
+  * Implemented robust CLI flag parsing for `--help` / `-h`, `--domain` / `-d`, `--password` / `-p`, `--tunnel`, `--dir`, `--branch`, `-y` / `--yes` / `--non-interactive`, `--skip-cloudflared`, and `--dry-run` / `--check-only`.
+  * Added environment variable overrides (`HOME_CLOUD_PASSWORD`, `CF_DOMAIN`, `TUNNEL_NAME`, `HOME_CLOUD_DIR`, `HOME_CLOUD_BRANCH`, `NON_INTERACTIVE`, `SKIP_CLOUDFLARED`, `DRY_RUN`).
+  * Solved the `curl -fsSL ... | bash` standard input problem via `read_input` helper reading from `/dev/tty` when stdin is a pipe, with fallback to non-interactive defaults in headless environments.
+  * Implemented canonical installation directory resolution: automatically uses `$SCRIPT_DIR` if running inside a clone, or installs into `--dir <path>` / `$HOME/home-cloud` via lowercase repository slug `https://github.com/Cypher0071/home_cloud.git` on branch `--branch <branch>` (default: `main`).
+  * Added cross-distribution support for Ubuntu/Debian (`apt`), Fedora/RHEL/CentOS (`dnf`/`yum`), and Arch Linux (`pacman`). Implemented multi-distro `cloudflared` installation (`.deb`, `.rpm`, static binary fallback).
+  * Hardened non-root user and sudo resolution (`CURRENT_USER`, `CURRENT_GROUP`, `CURRENT_HOME` correctly resolved even under `sudo curl | bash`), privilege separation (`run_privileged` vs `run_as_current_user`), and non-root ownership of build artifacts.
+  * Preserved injection-safe Node.js scripts for updating `agent/.env` and maintaining `chmod 600`.
+  * Added comprehensive `--dry-run` / `--check-only` validation mode that audits all prerequisites, user contexts, and configuration templates without modifying the system.
 
 ---
 
-### 2. Comprehensive `README.md` Revamp
-* **Status**: [ ] Pending.
+### 2. Comprehensive `README.md` Revamp (Resolved ✅)
+* **Status**: [x] Resolved.
 * **Target File**: [`README.md`](../README.md)
-* **Required Content**:
-  * Hero banner, badge bar (CI, License, Node 20+, Docker).
-  * High-level architectural diagram (Browser -> Cloudflare Tunnel -> Agent -> Docker/Terminal/Files).
-  * Quickstart guide (1-command setup vs manual Docker/Node run).
-  * Security model & threat boundary explanation (single-user model, CGNAT traversal).
-  * High-res screenshot showcase (Desktop environment, Docker store, Web terminal, File explorer).
+* **Resolution**:
+  * Added GitHub badge bar: Apache 2.0 license, Node.js (>=20.0.0), Docker (24+), Linux x86_64 architecture indicator, and PRs welcome badge.
+  * Explicitly communicated the single-user ownership philosophy and zero-port-forwarding CGNAT architecture vs. multi-user bloated appliances (CasaOS, Umbrel).
+  * Authored clean, readable Mermaid architectural flowchart highlighting external Cloudflare Zero Trust tunnel ingress, local split-horizon direct LAN fallback, Express agent subsystems, and host primitives (Dockerode, node-pty, Storage Scope).
+  * Documented core features:
+    * WebOS Desktop environment (multi-window manager, dock, keyboard shortcuts, responsive layout).
+    * Docker & Compose lifecycle (live container stats, container exec terminal, logs streaming, stack editor).
+    * Host Web Terminal (`node-pty` + `xterm.js` PTY session under host user).
+    * Multi-drive Storage & File Explorer (`/mnt`, `/media`, `/srv` drive discovery, Safe Mode vs. System Root Mode, hard kernel `/proc`, `/sys`, `/dev` blocking).
+    * Zero-config Cloudflare ingress autowiring for containers (`~/.cloudflared/config.yml`).
+    * Cross-device settings & preferences sync (`~/.config/home-cloud/preferences.json`).
+    * Hardened single-user security model (constant-time SHA-256 compare, sliding-window lockout, token epoch session revocation, Google/Apple biometric autofill).
+    * One-click auto-update engine with automated git snapshot rollback.
+  * Added dual-track getting started instructions:
+    * 1-line automated installer (`curl -fsSL .../setup.sh | bash`) with CLI flags documentation (`-d`, `-p`, `--tunnel`, `--dir`, `-y`).
+    * Manual clone, environment configuration (`agent/.env`), build, and run commands.
+  * Documented full configuration reference table (`agent/.env` and `preferences.json`).
+  * Explicitly documented requirements and compatibility matrix, verifying Linux x86_64 and explicitly noting ARM64 as currently untested.
+  * Outlined single-user security boundaries, root-equivalent shell access model, and links to governance documents.
 
 ---
 
-### 3. Open-Source Community Guidelines & Templates
-* **Status**: [ ] Pending.
+### 3. Open-Source Community Guidelines & Templates (Resolved ✅)
+* **Status**: [x] Resolved.
 * **Target Files**:
-  * `CONTRIBUTING.md` — Guide for local setup, PR workflows, code style, and testing requirements.
-  * `CODE_OF_CONDUCT.md` — Contributor Covenant v2.1.
-  * `SECURITY.md` — Responsible disclosure policy and reporting process.
-  * `.github/ISSUE_TEMPLATE/` — Structured templates for Bug Reports and Feature Requests.
-  * `.github/PULL_REQUEST_TEMPLATE.md` — Checklist for PR authors.
+  * [`CONTRIBUTING.md`](../CONTRIBUTING.md) — Comprehensive guide covering prerequisites (Node.js 20+, pnpm 11+, Docker, Linux/WSL2), monorepo architecture (`agent/`, `dashboard/`, `landing/`), local setup, verification scripts, TypeScript/React 19/Express 5 coding standards, Conventional Commits, and PR lifecycle.
+  * [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) — Full Contributor Covenant v2.1 with community pledge, standards, enforcement guidelines, and maintainer reporting contact (@Cypher0071).
+  * [`SECURITY.md`](../SECURITY.md) — Responsible disclosure policy (GitHub Security Advisories, 48h triage SLA), supported versions table (1.0.x), comprehensive threat model (single-tenant architecture, Cloudflare zero-trust network boundary, Safe Mode vs System Root storage scopes, hard-blocked `/proc`/`/sys`/`/dev`, constant-time timingSafeEqual auth, rate limiting, and token epoch session revocation).
+  * [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml) — GitHub Issue Form for bug reporting with host OS dropdown, Node/Docker version inputs, connection method dropdown, browser/client OS, log paste area, and credential security confirmation.
+  * [`.github/ISSUE_TEMPLATE/feature_request.yml`](../.github/ISSUE_TEMPLATE/feature_request.yml) — GitHub Issue Form for structured feature proposals with component tags, problem statements, and alternatives considered.
+  * [`.github/ISSUE_TEMPLATE/config.yml`](../.github/ISSUE_TEMPLATE/config.yml) — Issue configuration disabling blank issues and linking to GitHub Security Advisories and GitHub Discussions.
+  * [`.github/PULL_REQUEST_TEMPLATE.md`](../.github/PULL_REQUEST_TEMPLATE.md) — Pull request checklist verifying local tests (`pnpm test`), lint (`pnpm --filter dashboard lint`), production build (`pnpm --filter dashboard build`), test coverage, and documentation.
 
 ---
 
@@ -416,8 +433,8 @@ flowchart TD
     end
 
     subgraph P3["P3: Open-Source Launch"]
-        RM["[ ] Revamped README"]
-        ST["[ ] setup.sh 1-Liner Polish"]
+        RM["[x] Revamped README (Resolved ✅)"]
+        ST["[x] setup.sh 1-Liner Polish (Resolved ✅)"]
         GH["[ ] Community Docs & CI Pipeline"]
         REL["[ ] v1.0.0 Release Tag"]
     end
