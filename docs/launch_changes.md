@@ -11,7 +11,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 | **P0: Public Release Blockers** | ✅ Ready / Resolved | **NONE** | All 7 hard gates resolved: License applied, constant-time auth & rate limiting, network info disclosure patched, dead terminal removed, 46 ESLint violations fixed, test suites passing (93/93 E2E tests), docs sanitized. |
 | **P1: Security & Privilege Boundaries** | ✅ Ready / Resolved (4/4 Resolved) | **NONE** | All 4 security gates resolved: Storage Scope & System Root Access, Google Autofill Biometrics, Server-Side Session Revocation / Token Epoch, and Dynamic Passcode Management UI & Endpoint. (Chunked uploads deferred to final phase in TECHNICAL_DEBT.md). |
 | **P2: Essential V4 & Tech Debt Milestones** | ✅ Ready / Resolved (2/2 Resolved for 1.0) | **NONE** | Auto-update engine and cross-device settings persistence resolved ✅. Container crash watchdog and automated volume backups deferred to post-1.0 roadmap in [`docs/future_roadmap.md`](future_roadmap.md). (File Explorer usability & search sits in TECHNICAL_DEBT.md). |
-| **P3: Open-Source Polish & Governance** | 📝 Planned | **LOW** | 1-line curl installer, modernized `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, GitHub Actions CI. |
+| **P3: Open-Source Polish & Governance** | ✅ Ready / Resolved (4/4 Resolved) | **NONE** | 1-line curl installer (`setup.sh`), modernized `README.md`, open-source governance guidelines (`CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`), issue/PR templates, and production GitHub Actions CI/CD pipeline (`.github/workflows/ci.yml`). |
 
 ---
 
@@ -42,7 +42,7 @@ This document catalogs all prerequisite architectural fixes, security hardening,
 - [x] **1. 1-Command Automated Installer (`curl | bash`)** (Resolved ✅)
 - [x] **2. Comprehensive `README.md` Revamp** (Resolved ✅)
 - [x] **3. Open-Source Community Guidelines & Templates** (Resolved ✅)
-- [ ] **4. GitHub Actions CI/CD Pipeline**
+- [x] **4. GitHub Actions CI/CD Pipeline** (Resolved ✅)
 
 ---
 
@@ -337,8 +337,8 @@ Final polish required for public GitHub launch, contributor attraction, and fric
 
 - [x] **1. 1-Command Automated Installer (`curl | bash`)** (Resolved ✅)
 - [x] **2. Comprehensive `README.md` Revamp** (Resolved ✅)
-- [ ] **3. Open-Source Community Guidelines & Templates**
-- [ ] **4. GitHub Actions CI/CD Pipeline**
+- [x] **3. Open-Source Community Guidelines & Templates** (Resolved ✅)
+- [x] **4. GitHub Actions CI/CD Pipeline** (Resolved ✅)
 
 ### 1. 1-Command Automated Installer (`curl | bash`) (Resolved ✅)
 * **Status**: [x] Resolved.
@@ -393,14 +393,18 @@ Final polish required for public GitHub launch, contributor attraction, and fric
 
 ---
 
-### 4. GitHub Actions CI/CD Pipeline
-* **Status**: [ ] Pending.
-* **Target File**: `.github/workflows/ci.yml`
-* **Automated Checks**:
-  * Monorepo linting (`pnpm run lint`).
-  * TypeScript typecheck (`tsc -b`).
-  * Production frontend build verification (`pnpm --filter dashboard build`).
-  * Automated backend test suite execution (`pnpm test`).
+### 4. GitHub Actions CI/CD Pipeline (Resolved ✅)
+* **Status**: [x] Resolved.
+* **Target File**: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
+* **Resolution**:
+  * Implemented production-grade GitHub Actions CI workflow triggering on `push` to `main` and `t3/**` branches, as well as `pull_request` targeting `main`.
+  * Configured workflow concurrency with `group: ${{ github.workflow }}-${{ github.ref }}` and `cancel-in-progress: true` to prevent redundant runner execution on rapid commits.
+  * Designed modular 4-job architecture with parallel execution and Node matrix:
+    * **Job 1: `lint-and-typecheck`**: Enforces zero ESLint errors across the dashboard (`pnpm --filter dashboard lint`) and validates strict TypeScript compilation (`pnpm --filter dashboard exec tsc -b`).
+    * **Job 2: `build`**: Validates production bundle compilation for both the React/Vite dashboard (`pnpm --filter dashboard build`) and Astro landing site (`pnpm --filter landing build`).
+    * **Job 3: `test`**: Executes full test suite matrix across Node 20.x and Node 22.x LTS with dummy test secrets (`CI=true`, `JWT_SECRET`, `PASSWORD`), verifying dashboard code splitting, backend authentication/rate-limiting, storage security, session revocation, and end-to-end WebSocket terminal & compose refactor suites (`pnpm test`).
+    * **Job 4: `installer-check`**: Validates bash syntax integrity for `setup.sh` (`bash -n setup.sh`), verifies `--help` output, and executes headless `--dry-run` simulation mode to guarantee zero-defect customer onboarding.
+  * Configured hardened dependency caching with `pnpm/action-setup@v4` (v11.5.1) and `actions/setup-node@v4` (`cache: 'pnpm'`), enforcing `--frozen-lockfile` determinism across runners.
 
 ---
 
@@ -432,10 +436,10 @@ flowchart TD
         BK["[x] Volume Backups (Deferred)"]
     end
 
-    subgraph P3["P3: Open-Source Launch"]
+    subgraph P3["P3: Open-Source Launch (Resolved ✅)"]
         RM["[x] Revamped README (Resolved ✅)"]
         ST["[x] setup.sh 1-Liner Polish (Resolved ✅)"]
-        GH["[ ] Community Docs & CI Pipeline"]
+        GH["[x] Community Docs & CI Pipeline (Resolved ✅)"]
         REL["[ ] v1.0.0 Release Tag"]
     end
 
@@ -452,4 +456,4 @@ flowchart TD
    - [x] Server-Side Session Revocation & Token Epoch (Resolved ✅)
    - [x] Dynamic Passcode Management UI & Endpoint (Resolved ✅)
 3. **Phase 3 (P2)**: Implement Auto-Update Engine ([x] Resolved ✅) and cross-device settings persistence ([x] Resolved ✅). (Crash watchdog and volume backups deferred to [`docs/future_roadmap.md`](future_roadmap.md)).
-4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and publish v1.0.0 release.
+4. **Phase 4 (P3)**: Polish `README.md`, installer script, community templates, and GitHub Actions CI/CD pipeline ([x] Resolved ✅), ready for v1.0.0 release.

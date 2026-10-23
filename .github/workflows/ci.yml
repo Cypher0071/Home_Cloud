@@ -1,0 +1,125 @@
+name: CI
+
+'on':
+  push:
+    branches:
+      - main
+      - 't3/*'
+      - 't3/**'
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  JWT_SECRET: "dummy-test-jwt-secret-min-32-chars-long"
+  PASSWORD: "dummy-ci-password-12345678"
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.1
+
+      - name: Setup Node.js (22.x)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint Dashboard (ESLint)
+        run: pnpm --filter dashboard lint
+
+      - name: Typecheck Dashboard (TypeScript)
+        run: pnpm --filter dashboard exec tsc -b
+
+  build:
+    name: Production Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.1
+
+      - name: Setup Node.js (22.x)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Dashboard (Vite + TypeScript)
+        run: pnpm --filter dashboard build
+
+      - name: Build Landing Page (Astro)
+        run: pnpm --filter landing build
+
+  test:
+    name: Test Suite (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.1
+
+      - name: Setup Node.js (${{ matrix.node-version }})
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Test Suites (Dashboard, Agent, E2E)
+        run: pnpm test
+
+  installer-check:
+    name: Host Installer Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make installer executable
+        run: chmod +x setup.sh
+
+      - name: Verify Bash Syntax (setup.sh)
+        run: bash -n setup.sh
+
+      - name: Verify Installer Help (--help)
+        run: ./setup.sh --help
+
+      - name: Verify Installer Dry-Run Simulation (--dry-run)
+        run: ./setup.sh --dry-run
