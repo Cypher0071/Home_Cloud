@@ -1,12 +1,18 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build and production outputs
 dist/
 dist-ssr/
 build/
 out/
+.astro/
+**/.astro/
+**/dist/
 tsconfig.tsbuildinfo
+vite.config.*.timestamp*
+*.timestamp-*
 
 # Debug logs
 logs/
@@ -26,6 +32,11 @@ lerna-debug.log*
 .env.*.local
 *.env
 *.env.local
+*.pem
+*.key
+*.cert
+.cloudflared/
+cookies.txt
 
 # Editor directories and files
 .vscode/
@@ -46,10 +57,13 @@ __pycache__/
 venv/
 .ruff_cache/
 
-# Raw debug dumps and temporary artifacts
+# Raw debug dumps, archives, and temporary artifacts
 *.raw.html
 *.raw.txt
 *.dump
+*.tar.gz
+*.tgz
+*.zip
 
 # OS metadata files
 .DS_Store
@@ -66,16 +80,14 @@ coverage/
 .eslintcache
 .npm/
 
-# AI / LLM coding assistant directories and logs
+# Architecture & LLM tooling artifacts
+.archify/
 .antigravity/
 .gemini/
 .cursor/
 .continue/
 .aider*
 .copilot/
-*.pem
-.cloudflared/
-cookies.txt
 
 # Playwright & Temporary Screenshots
 .playwright-cli/
@@ -84,6 +96,3 @@ cookies.txt
 .agents/*
 !.agents/tests/
 TEST_READY.md
-
-# Astro
-.astro/
