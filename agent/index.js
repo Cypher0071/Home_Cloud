@@ -5,7 +5,7 @@ const http = require("http");
 const ws = require("ws");
 const path = require("path");
 const fs = require("fs");
-const { PORT } = require("./config");
+const { PORT, assertRuntimeSecrets } = require("./config");
 const {
 	startTunnel,
 	stopTunnel,
@@ -14,6 +14,7 @@ const {
 const cookieParser = require("cookie-parser");
 const auth = require("./routes/auth");
 const authMiddleware = require("./middleware/auth");
+const { originGuard, websocketOriginAllowed } = require("./middleware/origin");
 const { handleSystemTerminal, closeAllSessions } = require("./sockets/terminal");
 const { handleContainerExec } = require("./sockets/containerExec");
 
@@ -36,6 +37,10 @@ wss.on("connection", (socket, request) => {
 		socket.close();
 		return;
 	}
+	if (!websocketOriginAllowed(request)) {
+		socket.close(1008, "Origin rejected");
+		return;
+	}
 	if (pathname === "/ws/docker/exec") {
 		handleContainerExec(socket, request);
 	} else if (pathname === "/terminal") {
@@ -56,6 +61,7 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(originGuard);
 
 // Public endpoints (no auth required)
 app.use("/api/auth", auth);
@@ -212,6 +218,7 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 // Non-blocking server startup: HTTP server listens immediately so local LAN (:3000)
 // is accessible instantly on boot, while Cloudflare tunnel runs in background with retry.
 if (require.main === module) {
+	assertRuntimeSecrets();
 	server.listen(PORT, () => {
 		console.log(`Agent is running on port: ${PORT}`);
 		startTunnelWithRetry().catch((err) => {

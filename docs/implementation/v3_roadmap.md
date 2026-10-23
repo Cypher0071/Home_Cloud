@@ -1,5 +1,7 @@
 # Home Cloud — V3 Hardware Deployment & Standalone Server Roadmap
 
+Historical note: a Cloudflare DNS API client and `SIGHUP` reload were **not shipped**. Ingress writes local YAML and restarts `cloudflared`.
+
 This document outlines the architectural enhancements, performance optimizations, and deployment hardening completed and planned for **V3** to transform Home Cloud into a production-ready, standalone personal server running 24/7 on a spare PC.
 
 ---
@@ -54,7 +56,7 @@ This phase focuses on the low-level system engineering and daemonization require
   * Resolved Tunnel recycling race condition in `agent/tunnel.js` by awaiting process exit with a 3000ms `SIGKILL` escalation fallback.
   * Graceful shutdown signal trapping (`SIGTERM`, `SIGINT`) in `agent/index.js` cleanly draining HTTP connections, closing WebSockets, terminating active node-pty terminal sessions (`closeAllSessions()`), and stopping `cloudflared`.
 * [x] **Spare PC Setup Script (`setup.sh`):**
-  * Automated host configuration script preparing the spare PC: checking/installing Node.js 24 LTS and Docker prerequisites, generating secure `.env` secrets with interactive password prompt, configuring permissions, and enabling the systemd daemon.
+  * Automated host configuration script. Node.js `>= 22.13` and Docker must already be installed. pnpm `11.28.8` is installed with corepack. `cloudflared` is optional and downloaded only at a pinned release after sha256 verification. The script writes `.env` and enables the systemd unit as the install user, not root.
 
 ---
 
@@ -68,7 +70,7 @@ This phase focuses on the low-level system engineering and daemonization require
 | **Live Log Streaming & Attachment Download** | ✅ *(SSE stream + `.log` attachment)* | ✅ | ❌ *(Static view)* | ✅ *(Static view)* | ✅ |
 | **Image Management (Layer SSE Pull/Prune)** | ✅ *(Layer-by-layer progress bar)* | ✅ | ❌ | ✅ | ✅ |
 | **Custom Container Creation Modal** | ✅ *(Ports, Envs, Mounts, Restart policy)* | ✅ | ❌ | ✅ | ✅ |
-| **Zero-Downtime Cloudflare Ingress Auto-Wiring** | ✅ *(V2: CNAME API + `SIGHUP` reload)* | ❌ *(Manual proxy)* | ❌ *(Manual proxy)* | ❌ *(Manual proxy)* | ❌ *(Manual proxy)* |
+| **Cloudflare Ingress Autowiring** | ✅ *(writes local ingress YAML and restarts cloudflared; DNS API and `SIGHUP` reload were not shipped)* | ❌ *(Manual proxy)* | ❌ *(Manual proxy)* | ❌ *(Manual proxy)* | ❌ *(Manual proxy)* |
 | **Multi-Container Compose Projects (`docker-compose`)** | ✅ *(V2: Native compose CLI + 2-way sync)* | ✅ | ❌ | ✅ *(Partial)* | ✅ |
 | **Smart Split-Horizon DNS (LAN vs Remote)** | ✅ *(V3: `<2ms` LAN vs Remote fallback)* | ❌ | ❌ | ❌ | ❌ *(Requires custom DNS server)* |
 | **Persistent Sessions ("Resume Session")** | ✅ *(V3: Headless PTY + Replay Buffer)* | ❌ | ❌ | ❌ | ❌ |

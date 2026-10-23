@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -8,13 +9,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const SETUP_SH = path.join(REPO_ROOT, "setup.sh");
+const setupSource = fs.readFileSync(SETUP_SH, "utf8");
+
+const pinnedCloudflaredHashes = [
+	["cloudflared-linux-amd64", "053b80b0a23031a038fdbf3c073f59f82b8f1f152aa67971d7383ffafc0dbab0"],
+	["cloudflared-linux-arm64", "89297ebfb9e8c99c0dc013a1140601453cf3798d8306c5591651f4a3f5210be8"],
+	["cloudflared-linux-arm", "76f35faae119881ddf766b61baa9e27803aea6bea7111ed4170ed1b7a5c8637e"],
+	["cloudflared-linux-386", "7c533230928eae6443d6d87dce16e0af67fa1f60fb56860dca4e09883a8ee394"],
+	["cloudflared-linux-amd64.deb", "297d906a8fef396ec888b51571e783d594bde280f3b44d63e8fa343ef2c4cc4e"],
+	["cloudflared-linux-arm64.deb", "9382c5406c5cb64821114360550b8903c600b20052e9e82359acf343834be2b7"],
+	["cloudflared-linux-arm.deb", "53af737052f3d964956c5fbaca1d1f1ece85b72cdbc8c9b2e55f5961dae4f657"],
+	["cloudflared-linux-386.deb", "eaf686113a233fd03953720b905e2ee974bf15e5909965c14ecef3951cb788f7"],
+	["cloudflared-linux-x86_64.rpm", "de14351f7859728b166e411967ba9440c563c6953a0ca671f6ffb8a24ec6942f"],
+	["cloudflared-linux-aarch64.rpm", "f1f91e23bf38219f59bbb52022214f1c99b0b6e14589f86907f9ba3ced53a281"],
+	["cloudflared-linux-arm.rpm", "5e0b22ffd1e85bc3c7bd189b0bd92ba81b7ce001e8d10cd8c1b22f8f46b3198a"],
+	["cloudflared-linux-386.rpm", "3390a8fa2e1bcb10cfcf87870698841c509fa62d4c6ac8c1e7905c4407535a3e"],
+];
+for (const [asset, digest] of pinnedCloudflaredHashes) {
+	assert.ok(
+		setupSource.includes(`2026.10.3:${asset}) expected="${digest}" ;;`),
+		`setup.sh must pin the published SHA256 for ${asset}`,
+	);
+}
+assert.doesNotMatch(setupSource, /CLOUDFLARED_RELEASE_API|checksums\.txt|\.sha256/);
 
 console.log("--- Running Cloudflare Automated Tunnel Setup Verification Tests ---");
+console.log("  ✔ All supported cloudflared assets have pinned release SHA256 values");
 
 // Helper to create sandbox directory structure
 function createSandbox(testName) {
-	const sandboxDir = path.join(__dirname, "sandbox", testName);
-	fs.rmSync(sandboxDir, { recursive: true, force: true });
+	const sandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), `home-cloud-${testName}-`));
 	const homeDir = path.join(sandboxDir, "home");
 	const binDir = path.join(sandboxDir, "bin");
 	const agentDir = path.join(sandboxDir, "repo", "agent");

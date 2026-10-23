@@ -29,7 +29,7 @@ no interface that draws attention to itself. Confidence through clarity.
 
 - Umbrel and CasaOS: consumer-soft card grids and macOS-imitating aesthetics
 - Generic glassmorphism / blur-heavy SaaS dark dashboards
-- Purple gradient AI-tool aesthetic (the current codebase has this; it must go)
+- Purple gradient AI-tool aesthetic. The dashboard theme is already the neutral theme in `dashboard/src/index.css`; do not bring that look back.
 - macOS traffic-light window controls and dock magnification
 - Any design where you can guess the aesthetic from the category ("dark dashboard = blue")
 

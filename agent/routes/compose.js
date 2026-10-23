@@ -44,6 +44,11 @@ function runCompose(args, cwd) {
 	});
 }
 
+function isNoContainerToStartError(error) {
+	const message = error instanceof Error ? error.message : String(error || "");
+	return /\bno container to start\b/i.test(message) || /\bno container found for project\b/i.test(message);
+}
+
 const COMPOSE_DIR = path.resolve(path.join(os.homedir(), ".home-cloud", "compose"));
 const LEGACY_STACKS_DIR = path.resolve(path.join(os.homedir(), ".home-cloud", "stacks"));
 
@@ -329,14 +334,14 @@ router.post("/:name/start", async (req, res) => {
 	try {
 		if (composePath && fs.existsSync(composePath)) {
 			await runCompose(["start"], projectFolder).catch(async (err) => {
-				if (err.message && err.message.includes("no container to start")) {
+				if (isNoContainerToStartError(err)) {
 					return runCompose(["up", "-d"], projectFolder);
 				}
 				throw err;
 			});
 		} else {
-			await runCompose(["-p", name, "start"]).catch(async (err) => {
-				if (err.message && err.message.includes("no container to start")) {
+				await runCompose(["-p", name, "start"]).catch(async (err) => {
+					if (isNoContainerToStartError(err)) {
 					return runCompose(["-p", name, "up", "-d"]);
 				}
 				throw err;
@@ -456,5 +461,6 @@ router.getComposeFilePath = getComposeFilePath;
 router.COMPOSE_DIR = COMPOSE_DIR;
 router.LEGACY_STACKS_DIR = LEGACY_STACKS_DIR;
 router.runCompose = runCompose;
+router.isNoContainerToStartError = isNoContainerToStartError;
 
 module.exports = router;

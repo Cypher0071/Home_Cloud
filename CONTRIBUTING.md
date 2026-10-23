@@ -29,10 +29,10 @@ Home Cloud follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By participat
 
 Before setting up Home Cloud locally, verify that your development environment satisfies the following requirements:
 
-- **Node.js**: `v20.0.0` or higher (Node 20 LTS or Node 22 LTS recommended).
-- **pnpm**: `v11.0.0` or higher.
-  - The repository specifies package manager requirements in `package.json` under `devEngines` (`pnpm@11.5.1`).
-  - If you use Corepack: `corepack enable && corepack prepare pnpm@latest --activate`.
+- **Node.js**: `>= 22.13`. Node.js 20 is not supported.
+- **pnpm**: `11.28.8`.
+  - This is the pinned version for CI and Corepack. It is not "pnpm >= 9" and not floating `latest`.
+  - If you use Corepack: `corepack enable && corepack prepare pnpm@11.28.8 --activate`.
 - **Docker Engine**: Installed and running daemon.
   - Your user must belong to the `docker` group to interact with the Docker socket without root privileges:
     ```bash
@@ -59,15 +59,15 @@ home_cloud/
 ### 1. `agent/`
 - **Stack**: Node.js, Express 5, Dockerode, `systeminformation`, `node-pty`, `ws` (WebSockets).
 - **Role**: The daemon runs locally with host-level access. It monitors system performance (CPU, memory, storage, temperature), interfaces with the Docker socket for container lifecycle operations, provides secure WebSocket-based interactive terminal sessions, manages drive mounting/storage scopes, and handles Cloudflare Tunnel automation.
-- **Port**: Runs on port `3000` by default (configurable in `agent/.env`).
+- **Port**: Listens on `process.env.PORT` (default `3000`), set in `agent/.env`.
 
 ### 2. `dashboard/`
-- **Stack**: React 19, TypeScript, Vite, Tailwind CSS, Lucide Icons, Xterm.js.
-- **Role**: A responsive desktop-style "Web OS" user interface featuring draggable and resizable windows, real-time telemetry meters, interactive shell terminal, Docker container manager, app store catalog, file explorer, and settings manager.
+- **Stack**: React 19, TypeScript, Vite, CSS modules and `dashboard/src/index.css`, Lucide, xterm.js. No Tailwind.
+- **Role**: A responsive desktop-style workspace: draggable and resizable windows, real-time telemetry, an interactive shell, Docker container management, a file explorer, and settings. There is no app store.
 - **Port**: Serves on port `5173` during development and proxies API calls (`/api`) and WebSocket connections (`/terminal`, `/ws`) to the agent backend.
 
 ### 3. `landing/`
-- **Stack**: Astro 7, Tailwind CSS, Variable Fonts (Geist, JetBrains Mono, Instrument Serif).
+- **Stack**: Astro 7, the project's own CSS, and the fonts Geist, JetBrains Mono, and Instrument Serif. No Tailwind.
 - **Role**: Fast, static marketing and distribution site showcasing Home Cloud features, architecture diagrams, and quickstart installation commands.
 - **Port**: Serves on port `4321` via `pnpm dev:landing`.
 
@@ -78,8 +78,8 @@ home_cloud/
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/Cypher0071/home_cloud.git
-cd home_cloud
+git clone https://github.com/Cypher0071/Home_Cloud
+cd Home_Cloud
 ```
 
 ### 2. Install Workspace Dependencies
@@ -95,6 +95,8 @@ Create a local `.env` file for the agent daemon from the provided template:
 ```bash
 cp agent/.env.example agent/.env
 ```
+
+Copying `agent/.env.example` and starting the agent without changing `PASSWORD` and `JWT_SECRET` will refuse to boot. `PASSWORD` must be at least 8 characters and must not be `change-me`. `JWT_SECRET` must be at least 16 characters and must not be `generate-a-long-random-string`.
 
 Open `agent/.env` and update the required values:
 
@@ -177,7 +179,7 @@ pnpm test
 ### Dashboard (React 19)
 - **Functional Components**: Write pure, functional React components leveraging React 19 hooks (`use`, `useActionState`, `useOptimistic` where appropriate, along with standard hooks).
 - **Modularity**: Break down large views into focused, reusable components with clear prop interfaces.
-- **Styling**: Use utility classes with Tailwind CSS. Follow responsive design patterns and accessibility (a11y) standards including ARIA attributes and keyboard navigation.
+- **Styling**: Use CSS modules and the shared rules in `dashboard/src/index.css`. Do not add Tailwind. The landing site uses its own CSS, not Tailwind. Follow accessibility standards, including ARIA attributes and keyboard navigation.
 
 ### Agent (Express 5 & Node.js)
 - **Route & Middleware Separation**: Keep routes lean by delegating logic to dedicated services (`agent/services/`) and middlewares (`agent/middleware/`).
@@ -188,7 +190,7 @@ pnpm test
 
 ## Commit Message Conventions
 
-We enforce [Conventional Commits](https://www.conventionalcommits.org/) to maintain an informative, automated changelog.
+We use [Conventional Commits](https://www.conventionalcommits.org/). Humans update [CHANGELOG.md](CHANGELOG.md). Nothing in this repository generates that file.
 
 ### Format
 ```text

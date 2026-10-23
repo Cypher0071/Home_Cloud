@@ -10,6 +10,41 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 const sessions = new Map();
 
+const SHELL_ENV_KEYS = [
+	"PATH",
+	"HOME",
+	"USER",
+	"LOGNAME",
+	"SHELL",
+	"TERM",
+	"LANG",
+	"LC_ALL",
+	"XDG_RUNTIME_DIR",
+	"TMPDIR",
+	"TMP",
+	"TEMP",
+];
+
+function shellEnvironment() {
+	const env = {};
+	for (const key of SHELL_ENV_KEYS) {
+		if (process.env[key]) env[key] = process.env[key];
+	}
+	env.LANG = env.LANG || "C.UTF-8";
+	env.LC_ALL = "C.UTF-8";
+	env.TERM = env.TERM || "xterm-256color";
+	env.PROMPT_EOL_MARK = "";
+	for (const key of Object.keys(env)) {
+		if (key.endsWith("_SECRET") || key.endsWith("_TOKEN") || key === "PASSWORD") {
+			delete env[key];
+		}
+	}
+	delete env.PASSWORD;
+	delete env.JWT_SECRET;
+	delete env.GITHUB_TOKEN;
+	return env;
+}
+
 class TerminalBuffer {
 	constructor(maxBytes = BUFFER_BYTES) {
 		this.maxBytes = maxBytes;
@@ -119,12 +154,7 @@ class TerminalSession {
 				cols: this.cols || 100,
 				rows: this.rows || 30,
 				cwd: process.env.HOME || process.cwd(),
-				env: {
-					...process.env,
-					LANG: "C.UTF-8",
-					LC_ALL: "C.UTF-8",
-					PROMPT_EOL_MARK: "",
-				},
+				env: shellEnvironment(),
 			});
 		} catch (err) {
 			console.error(`[Terminal] Failed to spawn PTY for session ${this.id}:`, err);
@@ -398,6 +428,7 @@ function closeAllSessions() {
 
 module.exports = {
 	handleSystemTerminal,
+	shellEnvironment,
 	TerminalBuffer,
 	BUFFER_BYTES,
 	TerminalSession,

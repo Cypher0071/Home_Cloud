@@ -31,7 +31,6 @@ body:
       options:
         - Dashboard Web OS
         - Backend Agent Daemon
-        - Docker App Store
         - Web Terminal
         - File Explorer
         - System Settings

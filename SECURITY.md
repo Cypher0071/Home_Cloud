@@ -25,9 +25,11 @@ We appreciate the responsible, coordinated disclosure of security vulnerabilitie
 > Publicly disclosing an in-the-wild zero-day puts personal server deployments at risk before a fix can be verified and deployed.
 
 ### Disclosure Channels
-Please submit vulnerability reports through one of the following private channels:
-1. **GitHub Private Vulnerability Reporting (Preferred)**: Navigate to the [Security Advisories tab](https://github.com/Cypher0071/Home_Cloud/security/advisories) and select **"Report a vulnerability"** to open a confidential advisory thread directly with the maintainers.
-2. **Direct Security Contact**: If you cannot use GitHub Advisories, contact the project maintainers privately at `security@homecloud.local` or via the maintainer profile contact details with the subject prefix `[SECURITY VULNERABILITY]`.
+The only private channel is a GitHub Security Advisory:
+
+[https://github.com/Cypher0071/Home_Cloud/security/advisories/new](https://github.com/Cypher0071/Home_Cloud/security/advisories/new)
+
+Sign in to GitHub to open a confidential report there. Do not email vulnerability details, and do not use public issues, discussions, or pull requests.
 
 ### Required Information in Reports
 To help us triage and remediate the issue quickly, please include as much of the following details as possible:
@@ -38,9 +40,9 @@ To help us triage and remediate the issue quickly, please include as much of the
 - **Potential Impact**: An assessment of the attack vector, prerequisites, required attacker privileges, and realistic operational impact on the host.
 - **Proposed Remediation**: Any suggested code changes, patch snippets, or workarounds (optional but appreciated).
 
-### Response & Remediation Service Level Commitments (SLAs)
-- **Initial Triage & Acknowledgment**: Within **48 hours** of report receipt, we will acknowledge your disclosure and confirm whether we can reproduce the behavior.
-- **Patch Development & Updates**: We will provide periodic progress reports as a patch is drafted, tested, and reviewed in private.
+### Response & Remediation
+- **Triage & Acknowledgment**: We will review reports received through GitHub Security Advisories and confirm whether we can reproduce the behavior.
+- **Patch Development & Updates**: We will provide updates as a patch is drafted, tested, and reviewed in private.
 - **Coordinated Disclosure Timeline**: We adhere to coordinated vulnerability disclosure. A mutual disclosure date (typically 30 to 90 days, or immediately following release of the patched version) will be agreed upon before releasing public release notes, advisories, or CVE numbers.
 
 ---
@@ -59,7 +61,7 @@ Home Cloud is intentionally designed as a **single-tenant personal cloud operati
 - **Encrypted Outbound Tunneling**: Remote internet access is brokered through **Cloudflare Zero-Trust Named Tunnels (`cloudflared`)**.
   - No public router ports (e.g., 80, 443, 3000) or dynamic DNS forwarding rules are ever required on your residential router.
   - Fully compatible with Carrier-Grade NAT (CGNAT) and strict firewall environments.
-  - External traffic terminates on Cloudflare's edge before traveling over an authenticated, outbound-only WireGuard/QUIC tunnel to the local machine.
+  - External traffic terminates on Cloudflare's edge, then travels to the host over an outbound `cloudflared` connection using QUIC or HTTP/2. This is not WireGuard.
 - **Local LAN Acceleration with Boundary Isolation**: 
   - Clients connected to the local home network can access the dashboard directly via the local IP address for zero-latency file transfers.
   - Both remote and local interfaces enforce the exact same cryptographic authentication and rate-limiting barriers.
@@ -67,7 +69,9 @@ Home Cloud is intentionally designed as a **single-tenant personal cloud operati
 ### C. Storage Scope Boundary & Directory Traversal Defense
 Home Cloud includes a built-in **Storage Scope Engine** that strictly governs filesystem interaction through the API:
 - **Safe Server Mode (Default)**:
-  - Filesystem navigation, file reads, writes, and uploads are strictly restricted to the user's home directory (`$HOME`), standard external storage mounts (`/mnt/*`, `/media/*`, `/srv/*`, `/run/media/*`), and explicitly allowed administrator storage paths.
+  - Safe Server Mode still jails file routes. Navigation, reads, writes, and uploads stay inside the user's home directory (`$HOME`), `/mnt`, `/media`, `/run/media`, `/srv`, and explicitly allowed custom paths.
+  - Wallpaper reads only allow `.png`, `.jpg`, `.jpeg`, `.webp`, and `.gif` under `~/.config/home-cloud`.
+  - File view sends `Content-Disposition: attachment` except for those image types, and sets `X-Content-Type-Options: nosniff`. HTML and SVG are not inline.
   - Operating system configuration and binaries outside allowed boundaries cannot be traversed or modified via storage APIs.
 - **Full System Root Access Mode**:
   - Requires explicit administrator opt-in in settings (`allowSystemRoot: true`) for power users managing entire servers.
@@ -81,15 +85,22 @@ Home Cloud includes a built-in **Storage Scope Engine** that strictly governs fi
 - **Constant-Time Cryptographic Verification**:
   - Passwords are validated using Node.js `crypto.timingSafeEqual`.
   - Input strings are pre-hashed with SHA-256 prior to comparison to normalize buffer lengths to 32 bytes, eliminating variable-length timing leaks and buffer mismatch exceptions.
-- **IP-Based Login Rate Limiting**:
-  - The authentication gateway tracks failed attempts per IP address.
-  - Repeated failed attempts trigger automated lockout windows and exponential backoff to render brute-force credential stuffing ineffective.
-- **Server-Side Session Revocation with Persistent Token Epoch**:
+- **Fixed-window login lockout**:
+  - The limit is not exponential backoff. 5 failures within 60 seconds produce a 5 minute lockout.
+  - The window uses the TCP peer address. `CF-Connecting-IP` is honored only when that peer is loopback (the local `cloudflared`). Clients cannot rotate `X-Forwarded-For` to reset the window.
+- **Server-side session revocation**:
   - Authentication tokens (JWT) embed a `sessionEpoch` identifier.
-  - When a user logs out or an administrator clicks "Revoke All Sessions", the persistent `sessionEpoch` in the configuration is incremented.
-  - Any previously issued JWT containing an outdated epoch is instantly rejected on both REST HTTP endpoints and real-time WebSocket connection upgrades (Terminal & Container Exec).
-- **Secure Cookie & WebSocket Protection**:
-  - Tokens are transmitted via `HttpOnly`, `SameSite=Lax` cookies (with `Secure` flags on HTTPS connections) and validated prior to upgrading WebSocket handshakes.
+  - Logout and "log out everywhere" both increment `sessionEpoch`.
+  - Old JWTs are rejected on HTTP and on WebSocket upgrades (terminal and container exec).
+  - `clearCookie` uses the same `httpOnly`, `sameSite`, `secure`, and `path` flags as login.
+- **Host-only cookie and same-site checks**:
+  - The cookie is `HttpOnly`, `SameSite=Lax`, and host-only (no `Domain` attribute). It is `Secure` on HTTPS.
+  - It is not sent to `grafana.example.com` or other apps.
+  - Sibling hostnames are still the same site, so the agent requires the request `Origin` (or `Referer` if `Origin` is missing) to match the dashboard host on `POST`, `PUT`, `PATCH`, and `DELETE`. WebSocket upgrades require a matching `Origin`.
+  - This does not add a login wall to exposed apps.
+- **Startup secret refusal**:
+  - The agent refuses to listen if `PASSWORD` is missing, shorter than 8 characters, or `change-me`.
+  - The agent refuses to listen if `JWT_SECRET` is missing, shorter than 16 characters, or `generate-a-long-random-string`.
 
 ### E. Privilege & Host Execution Guidelines
 Home Cloud executes host processes, Docker APIs, and shell sessions. Deployments must adhere to the following privilege guidelines:
@@ -108,7 +119,7 @@ Home Cloud executes host processes, Docker APIs, and shell sessions. Deployments
 ## 4. Security Audit Checklist for Operators
 
 When deploying Home Cloud in production or on a home server:
-1. [ ] Set a strong, unique administrative password during initial setup.
+1. [ ] Set a password of at least 8 characters and a JWT secret of at least 16 characters. The agent will not listen if either value is missing, too short, or still a placeholder.
 2. [ ] Keep Cloudflare Zero Trust credentials and credentials files (`~/.cloudflared`) secured with `chmod 600`.
 3. [ ] Keep Safe Server Mode enabled unless you explicitly require root filesystem navigation.
 4. [ ] Regularly update the system using the built-in update manager or `git pull && pnpm install`.

@@ -57,23 +57,8 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
     /* not authenticated or network error */
   }
 
-  // 2. If unauthenticated, fetch public /api/ping to discover local IP/port
-  if (!localIp) {
-    try {
-      const pingRes = await fetch('/api/ping');
-      if (pingRes.ok) {
-        const pingData = await pingRes.json();
-        if (pingData.serverLocalIp) {
-          localIp = pingData.serverLocalIp;
-          localPort = pingData.serverLocalPort || 3000;
-        }
-      }
-    } catch {
-      /* offline or network error */
-    }
-  }
-
-  // 3. Fallback to localStorage if available
+  // 2. Fallback to localStorage if the authenticated network call did not return an address.
+  // Public /api/ping only returns { status: "ok" } and must not be asked for a LAN address.
   if (!localIp) {
     try {
       const storedIp = localStorage.getItem(LOCAL_STORAGE_IP_KEY);

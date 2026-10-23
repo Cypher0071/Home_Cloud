@@ -3,6 +3,3 @@ contact_links:
   - name: GitHub Security Advisories
     url: https://github.com/Cypher0071/Home_Cloud/security/advisories/new
     about: Please report security vulnerabilities privately through GitHub Security Advisories.
-  - name: GitHub Discussions
-    url: https://github.com/Cypher0071/Home_Cloud/discussions
-    about: For community Q&A, general questions, and open-ended discussions.

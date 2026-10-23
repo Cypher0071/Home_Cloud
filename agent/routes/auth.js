@@ -3,6 +3,22 @@ const jwt = require('jsonwebtoken');
 const express = require('express');
 const router = express.Router();
 const { COOKIE_SECURE } = require('../config');
+
+function buildCookieOptions(req) {
+    const forwarded = req.headers && req.headers['x-forwarded-proto'];
+    const proto = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '';
+    const isHttps = Boolean(req.secure || proto === 'https');
+    return {
+        httpOnly: true,
+        secure: isHttps && COOKIE_SECURE,
+        sameSite: 'lax',
+        path: '/',
+    };
+}
+
+function clearAuthCookie(res, req) {
+    res.clearCookie('token', buildCookieOptions(req));
+}
 const preferences = require('../services/preferences');
 const authMiddleware = require('../middleware/auth');
 
@@ -32,16 +48,35 @@ if (cleanupTimer.unref) {
 /**
  * Extracts client IP from reverse proxy headers (Cloudflare, nginx) or direct socket.
  */
+function normalizePeerAddress(address) {
+    if (!address || typeof address !== 'string') return '';
+    return address.replace(/^::ffff:/, '');
+}
+
+function isLoopbackAddress(address) {
+    const normalized = normalizePeerAddress(address);
+    return normalized === '127.0.0.1' || normalized === '::1';
+}
+
 function getClientIp(req) {
-    const cfIp = req.headers['cf-connecting-ip'];
-    if (cfIp && typeof cfIp === 'string') {
-        return cfIp.trim();
+    const peer = req.socket?.remoteAddress || req.ip || '';
+    if (isLoopbackAddress(peer)) {
+        const cfIp = req.headers && req.headers['cf-connecting-ip'];
+        if (typeof cfIp === 'string' && cfIp.trim()) {
+            return cfIp.trim();
+        }
     }
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded && typeof forwarded === 'string') {
-        return forwarded.split(',')[0].trim();
+    return normalizePeerAddress(peer) || 'unknown';
+}
+
+const MAX_TRACKED_IPS = 10000;
+
+function rememberAttempt(ip, record) {
+    if (!loginAttempts.has(ip) && loginAttempts.size >= MAX_TRACKED_IPS) {
+        const oldest = loginAttempts.keys().next().value;
+        if (oldest !== undefined) loginAttempts.delete(oldest);
     }
-    return req.ip || req.socket?.remoteAddress || 'unknown';
+    loginAttempts.set(ip, record);
 }
 
 /**
@@ -93,7 +128,7 @@ function recordFailedLogin(ip) {
 
     if (!record || (now - record.firstAttempt > WINDOW_MS && !record.lockedUntil)) {
         record = { count: 1, firstAttempt: now, lockedUntil: 0 };
-        loginAttempts.set(ip, record);
+        rememberAttempt(ip, record);
     } else {
         record.count += 1;
     }
@@ -141,12 +176,7 @@ router.post('/login', (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
-        const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: isHttps && COOKIE_SECURE,
-            sameSite: 'lax',
-        });
+        res.cookie('token', token, buildCookieOptions(req));
         return res.json({ success: true });
     } else {
         const failStatus = recordFailedLogin(clientIp);
@@ -157,21 +187,23 @@ router.post('/login', (req, res) => {
                 retryAfter: failStatus.retryAfterSeconds,
             });
         }
-        return res.status(401).json({
-            error: 'Invalid password',
-            remainingAttempts: failStatus.remainingAttempts,
-        });
+        return res.status(401).json({ error: 'Invalid password' });
     }
 });
 
-router.post('/logout', (req, res) => {
-    res.clearCookie('token');
-    res.json({ success: true });
+router.post('/logout', authMiddleware, (req, res) => {
+    const newEpoch = preferences.incrementSessionEpoch();
+    clearAuthCookie(res, req);
+    res.json({
+        success: true,
+        message: 'All active sessions revoked',
+        sessionEpoch: newEpoch,
+    });
 });
 
 router.post('/logout-all', authMiddleware, (req, res) => {
     const newEpoch = preferences.incrementSessionEpoch();
-    res.clearCookie('token');
+    clearAuthCookie(res, req);
     res.json({
         success: true,
         message: 'All active sessions revoked',
@@ -200,6 +232,9 @@ router.checkLoginRateLimit = checkLoginRateLimit;
 router.recordFailedLogin = recordFailedLogin;
 router.recordSuccessfulLogin = recordSuccessfulLogin;
 router.getClientIp = getClientIp;
+router.isLoopbackAddress = isLoopbackAddress;
+router.buildCookieOptions = buildCookieOptions;
+router.clearAuthCookie = clearAuthCookie;
 router._resetRateLimiter = () => loginAttempts.clear();
 router._getAttemptsMap = () => loginAttempts;
 

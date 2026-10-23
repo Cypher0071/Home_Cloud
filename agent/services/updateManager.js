@@ -6,6 +6,27 @@ const { EventEmitter } = require("events");
 const REPO = "Cypher0071/Home_Cloud";
 const GITHUB_API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const RELEASE_TAG = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+function assertReleaseTag(tag) {
+	if (typeof tag !== "string" || !RELEASE_TAG.test(tag)) {
+		throw new Error("targetTag must be a semver release tag such as v1.0.1");
+	}
+}
+
+async function assertTagAdvertised(tag) {
+	const res = await runCommand("git", ["ls-remote", "--tags", "origin", `refs/tags/${tag}`]);
+	const needle = `refs/tags/${tag}`;
+	const advertised = String(res.stdout || "")
+		.split("\n")
+		.some((line) => {
+			const ref = line.split("\t")[1] || "";
+			return ref === needle;
+		});
+	if (!advertised) {
+		throw new Error(`Tag ${tag} is not advertised by origin`);
+	}
+}
 
 const rootDir = path.resolve(__dirname, "../..");
 
@@ -393,28 +414,24 @@ async function applyUpdate(onProgress, options = {}) {
 			percent: 30,
 		});
 
-		const targetTag = options.targetTag || cachedReleaseInfo?.tagName;
+		const targetTag = options.targetTag || cachedReleaseInfo?.tagName || "";
+		if (!targetTag) {
+			throw new Error("No release tag to apply. Refusing to update from floating main.");
+		}
+		assertReleaseTag(targetTag);
 
 		await runCommand("git", ["fetch", "--tags", "origin"], {}, (chunk) => {
 			const line = chunk.trim().split("\n").pop();
 			if (line) emit({ stage: "fetch", message: line, percent: 35 });
 		});
+		await assertTagAdvertised(targetTag);
 
-		if (targetTag && targetTag !== "main" && targetTag !== "master") {
-			emit({
-				stage: "fetch",
-				message: `Checking out release tag ${targetTag}...`,
-				percent: 45,
-			});
-			await runCommand("git", ["checkout", targetTag]);
-		} else {
-			emit({
-				stage: "fetch",
-				message: "Pulling latest changes from main branch...",
-				percent: 45,
-			});
-			await runCommand("git", ["pull", "origin", "main"]);
-		}
+		emit({
+			stage: "fetch",
+			message: `Checking out release tag ${targetTag}...`,
+			percent: 45,
+		});
+		await runCommand("git", ["checkout", "--detach", targetTag]);
 
 		// Stage 4: Dependencies
 		emit({
@@ -562,6 +579,7 @@ module.exports = {
 	compareSemver,
 	checkForUpdates,
 	applyUpdate,
+	assertReleaseTag,
 	getUpdateStatus,
 	getLastProgress,
 	isUpdating: () => isUpdating,

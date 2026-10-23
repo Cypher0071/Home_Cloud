@@ -35,6 +35,8 @@ The spare PC is behind home NAT (no public IP). Cloudflare Tunnel solves this by
 
 No inbound ports needed. Your router allows outbound connections so this just works.
 
+Hostnames such as `home-cloud.live` in this file are examples. `CF_DOMAIN` has no default, and the agent does not publish DNS.
+
 ---
 
 ## Architecture
@@ -77,14 +79,16 @@ BROWSER (any device, anywhere)
     ├── File manager tab (upload, download, browse, search)
     ├── Monitoring tab (CPU, RAM, disk - live SSE)
     ├── Docker tab (containers, images, lifecycle controls, logs)
-    ├── App Store tab (one-click install catalog)
-    ├── Remote desktop tab (noVNC - VNC client in browser)
+    ├── App Store tab (one-click install catalog) — not shipped
+    ├── Remote desktop tab (noVNC - VNC client in browser) — not shipped
     └── Installed apps open in NEW TABS at their own subdomain
 ```
 
 ---
 
 ## How App Installation Works
+
+**Not shipped.** There is no app store catalog and no `POST /api/docker/install` flow. The steps below are an old design sketch, not the running agent. Exposing a container writes ingress YAML in `~/.cloudflared/config.yml` and restarts `cloudflared`. The agent does not call the Cloudflare DNS API and does not send `SIGHUP`.
 
 When a user clicks "Install Jellyfin" in the App Store:
 
@@ -218,7 +222,7 @@ The catch-all exists because React Router handles client-side routing. Hard refr
 
 **SSE for metrics, WebSocket for terminal** — Metrics are server-to-client only. SSE is simpler, has built-in reconnection (`retry:`), framing (`\n\n`), and heartbeat (`: comment`) support. WebSocket is bidirectional — mandatory for terminal where keystrokes go up and output comes down.
 
-**Cloudflare ingress rules for app access** — One cloudflared process, one config file, multiple hostname→port mappings. When an app is installed: append ingress rule, create DNS CNAME via Cloudflare API, send SIGHUP to reload. Each app gets its own subdomain. No reverse proxy inside Express needed. No path prefix hacks. Apps run at `/` as they expect.
+**Cloudflare ingress rules for app access** — One cloudflared process, one config file, multiple hostname→port mappings. The shipped expose path appends an ingress rule and restarts `cloudflared`. It does not call the Cloudflare DNS API and it does not send `SIGHUP`. The app-store install flow that used to be described here is not shipped. Each exposed app can still have its own subdomain once DNS (a wildcard CNAME, not an agent API call) points at the tunnel. No reverse proxy inside Express is required. Apps run at `/` as they expect.
 
 **Docker for app lifecycle, Cloudflare for app access** — These are separate concerns handled by separate systems. Docker: install, isolate, start, stop, monitor, remove. Cloudflare: make the app reachable from the internet. The agent orchestrates both.
 

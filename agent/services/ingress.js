@@ -125,7 +125,14 @@ function validateWithCloudflared(filePath) {
  *
  * @param {object} config - Ingress configuration object
  */
+function assertCfDomain() {
+	if (!CF_DOMAIN) {
+		throw new Error("CF_DOMAIN is not set. Ingress autowiring is disabled.");
+	}
+}
+
 function safeWriteYamlConfig(config) {
+	assertCfDomain();
 	// 1. Dump to YAML string
 	const newYaml = yaml.dump(config, { lineWidth: -1 });
 
@@ -229,6 +236,7 @@ function _getIngressRulesInternal() {
 }
 
 function _addIngressRuleInternal(subdomain, localPort) {
+	assertCfDomain();
 	const validSubdomain = validateSubdomain(subdomain);
 	const port = Number(localPort);
 	if (!port || isNaN(port) || port < 1 || port > 65535) {
@@ -272,6 +280,7 @@ function _addIngressRuleInternal(subdomain, localPort) {
 }
 
 function _removeIngressRuleInternal(subdomain) {
+	assertCfDomain();
 	const clean = String(subdomain || "").trim().toLowerCase();
 	if (!clean) throw new Error("Subdomain is required");
 
@@ -294,6 +303,7 @@ function _removeIngressRuleInternal(subdomain) {
 
 function _removeIngressByPortInternal(localPort) {
 	try {
+		if (!CF_DOMAIN) return false;
 		if (!fs.existsSync(CONFIG_PATH)) return false;
 		const file = fs.readFileSync(CONFIG_PATH, "utf8");
 		const config = yaml.load(file);

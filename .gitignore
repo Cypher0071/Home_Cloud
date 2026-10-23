@@ -82,6 +82,7 @@ coverage/
 
 # Architecture & LLM tooling artifacts
 .archify/
+.unlazy/
 .antigravity/
 .gemini/
 .cursor/

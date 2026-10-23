@@ -24,12 +24,14 @@ const DASHBOARD_ROOT = path.join(REPO_ROOT, 'dashboard');
 
 // Paths to targets
 const INDEX_HTML_PATH = path.join(DASHBOARD_ROOT, 'index.html');
+const MAIN_TSX_PATH = path.join(DASHBOARD_ROOT, 'src/main.tsx');
 const TERMINAL_APP_PATH = path.join(DASHBOARD_ROOT, 'src/components/apps/TerminalApp.tsx');
 const TERMINAL_CSS_PATH = path.join(DASHBOARD_ROOT, 'src/components/apps/terminal.module.css');
 const INDEX_CSS_PATH = path.join(DASHBOARD_ROOT, 'src/index.css');
 
 // Load target files
 let indexHtml = '';
+let mainTsx = '';
 let terminalAppTsx = '';
 let terminalCss = '';
 let indexCss = '';
@@ -71,7 +73,9 @@ describe('Home Cloud OS — Web Terminal UI/UX Redesign Test Suite', () => {
     assert.ok(fs.existsSync(TERMINAL_CSS_PATH), `terminal.module.css must exist at ${TERMINAL_CSS_PATH}`);
     assert.ok(fs.existsSync(INDEX_CSS_PATH), `index.css must exist at ${INDEX_CSS_PATH}`);
 
+    assert.ok(fs.existsSync(MAIN_TSX_PATH), `main.tsx must exist at ${MAIN_TSX_PATH}`);
     indexHtml = fs.readFileSync(INDEX_HTML_PATH, 'utf-8');
+    mainTsx = fs.readFileSync(MAIN_TSX_PATH, 'utf-8');
     terminalAppTsx = fs.readFileSync(TERMINAL_APP_PATH, 'utf-8');
     terminalCss = fs.readFileSync(TERMINAL_CSS_PATH, 'utf-8');
     indexCss = fs.readFileSync(INDEX_CSS_PATH, 'utf-8');
@@ -149,26 +153,31 @@ describe('Home Cloud OS — Web Terminal UI/UX Redesign Test Suite', () => {
       });
     });
 
-    // Feature 3: JetBrains Mono Font Import in index.html
+    // Feature 3: Inter and JetBrains Mono are bundled. index.html must not call Google.
     describe('F3: JetBrains Mono Font Import', () => {
-      it('T1.11: Google Fonts preconnect origins are defined in index.html', () => {
-        assert.match(indexHtml, /<link\s+rel="preconnect"\s+href="https:\/\/fonts\.googleapis\.com">/);
+      it('T1.11: index.html does not preconnect to fonts.googleapis.com', () => {
+        assert.equal(indexHtml.includes('fonts.googleapis.com'), false);
       });
 
-      it('T1.12: Google Fonts gstatic preconnect with crossorigin attribute present in index.html', () => {
-        assert.match(indexHtml, /<link\s+rel="preconnect"\s+href="https:\/\/fonts\.gstatic\.com"\s+crossorigin>/);
+      it('T1.12: index.html does not preconnect to fonts.gstatic.com', () => {
+        assert.equal(indexHtml.includes('fonts.gstatic.com'), false);
       });
 
-      it('T1.13: JetBrains Mono family is explicitly requested in Google Fonts stylesheet link', () => {
-        assert.match(indexHtml, /family=JetBrains\+Mono/);
+      it('T1.13: JetBrains Mono is imported from @fontsource in main.tsx', () => {
+        assert.match(mainTsx, /@fontsource\/jetbrains-mono\/400\.css/);
+        assert.match(mainTsx, /@fontsource\/jetbrains-mono\/700\.css/);
       });
 
-      it('T1.14: JetBrains Mono font weights include 400, 500, 600, 700', () => {
-        assert.match(indexHtml, /family=JetBrains\+Mono:wght@.*400.*500.*600.*700/);
+      it('T1.14: JetBrains Mono weights 400, 500, 600, and 700 are bundled', () => {
+        for (const weight of ['400', '500', '600', '700']) {
+          assert.match(mainTsx, new RegExp(`@fontsource/jetbrains-mono/${weight}\\.css`));
+        }
       });
 
-      it('T1.15: Inter font family import remains intact alongside JetBrains Mono', () => {
-        assert.match(indexHtml, /family=Inter/);
+      it('T1.15: Inter weights 300 through 700 are bundled beside JetBrains Mono', () => {
+        for (const weight of ['300', '400', '500', '600', '700']) {
+          assert.match(mainTsx, new RegExp(`@fontsource/inter/${weight}\\.css`));
+        }
       });
     });
 
@@ -401,7 +410,7 @@ describe('Home Cloud OS — Web Terminal UI/UX Redesign Test Suite', () => {
       });
     });
 
-    // F3 Boundary: Google Fonts Fallbacks & Resource Loading Boundaries
+    // F3 Boundary: bundled fonts stay local and the HTML shell stays free of remote font hosts.
     describe('F3-B: Font Loading Resilience & Link Boundaries', () => {
       it('T2.11: Offline font fallback chain includes Menlo, Monaco, Courier New, monospace', () => {
         assert.match(terminalAppTsx, /Menlo/);
@@ -410,25 +419,25 @@ describe('Home Cloud OS — Web Terminal UI/UX Redesign Test Suite', () => {
         assert.match(terminalAppTsx, /monospace/);
       });
 
-      it('T2.12: Google Fonts link uses display=swap parameter to prevent FOIT (flash of invisible text)', () => {
-        assert.match(indexHtml, /display=swap/);
+      it('T2.12: Font CSS is imported from local @fontsource packages, not a remote stylesheet', () => {
+        assert.match(mainTsx, /@fontsource\/inter\/400\.css/);
+        assert.match(mainTsx, /@fontsource\/jetbrains-mono\/400\.css/);
+        assert.equal(indexHtml.includes('fonts.googleapis.com'), false);
       });
 
-      it('T2.13: Google Fonts preconnect tags precede the stylesheet link in <head>', () => {
-        const preconnectIndex = indexHtml.indexOf('rel="preconnect"');
-        const stylesheetIndex = indexHtml.indexOf('fonts.googleapis.com/css2');
-        assert.ok(preconnectIndex !== -1 && stylesheetIndex !== -1, 'Both preconnect and stylesheet link must exist');
-        assert.ok(preconnectIndex < stylesheetIndex, 'Preconnect must appear before stylesheet link');
+      it('T2.13: index.html has no remote font preconnect', () => {
+        assert.equal(indexHtml.includes('rel="preconnect"'), false);
+        assert.equal(indexHtml.includes('fonts.gstatic.com'), false);
       });
 
-      it('T2.14: Document charset is UTF-8 declared before font links', () => {
+      it('T2.14: Document charset is UTF-8 and no remote font host is declared', () => {
         const charsetIndex = indexHtml.indexOf('<meta charset="UTF-8"');
-        const fontLinkIndex = indexHtml.indexOf('fonts.googleapis.com');
-        assert.ok(charsetIndex < fontLinkIndex, 'Charset must be defined prior to remote font links');
+        assert.ok(charsetIndex !== -1, 'Charset must be declared');
+        assert.equal(indexHtml.includes('fonts.googleapis.com'), false);
       });
 
-      it('T2.15: Google Fonts link retains valid HTML syntax without unescaped characters', () => {
-        assert.match(indexHtml, /<link\s+href="https:\/\/fonts\.googleapis\.com\/css2\?[^"]+"\s+rel="stylesheet">/);
+      it('T2.15: index.html does not contain a Google Fonts stylesheet link', () => {
+        assert.equal(/fonts\.googleapis\.com/.test(indexHtml), false);
       });
     });
 
@@ -566,7 +575,7 @@ describe('Home Cloud OS — Web Terminal UI/UX Redesign Test Suite', () => {
 
   describe('Tier 3: Cross-Feature Integration Combinations (8 tests)', () => {
     it('T3.1: (F3 + F4 + F7) Font loading + xterm fit interaction ensures refit when JetBrains Mono is ready', () => {
-      assert.match(indexHtml, /JetBrains\+Mono/);
+      assert.match(mainTsx, /@fontsource\/jetbrains-mono\/400\.css/);
       assert.match(terminalAppTsx, /'JetBrains Mono'/);
       assert.match(terminalAppTsx, /document\.fonts\.ready\.then\(\(\)\s*=>\s*\{[\s\S]*?syncDimensions\(\);/);
       assert.match(terminalAppTsx, /syncDimensions\s*=\s*useCallback\(\(\)\s*=>\s*\{[\s\S]*?fitAddonRef\.current\.fit\(\);/);

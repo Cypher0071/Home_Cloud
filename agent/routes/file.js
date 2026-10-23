@@ -46,7 +46,13 @@ const storage = multer.diskStorage({
 	},
 });
 
-const upload = multer({ storage });
+const upload = multer({
+	storage,
+	limits: {
+		fileSize: 2 * 1024 * 1024 * 1024,
+		files: 20,
+	},
+});
 
 router.get("/", async (req, res) => {
 	const requestedPath = resolvePath(req.query.path);
@@ -249,15 +255,22 @@ router.get("/drives", async (req, res) => {
 	}
 });
 
-router.get("/view", async (req, res) => {
+router.get("/view", (req, res) => {
 	const requestedPath = resolvePath(req.query.path);
 	if (!isInsideBase(requestedPath)) {
 		return res.status(403).json({ error: "Access denied" });
 	}
 	const mimeType = mime.lookup(requestedPath) || "application/octet-stream";
-	res.setHeader("Content-Disposition", "inline");
-	res.setHeader("Content-Type", mimeType);
-	res.sendFile(requestedPath);
+	const inlineImages = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+	const inline = inlineImages.has(mimeType);
+	res.setHeader("X-Content-Type-Options", "nosniff");
+	res.setHeader("Content-Disposition", inline ? "inline" : "attachment");
+	res.setHeader("Content-Type", inline ? mimeType : "application/octet-stream");
+	res.sendFile(requestedPath, { dotfiles: "allow" }, (err) => {
+		if (!err || res.headersSent) return;
+		const status = err.statusCode === 404 || err.status === 404 ? 404 : 500;
+		res.status(status).json({ error: status === 404 ? "File not found" : "Failed to serve file" });
+	});
 });
 
 router.post("/copy", async (req, res) => {
