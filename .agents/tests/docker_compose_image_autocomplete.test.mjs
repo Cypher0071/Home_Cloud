@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 
-const WORKSPACE_ROOT = '/home/rudra-unix/orca/workspaces/home_cloud/siren';
+import { fileURLToPath } from 'node:url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const WORKSPACE_ROOT = path.resolve(__dirname, '../..');
 const DOCKER_APP_PATH = path.join(WORKSPACE_ROOT, 'dashboard/src/components/apps/DockerApp.tsx');
 const DOCKER_CSS_PATH = path.join(WORKSPACE_ROOT, 'dashboard/src/components/apps/docker.module.css');
 

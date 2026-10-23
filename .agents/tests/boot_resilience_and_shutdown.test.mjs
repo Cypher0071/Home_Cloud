@@ -7,7 +7,10 @@ import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 
 const require = createRequire(import.meta.url);
-const WORKSPACE_ROOT = "/home/rudra-unix/orca/workspaces/home_cloud/siren";
+import { fileURLToPath } from "node:url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const WORKSPACE_ROOT = path.resolve(__dirname, "../..");
 
 const tunnelModule = require(path.join(WORKSPACE_ROOT, "agent/tunnel.js"));
 const terminalModule = require(path.join(WORKSPACE_ROOT, "agent/sockets/terminal.js"));

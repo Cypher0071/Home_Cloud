@@ -6,7 +6,10 @@ import os from 'node:os';
 import http from 'node:http';
 import { createRequire } from 'node:module';
 
-const WORKSPACE_ROOT = '/home/rudra-unix/orca/workspaces/home_cloud/siren';
+import { fileURLToPath } from 'node:url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const WORKSPACE_ROOT = path.resolve(__dirname, '../..');
 const agentRequire = createRequire(path.join(WORKSPACE_ROOT, 'agent/index.js'));
 const express = agentRequire('express');
 const composeRouter = agentRequire('./routes/compose.js');
