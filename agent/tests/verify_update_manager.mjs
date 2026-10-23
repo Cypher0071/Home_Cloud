@@ -1,7 +1,19 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import express from "express";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { createRequire } from "node:module";
+
+// Isolate test environment
+const testTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "home-cloud-update-test-"));
+process.env.HOME = testTmpDir;
+process.env.XDG_CONFIG_HOME = path.join(testTmpDir, ".config");
+process.env.HOME_CLOUD_CONFIG_DIR = path.join(testTmpDir, ".config", "home-cloud");
+process.env.AGENT_ENV_FILE = path.join(testTmpDir, ".env");
+process.env.CF_CONFIG = path.join(testTmpDir, ".cloudflared", "config.yml");
+process.env.BASE_DIR = testTmpDir;
 
 const require = createRequire(import.meta.url);
 const updateManager = require("../services/updateManager.js");
@@ -39,7 +51,7 @@ console.log("\n[Test Suite 2] Version & Commit Detection");
 
 const currentVersion = updateManager.getCurrentVersion();
 assert.ok(typeof currentVersion === "string" && currentVersion.length > 0, "Current version must be a non-empty string");
-assert.equal(currentVersion, "1.0.0", "Root package.json version is 1.0.0");
+assert.equal(currentVersion, "1.0.1", "Root package.json version is 1.0.1");
 
 const currentCommit = updateManager.getCurrentCommit();
 assert.ok(typeof currentCommit === "string" && currentCommit.length > 0, "Current commit must be detected");
@@ -71,7 +83,7 @@ updateManager._setMockFetch(async () => {
 // 3a. Initial check should call fetch and find update
 const check1 = await updateManager.checkForUpdates();
 assert.equal(fetchCallCount, 1, "Fetch should be called once on first check");
-assert.equal(check1.updateAvailable, true, "1.2.0 should trigger updateAvailable: true against 1.0.0");
+assert.equal(check1.updateAvailable, true, "1.2.0 should trigger updateAvailable: true against the installed version");
 assert.equal(check1.latestVersion, "1.2.0", "Version tag 'v' should be stripped");
 assert.equal(check1.tagName, "v1.2.0");
 assert.equal(check1.releaseNotes, mockResponseData.body);
@@ -135,7 +147,7 @@ assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
 assert.equal(status.latestVersion, "1.0.5");
 assert.equal(status.tagName, "v1.0.5");
-assert.equal(status.currentVersion, "1.0.0");
+assert.equal(status.currentVersion, "1.0.1");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
 
@@ -160,6 +172,9 @@ const progressEvents = [];
 
 updateManager._setMockRunCommand(async (cmd, args) => {
 	executedCommands.push(`${cmd} ${args.join(" ")}`);
+	if (cmd === "git" && args[0] === "ls-remote") {
+		return { stdout: `deadbeef\t${args[args.length - 1]}\n`, stderr: "" };
+	}
 	if (cmd === "git" && args[0] === "status") {
 		return { stdout: "", stderr: "" };
 	}
@@ -190,7 +205,8 @@ assert.ok(stages.includes("restart"), "Should pass restart stage");
 
 // Verify commands invoked
 assert.ok(executedCommands.some((c) => c.includes("git fetch --tags origin")));
-assert.ok(executedCommands.some((c) => c.includes("git checkout v1.1.0")));
+assert.ok(executedCommands.some((c) => c.includes("git ls-remote --tags origin refs/tags/v1.1.0")));
+assert.ok(executedCommands.some((c) => c.includes("git checkout --detach v1.1.0")));
 assert.ok(executedCommands.some((c) => c.includes("pnpm install --frozen-lockfile")));
 assert.ok(executedCommands.some((c) => c.includes("pnpm --filter dashboard build")));
 console.log("  ✔ Pipeline successfully progresses through preflight, fetch, install, build, and restart");
@@ -202,6 +218,9 @@ const rollbackCommands = [];
 
 updateManager._setMockRunCommand(async (cmd, args) => {
 	rollbackCommands.push(`${cmd} ${args.join(" ")}`);
+	if (cmd === "git" && args[0] === "ls-remote") {
+		return { stdout: `deadbeef\t${args[args.length - 1]}\n`, stderr: "" };
+	}
 	if (cmd === "git" && args[0] === "status") return { stdout: "", stderr: "" };
 	if (cmd === "git" && args[0] === "rev-parse" && args[1] === "HEAD") {
 		return { stdout: "safe-rollback-sha-9999\n", stderr: "" };
@@ -241,7 +260,7 @@ app.use(express.json());
 app.use("/api/settings", settingsRouter);
 
 const server = http.createServer(app);
-await new Promise((resolve) => server.listen(0, resolve));
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const { port } = server.address();
 const baseUrl = `http://127.0.0.1:${port}/api/settings`;
 
@@ -252,7 +271,7 @@ try {
 	assert.equal(resStatus.status, 200);
 	const dataStatus = await resStatus.json();
 	assert.equal(dataStatus.status, "ok");
-	assert.equal(dataStatus.currentVersion, "1.0.0");
+	assert.equal(dataStatus.currentVersion, "1.0.1");
 	assert.equal(dataStatus.isUpdating, false);
 	console.log("  ✔ GET /api/settings/update/status returns 200 with status payload");
 
@@ -281,6 +300,9 @@ try {
 	updateManager._resetForTesting();
 	// Mock runCommand to be fast
 	updateManager._setMockRunCommand(async (cmd, args) => {
+		if (cmd === "git" && args[0] === "ls-remote") {
+			return { stdout: `deadbeef\t${args[args.length - 1]}\n`, stderr: "" };
+		}
 		if (cmd === "git" && args[0] === "status") return { stdout: "", stderr: "" };
 		if (cmd === "git" && args[0] === "rev-parse") return { stdout: "test-commit\n", stderr: "" };
 		return { stdout: "ok", stderr: "" };
@@ -343,6 +365,9 @@ try {
 	console.log("  ✔ GET /api/settings/update/progress streams SSE events properly");
 } finally {
 	await new Promise((resolve) => server.close(resolve));
+	try {
+		fs.rmSync(testTmpDir, { recursive: true, force: true });
+	} catch (_) {}
 }
 
 console.log("\n🎉 All Auto-Update Engine Verification Tests Passed Successfully!");

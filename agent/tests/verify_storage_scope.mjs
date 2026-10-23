@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 
+const testTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "home-cloud-scope-test-"));
+process.env.HOME = testTmpDir;
+process.env.HOME_CLOUD_CONFIG_DIR = path.join(testTmpDir, ".config", "home-cloud");
+process.env.AGENT_ENV_FILE = path.join(testTmpDir, ".env");
+process.env.CF_CONFIG = path.join(testTmpDir, ".cloudflared", "config.yml");
+process.env.BASE_DIR = testTmpDir;
+
 const require = createRequire(import.meta.url);
+const express = require("express");
 const preferences = require("../services/preferences.js");
 const paths = require("../paths.js");
 const settingsRouter = require("../routes/settings.js");
@@ -30,7 +39,8 @@ console.log("  ✔ Virtual filesystem paths (/proc, /sys, /dev) correctly blocke
 // 2. Test Safe Server Mode (allowSystemRoot = false)
 console.log("\n[Test 2] Safe Server Mode Scoping (allowSystemRoot = false)");
 preferences._resetForTesting({ allowSystemRoot: false, customStoragePaths: [] });
-const homeDir = os.homedir();
+const homeDir = testTmpDir;
+assert.equal(paths.BASE_DIR, testTmpDir, "Test storage root must use the isolated temporary directory");
 assert.equal(paths.isInsideAllowedScope(homeDir), true, "Home dir must be allowed");
 assert.equal(paths.isInsideAllowedScope(path.join(homeDir, "documents")), true, "Subpath in home must be allowed");
 assert.equal(paths.isInsideAllowedScope("/mnt/storage"), true, "Mounted drive (/mnt/*) must be allowed");
@@ -96,6 +106,93 @@ assert.equal(storageGetPayload.baseDir, paths.BASE_DIR);
 assert.equal(typeof storageGetPayload.allowSystemRoot, "boolean");
 console.log("  ✔ GET /api/settings/storage returned expected schema");
 
+// 6. Test GET /api/files/view active content prevention (P1-2)
+console.log("\n[Test 6] File View Active Content Prevention (P1-2)");
+const viewLayer = filesRouter.stack.find(
+	(l) => l.route && l.route.path === "/view" && l.route.methods.get,
+);
+assert.ok(viewLayer, "GET /view route must be registered");
+
+const testHtml = path.join(homeDir, "test.html");
+const testSvg = path.join(homeDir, "test.svg");
+const testPng = path.join(homeDir, "test.png");
+const hiddenDir = path.join(testTmpDir, ".hidden");
+const hiddenHtml = path.join(hiddenDir, "test-hidden.html");
+fs.mkdirSync(hiddenDir, { recursive: true });
+fs.writeFileSync(testHtml, "<html><script>alert(1)</script></html>", "utf8");
+fs.writeFileSync(testSvg, "<svg><script>alert(1)</script></svg>", "utf8");
+fs.writeFileSync(testPng, "fake-png-bytes", "utf8");
+fs.writeFileSync(hiddenHtml, "<html>hidden fixture</html>", "utf8");
+
+try {
+	function callViewRoute(filePath) {
+		const headers = {};
+		let sentFile = null;
+		let sentFileOptions = null;
+		const req = { query: { path: filePath } };
+		const res = {
+			setHeader(k, v) { headers[k.toLowerCase()] = v; },
+			sendFile(p, options) { sentFile = p; sentFileOptions = options; },
+			status(s) { this.statusCode = s; return this; },
+			json(d) { this.body = d; },
+		};
+		viewLayer.route.stack[0].handle(req, res);
+		return { headers, sentFile, sentFileOptions };
+	}
+
+	const htmlRes = callViewRoute(testHtml);
+	assert.equal(htmlRes.headers["content-disposition"], "attachment", "HTML must be served as attachment");
+	assert.equal(htmlRes.headers["content-type"], "application/octet-stream", "HTML must not be served as text/html");
+	assert.equal(htmlRes.headers["x-content-type-options"], "nosniff");
+	assert.equal(htmlRes.sentFileOptions.dotfiles, "allow", "the validated in-scope path may contain hidden directories");
+
+	const svgRes = callViewRoute(testSvg);
+	assert.equal(svgRes.headers["content-disposition"], "attachment", "SVG must be served as attachment");
+	assert.equal(svgRes.headers["content-type"], "application/octet-stream", "SVG must not be served as image/svg+xml");
+	assert.equal(svgRes.headers["x-content-type-options"], "nosniff");
+
+	const pngRes = callViewRoute(testPng);
+	assert.equal(pngRes.headers["content-disposition"], "inline", "PNG images may be served inline");
+	assert.equal(pngRes.headers["content-type"], "image/png");
+	assert.equal(pngRes.headers["x-content-type-options"], "nosniff");
+
+	const testApp = express();
+	testApp.use("/api/files", filesRouter);
+	const testServer = http.createServer(testApp);
+	await new Promise((resolve) => testServer.listen(0, "127.0.0.1", resolve));
+	try {
+		const baseUrl = `http://127.0.0.1:${testServer.address().port}/api/files/view?path=`;
+		for (const [filePath, disposition, contentType] of [
+			[testHtml, "attachment", "application/octet-stream"],
+			[testSvg, "attachment", "application/octet-stream"],
+			[testPng, "inline", "image/png"],
+			[hiddenHtml, "attachment", "application/octet-stream"],
+		]) {
+			const response = await fetch(`${baseUrl}${encodeURIComponent(filePath)}`);
+			assert.equal(response.status, 200);
+			assert.equal(response.headers.get("content-disposition"), disposition);
+			assert.equal(response.headers.get("content-type")?.split(";")[0], contentType);
+			assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+		}
+		const missingResponse = await fetch(`${baseUrl}${encodeURIComponent(path.join(homeDir, "missing.html"))}`);
+		assert.equal(missingResponse.status, 404, "missing files must return an HTTP error, not an unhandled rejection");
+		assert.deepEqual(await missingResponse.json(), { error: "File not found" });
+	} finally {
+		await new Promise((resolve) => testServer.close(resolve));
+	}
+
+	console.log("  ✔ HTTP file-view responses safely serve active content and return 404 for missing files");
+} finally {
+	try { fs.unlinkSync(testHtml); } catch (_) {}
+	try { fs.unlinkSync(testSvg); } catch (_) {}
+	try { fs.unlinkSync(testPng); } catch (_) {}
+	try { fs.unlinkSync(hiddenHtml); } catch (_) {}
+	try { fs.rmdirSync(hiddenDir); } catch (_) {}
+}
+
 // Reset preferences to default safe server mode
 preferences.updatePreferences({ allowSystemRoot: false, customStoragePaths: [] });
+try {
+	fs.rmSync(testTmpDir, { recursive: true, force: true });
+} catch (_) {}
 console.log("\n✅ All Storage Scope & System Root Access backend tests passed successfully!\n");

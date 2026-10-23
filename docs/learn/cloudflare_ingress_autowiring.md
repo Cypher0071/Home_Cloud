@@ -4,17 +4,18 @@
 > Prerequisite: Read `cloudflare_tunnels.md` first for the theory (SIGHUP, ingress rules, config.yml structure).
 > This doc covers only the **new implementation concepts** you need to write the code.
 
+> **Shipped behavior:** the agent does not call the Cloudflare DNS API. It writes ingress YAML to `~/.cloudflared/config.yml` and restarts `cloudflared`. If `CF_DOMAIN` is unset, it does not write that file. The installer publishes DNS only for `dash.$DOMAIN`; other names need a wildcard CNAME. The REST API and `SIGHUP` steps below are learning notes, not the running agent.
+
 ---
 
 ## What Phase 1 actually does (one sentence)
 
-When a user clicks "Expose" on a container, the backend:
+When a user clicks "Expose" on a container, the running backend:
 1. Finds which host port that container is listening on
 2. Appends a new ingress rule to `~/.cloudflared/config.yml`
-3. Creates a DNS CNAME record on Cloudflare via their REST API
-4. Sends `SIGHUP` to the running `cloudflared` process so it reloads — no downtime
+3. Restarts `cloudflared` so it reads the new YAML
 
-Four distinct steps. Four new concepts.
+It does **not** call the Cloudflare DNS API, and it does **not** send `SIGHUP`. The notes below still explain those ideas so the learning path stays intact. They are not what `agent/services/ingress.js` does.
 
 ---
 
@@ -95,7 +96,9 @@ function removeIngressRule(hostname) {
 
 ## New Concept 2: The Cloudflare REST API
 
-Cloudflare has a public REST API for managing everything in your account — DNS records, zones, tunnels, etc. You call it from the backend using regular HTTP requests (just like how your Docker routes call the Docker socket over HTTP with Dockerode).
+**Not called by the agent.** The running expose path does not create or delete DNS records. It only writes ingress YAML. DNS for `dash.$DOMAIN` is published by the installer; every other name needs a wildcard CNAME (or a record you create yourself). The sample below is a learning note.
+
+Cloudflare has a public REST API for managing everything in your account — DNS records, zones, tunnels, etc. The sample calls it with ordinary HTTP requests.
 
 ### What you need from the user (stored as environment variables)
 
@@ -257,13 +260,15 @@ router.post('/containers/:id/expose', requireAuth, async (req, res) => {
     // 2. Edit config.yml (throws if rule already exists)
     addIngressRule(hostname, hostPort);
 
-    // 3. Create DNS record on Cloudflare
+    // 3. Learning-note only — the shipped agent does not call the DNS API.
+    //    It writes ingress YAML (step 2) and restarts cloudflared.
     const dnsRecordId = await createDnsRecord(subdomain);
 
     // 4. Store the mapping (so we can delete it later)
     saveExposedMapping({ containerId: id, subdomain, hostname, hostPort, dnsRecordId });
 
-    // 5. Send SIGHUP to cloudflared — zero downtime reload
+    // 5. Learning-note only — the shipped agent restarts cloudflared.
+    //    It does not send SIGHUP.
     reloadCloudflared();
 
     res.json({ success: true, url: `https://${hostname}` });
@@ -347,7 +352,7 @@ Phase 1 has more failure modes than most features. Plan for all of these:
 | `config.yml parse error` | Manually edited file is broken | Catch `yaml.load` throw, abort |
 | `SIGHUP fails` | cloudflared crashed after config write | Log warning — config is already written, tunnel will pick it up on next start |
 
-The key principle: **do the cheap/safe operations first**. Check the container has ports → validate subdomain → edit config.yml → call Cloudflare API → send SIGHUP. If the Cloudflare API call fails, roll back the config.yml edit.
+The learning-note order was: check the container has ports → validate subdomain → edit config.yml → call the Cloudflare API → send `SIGHUP`. **The shipped agent stops after the YAML edit and restarts `cloudflared`.** It does not call the DNS API, so there is no API failure to roll back.
 
 ---
 
@@ -363,9 +368,11 @@ The key principle: **do the cheap/safe operations first**. Check the container h
 
 ## What is genuinely new (summary)
 
-1. **`js-yaml` for safe config.yml editing** — parse → mutate JS object → write back. The catch-all rule insertion order is critical.
-2. **Cloudflare REST API** — authenticated `fetch` calls to create/delete DNS CNAME records. Requires `CF_API_TOKEN`, `CF_ZONE_ID`, `CF_TUNNEL_ID` in `.env`.
-3. **`pgrep` + `process.kill(pid, 'SIGHUP')`** — finding the cloudflared daemon PID and signaling it to reload without restart.
+Only the YAML edit is shipped. The agent does not call the DNS API and does not send `SIGHUP`.
+
+1. **`js-yaml` for safe config.yml editing** — parse → mutate JS object → write back. The catch-all rule insertion order is critical. This is what the agent does.
+2. **Cloudflare REST API (learning note, not shipped)** — authenticated `fetch` calls to create/delete DNS CNAME records. The agent does not do this.
+3. **`pgrep` + `process.kill(pid, 'SIGHUP')` (learning note, not shipped)** — the agent restarts `cloudflared` instead of sending `SIGHUP`.
 4. **Flat JSON file for state persistence** — storing the exposed mappings (subdomain → container → DNS record ID) so they can be reversed.
 
 ---

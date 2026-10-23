@@ -82,10 +82,10 @@ flowchart TB
     subgraph AGENT["Node.js Agent  ·  Express v5 + ws  ·  :3000  ·  CommonJS"]
       HTTP["http.createServer(app)"]
       WSS["ws.WebSocketServer({ server })<br/>same port, upgrade event"]
-      PIPE["1. express.json + cookie-parser<br/>2. /api/auth, /api/health, /api/network  PUBLIC<br/>3. /api/*      JWT middleware (/api/auth/me)<br/>4. metrics · files · compose · docker<br/>5. express.static ../dashboard/dist<br/>6. GET /{*path} → index.html"]
+      PIPE["1. express.json + cookie-parser<br/>2. /api/health, /api/ping public<br/>3. /api/auth/login open; /api/auth/me checks the cookie<br/>4. /api/* JWT middleware, including /api/network/info<br/>5. metrics · files · compose · docker<br/>6. express.static ../dashboard/dist<br/>7. GET /{*path} → index.html"]
       AUTH["routes/auth.js + middleware/auth.js<br/>jwt.sign 7d  ·  httpOnly + secure cookie"]
       MET["routes/metrics.js<br/>SSE every 2s + :heartbeat 15s"]
-      FILES["routes/file.js<br/>BASE_DIR=$HOME"]
+      FILES["routes/file.js<br/>$HOME, /mnt, /media,<br/>/run/media, /srv, custom paths<br/>/proc /sys /dev blocked"]
       DOCK["routes/docker.js<br/>dockerode → Docker Engine"]
       CMP["routes/compose.js<br/>~/.home-cloud/compose/&lt;name&gt; (legacy stacks aliased)"]
       NETR["routes/network.js<br/>os.networkInterfaces() LAN IP"]
@@ -254,10 +254,11 @@ flowchart TB
 
   EXP --> JSON["express.json"]
   JSON --> CK["cookie-parser"]
-  CK --> R1["/api/auth/*   PUBLIC"]
-  CK --> HL["GET /api/health   PUBLIC (PNA + CORS)"]
-  CK --> NET["/api/network   PUBLIC (LAN IP)"]
-  CK --> MW["/api/*   authMiddleware"]
+  CK --> OG["originGuard"]
+  OG --> R1["/api/auth/*   PUBLIC"]
+  OG --> HL["GET /api/ping + /api/health   PUBLIC (PNA + CORS)"]
+  OG --> MW["/api/*   authMiddleware"]
+  MW --> NET["/api/network/info   AUTHENTICATED (LAN IP)"]
   MW --> R2["/api/metrics"]
   MW --> R3["/api/files"]
   MW --> R4["/api/docker/compose   mounted first (with /stacks alias)"]
@@ -267,8 +268,8 @@ flowchart TB
 
   class IN,UPG in
   class WSS,EXEC,HOST ws
-  class R1,HL,NET pub
-  class MW,R2,R3,R4,R5 prot
+  class R1,HL pub
+  class MW,NET,R2,R3,R4,R5 prot
   class ST,SPA spa
 ```
 
@@ -276,13 +277,13 @@ Mount order is load-bearing:
 
 | Order | Mount | Why it is there |
 |------:|-------|-----------------|
-| 1 | `express.json` + `cookie-parser` | Body + `req.cookies.token` |
-| 2 | `/api/auth` | Login/logout/me verification (`/me` validates session cookie) |
-| 3 | `GET /api/health` | Public liveness probe with CORS `*` & Private Network Access (PNA) |
-| 4 | `/api/network` | Public local IP discovery for split-horizon LAN switching |
-| 5 | `/api` + `authMiddleware` | Everything else under `/api` requires valid JWT |
+| 1 | `express.json`, `cookie-parser`, `originGuard` | Parse request data and enforce the configured origin policy |
+| 2 | `/api/auth` | Public login/logout and session verification (`/me` validates the session cookie) |
+| 3 | `/api/ping`, `/api/health` | Public reachability and liveness probes with CORS `*` & Private Network Access (PNA) |
+| 4 | `/api` + `authMiddleware` | All subsequent API routes require a valid JWT |
+| 5 | `/api/network`, `/api/metrics`, `/api/files`, `/api/settings` | Authenticated network discovery and feature routers |
 | 6 | `/api/docker/compose` **before** `/api/docker` | Otherwise `:id` on docker would swallow `compose` (legacy `/api/docker/stacks` aliased) |
-| 7 | `/api/docker`, `/api/files`, `/api/metrics` | Authenticated feature routers |
+| 7 | `/api/docker` | Authenticated Docker routes |
 | 8 | `express.static(dashboard/dist)` | Built SPA assets |
 | 9 | `GET /{*path}` → `index.html` | React Router deep links (`/docker`, `/files`, …) |
 
@@ -333,15 +334,16 @@ sequenceDiagram
 | Method | Path | Notes |
 |--------|------|-------|
 | POST | `/api/auth/login` | Validates passcode, signs JWT, sets `token` cookie |
-| GET | `/api/auth/me` | Validates active session token cookie (`{ authenticated: true }`) |
+| GET | `/api/auth/me` | Validates the session cookie and returns `{ authorized: true, user }` |
 | POST | `/api/auth/logout` | `clearCookie('token')` |
 
 **Health / network**
 
 | Method | Path | Notes |
 |--------|------|-------|
-| GET | `/api/health` | `{status:"ok"}`, public, CORS `*`, Private Network Access (PNA) header |
-| GET | `/api/network/info` | First non-virtual IPv4 + port `3000` (public for LAN discovery) |
+| GET | `/api/health` | Public. Returns `{ status: "ok", shuttingDown }`. CORS `*`, Private Network Access (PNA) header |
+| GET | `/api/ping` | Public. Returns `{ status: "ok" }` |
+| GET | `/api/network/info` | Authenticated. First non-virtual IPv4 and the listen port (`process.env.PORT`, default `3000`) |
 
 **Metrics** (`routes/metrics.js`)
 
@@ -349,13 +351,13 @@ sequenceDiagram
 |--------|------|-------|
 | GET | `/api/metrics` | SSE. `retry: 5000`. Body every 2s from `systeminformation` (`currentLoad`, `mem`, `fsSize`). Comment `: heartbeat` every 15s so Cloudflare does not idle-kill the stream. |
 
-**Files** (`routes/file.js`) — sandbox `BASE_DIR = $HOME (or /home/<user>)`
+**Files** (`routes/file.js`) — allowed roots are `$HOME`, `/mnt`, `/media`, `/run/media`, `/srv`, and custom paths. `/proc`, `/sys`, and `/dev` stay blocked.
 
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/api/files` | List directory |
 | GET | `/api/files/download` | Stream file |
-| GET | `/api/files/view` | Inline preview (`mime-types`) |
+| GET | `/api/files/view` | Attachment, except `.png`, `.jpg`, `.jpeg`, `.webp`, and `.gif`. Sets `X-Content-Type-Options: nosniff`. HTML and SVG are not inline. |
 | GET | `/api/files/drives` | `systeminformation` mounts |
 | GET | `/api/files/search` | `child_process.spawn` |
 | POST | `/api/files/upload` | `multer` to resolved dest |
@@ -366,7 +368,7 @@ sequenceDiagram
 | PATCH | `/api/files/move` | `rename`, or `cp`+`rm` on `EXDEV` |
 | DELETE | `/api/files/delete` | |
 
-Guard is `path.resolve` then `startsWith(BASE_DIR)` (no trailing-slash variant).
+Requested paths are canonicalized and must stay inside those roots. `/proc`, `/sys`, and `/dev` stay blocked in every mode, including full system root.
 
 **Docker containers / images** (`routes/docker.js`) — `dockerode` default socket
 
@@ -488,7 +490,7 @@ SSE over long-poll HTTP because: proxies buffer ordinary responses, Cloudflare k
 
 ### 6.3 Expose a container (control plane → data plane)
 
-This is the glue between Docker and Cloudflare. There is **no** Cloudflare DNS API call in the running agent. The code writes YAML and restarts `cloudflared`. DNS for `*.home-cloud.live` is assumed to already point at the tunnel.
+This is the glue between Docker and Cloudflare. There is **no** Cloudflare DNS API call in the running agent, and there is **no** `SIGHUP` reload. The code writes ingress YAML and restarts `cloudflared`. `CF_DOMAIN` has no default; if it is unset, ingress does not write config. Names such as `home-cloud.live` in the diagrams are examples, not the agent's default domain. The installer publishes DNS only for `dash.$DOMAIN`. Other names need a wildcard CNAME.
 
 ```mermaid
 sequenceDiagram
@@ -586,7 +588,7 @@ cloudflared  (unprivileged child, outbound only)
    ▼
 Agent :3000
    │  JWT cookie on /api/* and both WS handlers
-   │  file sandbox BASE_DIR
+   │  file routes: $HOME, /mnt, /media, /run/media, /srv, custom paths
    │  docker group → docker.sock   ←  this is root-equivalent
    ▼
 Docker Engine
@@ -598,7 +600,7 @@ App containers   (data plane, own origin)
 Implications:
 
 - Anyone with the passcode has a host shell (`node-pty` as the Agent's user) and Docker (effectively host root). This is intentional for a single-owner spare PC.
-- File routes cannot leave `/home/<user>` (or `$HOME`) by design, but the terminal can.
+- File routes allow `$HOME` plus `/mnt`, `/media`, `/run/media`, `/srv`, and custom paths. `/proc`, `/sys`, and `/dev` stay blocked. The terminal is not jailed the same way.
 - Each exposed app is a separate origin (`jellyfin.home-cloud.live` vs `dash.home-cloud.live`), so cookies and storage do not leak across apps.
 - Restarting the tunnel to apply ingress drops in-flight SSE/WS on `dash` for a moment. That is the current reload strategy.
 
@@ -639,7 +641,7 @@ These exist in `docs/implementation/` as future work, not as running processes:
 | `*.homecloud.app` central SaaS | V4 |
 | Vite dev proxy | Configured in `vite.config.ts` (proxies `/api`, `/terminal`, `/ws` to `:3000`) |
 
-Known debts that affect the picture: hardcoded `:3000`, hardcoded `BASE_DIR`, hardcoded cloudflared config path in `tunnel.js` vs `HOME`-relative path in `ingress.js`. (Resolved debts: terminal WS now features decoupled persistent PTY sessions with 5MB scrollback replay and auto-reconnect, and `/api/health` is a public CORS/PNA endpoint).
+Known debts that affect the picture: several clients and examples still assume port `3000`, while the agent listens on `process.env.PORT` (default `3000`); cloudflared config path handling differs between `tunnel.js` and the `HOME`-relative path in `ingress.js`. (Resolved debts: the listen port is not hardcoded; file routes are not limited to `$HOME`; terminal WS now features decoupled persistent PTY sessions with 5MB scrollback replay and auto-reconnect; `/api/ping` is public and returns `{ status: "ok" }`; `/api/health` is public and returns `{ status: "ok", shuttingDown }`.)
 
 ---
 

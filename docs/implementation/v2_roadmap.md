@@ -1,5 +1,7 @@
 # Home Cloud — V2 Roadmap
 
+Historical note: checked items that describe a Cloudflare DNS API client or a `SIGHUP` reload were **not shipped**. The agent writes ingress YAML and restarts `cloudflared`.
+
 This document outlines all completed milestones, architectural goals, and features built in **V2** of the Home Cloud platform.
 
 ---
@@ -8,12 +10,12 @@ This document outlines all completed milestones, architectural goals, and featur
 
 ### Phase 1: Cloudflare Tunnel Auto-Wiring (Ingress Routing) ✅ *COMPLETED — 2026-07-27*
 
-This feature automates DNS routing and HTTPS subdomain generation for any running container without opening public ports on your router.
+This feature writes ingress hostnames for running containers without opening public ports on your router. Creating DNS records and reloading with `SIGHUP` were not part of what shipped.
 
 * [x] **Expose Container endpoint:** `POST /api/docker/containers/:id/expose` — accepts `{ subdomain }`. Extracts the container's mapped host port to prepare it for external routing.
 * [x] **Safe Ingress File Writer:** Write logic to parse and insert the subdomain routing rules into `~/.cloudflared/config.yml` without syntax or indentation errors.
-* [x] **Dynamic DNS Record Creator:** Implement client calls to the Cloudflare API to dynamically create a CNAME record pointing the new subdomain to the tunnel URL.
-* [x] **Zero-Downtime Reloading:** Implement process signaling in the backend using `SIGHUP` to notify the `cloudflared` daemon of configuration changes without dropping active tunnel connections.
+* [ ] **Dynamic DNS Record Creator (historical / not shipped):** The checklist called for Cloudflare API CNAME creation. The agent does not call the Cloudflare DNS API. The installer publishes DNS only for `dash.$DOMAIN`; other names need a wildcard CNAME.
+* [ ] **Zero-Downtime Reloading via SIGHUP (historical / not shipped):** The checklist called for `SIGHUP`. The agent restarts `cloudflared` after writing ingress YAML. It does not send `SIGHUP`.
 
 ---
 

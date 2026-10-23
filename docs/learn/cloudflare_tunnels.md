@@ -40,6 +40,8 @@ When the `cloudflared` daemon starts up on your spare PC, it reads your credenti
 
 ## 3. How DNS Integration Works
 
+**The Home Cloud agent does not call the Cloudflare DNS API.** Expose writes ingress YAML and restarts `cloudflared`. The installer publishes a DNS record only for `dash.$DOMAIN`. Other names resolve only after a wildcard CNAME (or another record you create outside the agent). The steps below describe how Cloudflare DNS and a tunnel hostname fit together. They are not agent API calls.
+
 When you create a hostname like `dash.home-cloud.live` and bind it to your tunnel:
 
 1. Cloudflare automatically inserts a CNAME record in your domain's DNS panel pointing to:
@@ -142,7 +144,9 @@ This is handled by **HTTP/2 stream multiplexing** inside the QUIC tunnel:
 
 ## 6. Dynamic Configuration: Zero-Downtime Reloading (`SIGHUP`)
 
-For a self-hosted App Store, we need to add subdomains dynamically (e.g. adding `https://jellyfin.home-cloud.live` on-the-fly). 
+**Not what the agent does.** The running agent writes ingress YAML and restarts `cloudflared`. It does not send `SIGHUP`, and there is no shipped app store. This section stays as a learning note about the signal.
+
+For a self-hosted app hostname, you may want to add subdomains dynamically (e.g. adding `https://jellyfin.home-cloud.live` on-the-fly).
 
 If we restarted the `cloudflared` service every time we added an app, it would sever the tunnel connections, causing the visitor to see a Gateway Error (`502`) for several seconds and dropping their active desktop socket sessions.
 

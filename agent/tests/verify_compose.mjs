@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
+const testHome = fs.mkdtempSync(path.join(os.tmpdir(), "home-cloud-compose-home-"));
+const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "home-cloud-compose-test-"));
+process.env.HOME = testHome;
+process.env.XDG_CONFIG_HOME = path.join(testHome, ".config");
+process.env.HOME_CLOUD_CONFIG_DIR = path.join(testHome, ".config", "home-cloud");
+process.once("exit", () => {
+    fs.rmSync(testRoot, { recursive: true, force: true });
+    fs.rmSync(testHome, { recursive: true, force: true });
+});
 
 console.log("--- Running Compose Native CLI & Route Verification Tests ---");
 
@@ -48,6 +58,9 @@ assert.equal(composeRouter.isSafeProjectName("web-app_1"), true);
 assert.equal(composeRouter.isSafeProjectName("../evil"), false);
 assert.equal(composeRouter.isSafeProjectName(".."), false);
 assert.equal(composeRouter.isSafeProjectName("/root"), false);
+assert.equal(composeRouter.isNoContainerToStartError(new Error("no container to start")), true);
+assert.equal(composeRouter.isNoContainerToStartError(new Error('no container found for project "test"')), true);
+assert.equal(composeRouter.isNoContainerToStartError(new Error("permission denied")), false);
 console.log("  ✔ Project name validation correctly guards against directory traversal");
 
 // Test 6: Route handlers exist on router stack
@@ -70,7 +83,10 @@ console.log("  ✔ All compose routes (start, stop, delete) correctly registered
 
 // Test 7: Full runtime container lifecycle (up, stop, start, down -v) via native Compose CLI
 console.log("\n[Test 7] Full runtime container lifecycle via native Compose CLI");
-const testDir = path.join(__dirname, "sandbox", "compose_lifecycle_test");
+const testDir = path.join(testRoot, "compose_lifecycle_test");
+const projectPrefix = path.basename(testRoot).toLowerCase();
+const lifecycleProject = `${projectPrefix}-lifecycle`;
+const uncreatedProject = `${projectPrefix}-uncreated`;
 fs.mkdirSync(testDir, { recursive: true });
 const composeYaml = `services:
   test_worker:
@@ -80,46 +96,51 @@ const composeYaml = `services:
 fs.writeFileSync(path.join(testDir, "docker-compose.yml"), composeYaml, "utf8");
 
 try {
-    const upRes = await composeRouter.runCompose(["up", "-d"], testDir);
+    const upRes = await composeRouter.runCompose(["-p", lifecycleProject, "up", "-d"], testDir);
     assert(upRes, "up -d should succeed");
     console.log("  ✔ Native compose 'up -d' launched container stack");
 
-    const stopRes = await composeRouter.runCompose(["stop"], testDir);
+    const stopRes = await composeRouter.runCompose(["-p", lifecycleProject, "stop"], testDir);
     assert(stopRes, "stop should succeed");
     console.log("  ✔ Native compose 'stop' successfully stopped containers");
 
-    const startRes = await composeRouter.runCompose(["start"], testDir);
+    const startRes = await composeRouter.runCompose(["-p", lifecycleProject, "start"], testDir);
     assert(startRes, "start should succeed");
     console.log("  ✔ Native compose 'start' successfully resumed containers");
 
-    const downRes = await composeRouter.runCompose(["down", "-v"], testDir);
+    const downRes = await composeRouter.runCompose(["-p", lifecycleProject, "down", "-v"], testDir);
     assert(downRes, "down -v should succeed");
     console.log("  ✔ Native compose 'down -v' successfully tore down stack and volumes");
 } finally {
     try {
-        await composeRouter.runCompose(["down", "-v"], testDir).catch(() => {});
+        await composeRouter.runCompose(["-p", lifecycleProject, "down", "-v"], testDir).catch(() => {});
     } catch {}
     fs.rmSync(testDir, { recursive: true, force: true });
 }
 
 // Test 8: Auto-recovery for uncreated stacks when start is requested
 console.log("\n[Test 8] Auto-recovery: starting uncreated compose stack falls back to 'up -d'");
-const testUncreatedDir = path.join(__dirname, "sandbox", "compose_uncreated_test");
+const testUncreatedDir = path.join(testRoot, "compose_uncreated_test");
 fs.mkdirSync(testUncreatedDir, { recursive: true });
 fs.writeFileSync(path.join(testUncreatedDir, "docker-compose.yml"), composeYaml, "utf8");
 
 try {
     let directStartFailed = false;
+    let directStartError = null;
     try {
-        await composeRouter.runCompose(["start"], testUncreatedDir);
+        await composeRouter.runCompose(["-p", uncreatedProject, "start"], testUncreatedDir);
     } catch (err) {
-        directStartFailed = err.message.includes("no container to start");
+        directStartError = err;
+        directStartFailed = composeRouter.isNoContainerToStartError(err);
     }
-    assert(directStartFailed, "Direct start on uncreated stack should fail with 'no container to start'");
+    assert(
+        directStartFailed,
+        `Direct start on uncreated stack should fail with a recognized no-container error; received: ${directStartError?.message ?? "no error"}`,
+    );
 
-    const recoverRes = await composeRouter.runCompose(["start"], testUncreatedDir).catch(async (err) => {
-        if (err.message && err.message.includes("no container to start")) {
-            return composeRouter.runCompose(["up", "-d"], testUncreatedDir);
+    const recoverRes = await composeRouter.runCompose(["-p", uncreatedProject, "start"], testUncreatedDir).catch(async (err) => {
+        if (composeRouter.isNoContainerToStartError(err)) {
+            return composeRouter.runCompose(["-p", uncreatedProject, "up", "-d"], testUncreatedDir);
         }
         throw err;
     });
@@ -127,9 +148,9 @@ try {
     console.log("  ✔ Verified graceful recovery for uncreated stacks when start is requested");
 } finally {
     try {
-        await composeRouter.runCompose(["down", "-v"], testUncreatedDir).catch(() => {});
+        await composeRouter.runCompose(["-p", uncreatedProject, "down", "-v"], testUncreatedDir).catch(() => {});
     } catch {}
-    fs.rmSync(testUncreatedDir, { recursive: true, force: true });
+    fs.rmSync(testRoot, { recursive: true, force: true });
 }
 
 console.log("\n--- ALL COMPOSE VERIFICATION TESTS PASSED SUCCESSFULLY ---");

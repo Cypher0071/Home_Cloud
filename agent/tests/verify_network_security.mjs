@@ -4,6 +4,19 @@ import { createRequire } from "node:module";
 import jwt from "jsonwebtoken";
 import { app } from "../index.js";
 
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+
+// Isolate test environment
+const testTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "home-cloud-net-test-"));
+process.env.HOME = testTmpDir;
+process.env.XDG_CONFIG_HOME = path.join(testTmpDir, ".config");
+process.env.HOME_CLOUD_CONFIG_DIR = path.join(testTmpDir, ".config", "home-cloud");
+process.env.AGENT_ENV_FILE = path.join(testTmpDir, ".env");
+process.env.CF_CONFIG = path.join(testTmpDir, ".cloudflared", "config.yml");
+process.env.BASE_DIR = testTmpDir;
+
 const require = createRequire(import.meta.url);
 const preferences = require("../services/preferences.js");
 
@@ -111,4 +124,7 @@ try {
 	console.log("\n✅ All 8 Network Security & LAN Detection tests passed successfully!");
 } finally {
 	await new Promise((resolve) => testServer.close(resolve));
+	try {
+		fs.rmSync(testTmpDir, { recursive: true, force: true });
+	} catch (_) {}
 }

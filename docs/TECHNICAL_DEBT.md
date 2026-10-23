@@ -11,9 +11,8 @@ This document tracks active technical debt, architectural tradeoffs, and deferre
 * **Impact**: Compose files can declare bind mounts to system directories (`/`, `/etc`) or the host Docker socket (`/var/run/docker.sock`), bypassing the single-container filesystem jail.
 * **Target Fix**: Add AST/YAML parsing and policy validation for Compose files prior to execution to enforce storage scope and prevent unauthorized socket mounting.
 
-### 2. Hardcoded Backend Port
-* **Debt**: Backend agent port `3000` is hardcoded across startup scripts and configurations.
-* **Tradeoff**: Port re-binding cannot be configured via environment variables without updating process files.
+### 2. Listen port
+* **Resolved**: The agent listens on `process.env.PORT` (default `3000`). The port is not hardcoded, and changing it does not require editing process source. Set `PORT` in `agent/.env`.
 
 ---
 

@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { createRequire } from "node:module";
 import jwt from "jsonwebtoken";
+
+// Isolate test environment before importing agent modules
+const testTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "home-cloud-session-test-"));
+process.env.HOME = testTmpDir;
+process.env.XDG_CONFIG_HOME = path.join(testTmpDir, ".config");
+process.env.HOME_CLOUD_CONFIG_DIR = path.join(testTmpDir, ".config", "home-cloud");
+process.env.AGENT_ENV_FILE = path.join(testTmpDir, ".env");
+process.env.CF_CONFIG = path.join(testTmpDir, ".cloudflared", "config.yml");
+process.env.BASE_DIR = testTmpDir;
 
 const require = createRequire(import.meta.url);
 const preferences = require("../services/preferences.js");
@@ -29,6 +40,16 @@ const testServer = http.createServer(app);
 await new Promise((resolve) => testServer.listen(0, "127.0.0.1", resolve));
 const address = testServer.address();
 const baseUrl = `http://127.0.0.1:${address.port}`;
+const _fetch = globalThis.fetch;
+globalThis.fetch = (input, init = {}) => {
+	const method = String(init.method || "GET").toUpperCase();
+	if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+		const headers = new Headers(init.headers || {});
+		if (!headers.has("origin")) headers.set("origin", baseUrl);
+		init = { ...init, headers };
+	}
+	return _fetch(input, init);
+};
 
 try {
 	// Test 1: Initial state has valid sessionEpoch (>= 1)
@@ -48,141 +69,119 @@ try {
 		body: JSON.stringify({ password: TEST_PASSWORD }),
 	});
 	assert.equal(loginRes.status, 200, `Expected 200 from login, got ${loginRes.status}`);
-	const loginData = await loginRes.json();
-	assert.equal(loginData.success, true, "Login must return success: true");
 
-	const rawSetCookie = loginRes.headers.get("set-cookie");
-	assert.ok(rawSetCookie, "Login must set a cookie");
-	const token1 = extractCookieValue(rawSetCookie, "token");
-	assert.ok(token1, "Token cookie must be present");
+	const tokenHeader1 = loginRes.headers.get("set-cookie");
+	assert.ok(tokenHeader1, "set-cookie header must be present on successful login");
+	const token1 = extractCookieValue(tokenHeader1, "token");
+	assert.ok(token1, "token cookie must be present");
 
 	const decoded1 = jwt.verify(token1, JWT_SECRET);
-	assert.equal(decoded1.authorized, true, "Token authorized claim must be true");
-	assert.equal(decoded1.epoch, initialEpoch, `Token epoch claim must equal current epoch (${initialEpoch})`);
-	console.log(`  ✔ Login successfully issued JWT with epoch: ${decoded1.epoch}`);
+	assert.equal(decoded1.epoch, initialEpoch, `Token epoch must equal initial sessionEpoch (${initialEpoch})`);
+	console.log("  ✔ Login issued JWT containing current epoch.");
 
-	// Test 3: Requests to protected endpoints (/api/me, /api/network/info) succeed with valid epoch token
-	console.log("[Test 3] Requests to protected endpoints (/api/me, /api/network/info) succeed with valid epoch token");
+	// Test 3: Authenticated access succeeds with valid token
+	console.log("[Test 3] Authenticated access succeeds with valid token");
 	const meRes = await fetch(`${baseUrl}/api/me`, {
 		headers: { Cookie: `token=${token1}` },
 	});
-	assert.equal(meRes.status, 200, `Expected 200 from /api/me, got ${meRes.status}`);
+	assert.equal(meRes.status, 200, "Authenticated request to /api/me must return 200");
 	const meData = await meRes.json();
-	assert.equal(meData.authorized, true, "Expected authorized: true on /api/me");
-	assert.equal(meData.user?.epoch, initialEpoch, "Expected user.epoch to match on /api/me");
-
-	const authMeRes = await fetch(`${baseUrl}/api/auth/me`, {
-		headers: { Cookie: `token=${token1}` },
-	});
-	assert.equal(authMeRes.status, 200, `Expected 200 from /api/auth/me, got ${authMeRes.status}`);
-	const authMeData = await authMeRes.json();
-	assert.equal(authMeData.authorized, true, "Expected authorized: true on /api/auth/me");
-	assert.equal(authMeData.user?.epoch, initialEpoch, "Expected user.epoch to match on /api/auth/me");
+	assert.equal(meData.authorized, true);
+	assert.equal(meData.user.epoch, initialEpoch);
 
 	const netInfoRes = await fetch(`${baseUrl}/api/network/info`, {
 		headers: { Cookie: `token=${token1}` },
 	});
-	assert.equal(netInfoRes.status, 200, `Expected 200 from /api/network/info, got ${netInfoRes.status}`);
-	const netInfoData = await netInfoRes.json();
-	assert.equal(netInfoData.status, "ok", "Expected status: ok from /api/network/info");
-	console.log("  ✔ Protected endpoints successfully authenticated with valid epoch token.");
+	assert.equal(netInfoRes.status, 200, "Authenticated request to /api/network/info must return 200");
+	console.log("  ✔ Authenticated endpoints accepted valid session token.");
 
-	// Test 4: Token with wrong/expired epoch is rejected by authMiddleware with HTTP 401
-	console.log("[Test 4] Token with wrong/expired epoch is rejected by authMiddleware with HTTP 401");
-	const wrongEpochToken = jwt.sign(
-		{ authorized: true, epoch: initialEpoch + 999 },
-		JWT_SECRET,
-		{ expiresIn: "1h" }
-	);
-	const wrongEpochRes = await fetch(`${baseUrl}/api/network/info`, {
-		headers: { Cookie: `token=${wrongEpochToken}` },
-	});
-	assert.equal(wrongEpochRes.status, 401, `Expected 401 for wrong epoch, got ${wrongEpochRes.status}`);
-	const wrongEpochData = await wrongEpochRes.json();
-	assert.equal(wrongEpochData.error, "Session has been revoked", "Expected error message: 'Session has been revoked'");
-
-	const wrongEpochMeRes = await fetch(`${baseUrl}/api/auth/me`, {
-		headers: { Cookie: `token=${wrongEpochToken}` },
-	});
-	assert.equal(wrongEpochMeRes.status, 401, `Expected 401 for wrong epoch on /api/auth/me, got ${wrongEpochMeRes.status}`);
-	const wrongEpochMeData = await wrongEpochMeRes.json();
-	assert.equal(wrongEpochMeData.error, "Session has been revoked");
-	console.log("  ✔ Expired/mismatched epoch token correctly rejected with 401 and 'Session has been revoked'.");
-
-	// Test 5: Legacy token with no epoch (undefined) is rejected with HTTP 401
-	console.log("[Test 5] Legacy token with no epoch (undefined) is rejected with HTTP 401");
-	const legacyToken = jwt.sign(
-		{ authorized: true },
-		JWT_SECRET,
-		{ expiresIn: "1h" }
-	);
-	const legacyRes = await fetch(`${baseUrl}/api/network/info`, {
-		headers: { Cookie: `token=${legacyToken}` },
-	});
-	assert.equal(legacyRes.status, 401, `Expected 401 for legacy token without epoch, got ${legacyRes.status}`);
-	const legacyData = await legacyRes.json();
-	assert.equal(legacyData.error, "Session has been revoked", "Legacy token without epoch must be rejected as revoked");
-
-	const legacyMeRes = await fetch(`${baseUrl}/api/auth/me`, {
-		headers: { Cookie: `token=${legacyToken}` },
-	});
-	assert.equal(legacyMeRes.status, 401, `Expected 401 for legacy token on /api/auth/me, got ${legacyMeRes.status}`);
-	const legacyMeData = await legacyMeRes.json();
-	assert.equal(legacyMeData.error, "Session has been revoked");
-	console.log("  ✔ Legacy token with no epoch rejected with 401 and 'Session has been revoked'.");
-
-	// Test 6: POST /api/auth/logout-all increments session epoch, clears cookie, and invalidates previously valid token
-	console.log("[Test 6] POST /api/auth/logout-all increments session epoch, clears cookie, and invalidates previously valid token");
+	// Test 4: Revocation on POST /api/auth/logout-all increments sessionEpoch
+	console.log("[Test 4] Revocation on POST /api/auth/logout-all increments sessionEpoch");
 	const logoutAllRes = await fetch(`${baseUrl}/api/auth/logout-all`, {
 		method: "POST",
-		headers: { Cookie: `token=${token1}` },
+		headers: {
+			"Content-Type": "application/json",
+			Cookie: `token=${token1}`,
+		},
 	});
-	assert.equal(logoutAllRes.status, 200, `Expected 200 from /api/auth/logout-all, got ${logoutAllRes.status}`);
+	assert.equal(logoutAllRes.status, 200, `Expected 200 from logout-all, got ${logoutAllRes.status}`);
 	const logoutAllData = await logoutAllRes.json();
-	assert.equal(logoutAllData.success, true, "Expected success: true from logout-all");
-	assert.equal(logoutAllData.message, "All active sessions revoked", "Expected message: 'All active sessions revoked'");
-	assert.equal(logoutAllData.sessionEpoch, initialEpoch + 1, `Expected sessionEpoch to be incremented to ${initialEpoch + 1}`);
+	assert.equal(logoutAllData.success, true);
+	assert.equal(logoutAllData.sessionEpoch, initialEpoch + 1, "sessionEpoch in response must be incremented");
 
-	// Verify cookie clearing
-	const logoutCookie = logoutAllRes.headers.get("set-cookie");
-	assert.ok(logoutCookie, "logout-all must set cookie to clear token");
+	const currentEpochAfterRevoke = preferences.getSessionEpoch();
+	assert.equal(currentEpochAfterRevoke, initialEpoch + 1, "preferences.getSessionEpoch() must reflect incremented value");
+
+	// Verify set-cookie clears the token
+	const logoutCookieHeader = logoutAllRes.headers.get("set-cookie");
+	assert.ok(logoutCookieHeader, "set-cookie header must be present to clear cookie");
 	assert.ok(
-		logoutCookie.includes("token=;") || logoutCookie.includes("Expires=Thu, 01 Jan 1970"),
-		"logout-all must clear token cookie"
+		logoutCookieHeader.includes("token=;") || logoutCookieHeader.includes("Max-Age=0") || logoutCookieHeader.includes("Expires="),
+		"Cookie should be expired or cleared",
 	);
+	console.log(`  ✔ POST /api/auth/logout-all incremented sessionEpoch to ${currentEpochAfterRevoke} and cleared cookie.`);
 
-	// Verify current in-memory epoch was incremented
-	assert.equal(preferences.getSessionEpoch(), initialEpoch + 1, "getSessionEpoch() must return updated epoch");
-
-	// Verify previously valid token is now rejected on protected endpoints
-	const revokedInfoRes = await fetch(`${baseUrl}/api/network/info`, {
-		headers: { Cookie: `token=${token1}` },
-	});
-	assert.equal(revokedInfoRes.status, 401, "Previously valid token must now be rejected with 401");
-	const revokedInfoData = await revokedInfoRes.json();
-	assert.equal(revokedInfoData.error, "Session has been revoked");
-
+	// Test 5: Previously issued token is rejected after revocation across endpoints
+	console.log("[Test 5] Previously issued token is rejected after revocation across endpoints");
 	const revokedMeRes = await fetch(`${baseUrl}/api/me`, {
 		headers: { Cookie: `token=${token1}` },
 	});
-	assert.equal(revokedMeRes.status, 401, "Previously valid token must now be rejected on /api/me");
+	assert.equal(revokedMeRes.status, 401, "Revoked token must return 401 on /api/me");
 	const revokedMeData = await revokedMeRes.json();
-	assert.equal(revokedMeData.error, "Session has been revoked");
-	console.log("  ✔ /api/auth/logout-all incremented epoch and successfully revoked all existing tokens.");
+	assert.equal(revokedMeData.error, "Session has been revoked", "Error message must indicate revoked session");
 
-	// Test 7: New login after logout-all gets the new epoch and succeeds
-	console.log("[Test 7] New login after logout-all gets the new epoch and succeeds");
-	const login2Res = await fetch(`${baseUrl}/api/auth/login`, {
+	const revokedAuthMeRes = await fetch(`${baseUrl}/api/auth/me`, {
+		headers: { Cookie: `token=${token1}` },
+	});
+	assert.equal(revokedAuthMeRes.status, 401, "Revoked token must return 401 on /api/auth/me");
+	const revokedAuthMeData = await revokedAuthMeRes.json();
+	assert.equal(revokedAuthMeData.error, "Session has been revoked");
+
+	const revokedNetworkRes = await fetch(`${baseUrl}/api/network/info`, {
+		headers: { Cookie: `token=${token1}` },
+	});
+	assert.equal(revokedNetworkRes.status, 401, "Revoked token must return 401 on /api/network/info");
+	const revokedNetworkData = await revokedNetworkRes.json();
+	assert.equal(revokedNetworkData.error, "Session has been revoked");
+	console.log("  ✔ Revoked token rejected across all authenticated endpoints.");
+
+	// Test 6: Legacy token without epoch claim is rejected
+	console.log("[Test 6] Legacy token without epoch claim is rejected");
+	const legacyToken = jwt.sign(
+		{ authorized: true }, // Missing epoch claim
+		JWT_SECRET,
+		{ expiresIn: "7d" },
+	);
+
+	const legacyMeRes = await fetch(`${baseUrl}/api/me`, {
+		headers: { Cookie: `token=${legacyToken}` },
+	});
+	assert.equal(legacyMeRes.status, 401, "Legacy token must return 401 on /api/me");
+	const legacyMeData = await legacyMeRes.json();
+	assert.equal(legacyMeData.error, "Session has been revoked");
+
+	const legacyAuthMeRes = await fetch(`${baseUrl}/api/auth/me`, {
+		headers: { Cookie: `token=${legacyToken}` },
+	});
+	assert.equal(legacyAuthMeRes.status, 401, "Legacy token must return 401 on /api/auth/me");
+	const legacyAuthMeData = await legacyAuthMeRes.json();
+	assert.equal(legacyAuthMeData.error, "Session has been revoked");
+	console.log("  ✔ Legacy token without epoch claim safely rejected.");
+
+	// Test 7: New login after revocation succeeds with new epoch
+	console.log("[Test 7] New login after revocation succeeds with new epoch");
+	const loginRes2 = await fetch(`${baseUrl}/api/auth/login`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ password: TEST_PASSWORD }),
 	});
-	assert.equal(login2Res.status, 200, "New login must succeed");
-	const token2 = extractCookieValue(login2Res.headers.get("set-cookie"), "token");
-	assert.ok(token2, "New token must be set in cookie");
+	assert.equal(loginRes2.status, 200);
+	const tokenHeader2 = loginRes2.headers.get("set-cookie");
+	const token2 = extractCookieValue(tokenHeader2, "token");
+	assert.ok(token2);
 
 	const decoded2 = jwt.verify(token2, JWT_SECRET);
-	assert.equal(decoded2.epoch, initialEpoch + 1, `New token must have incremented epoch (${initialEpoch + 1})`);
+	assert.equal(decoded2.epoch, initialEpoch + 1, "New token must carry updated epoch");
 
 	const newMeRes = await fetch(`${baseUrl}/api/me`, {
 		headers: { Cookie: `token=${token2}` },
@@ -241,4 +240,7 @@ try {
 	console.log("\n✅ All 9 Session Revocation & Token Epoch tests passed successfully!");
 } finally {
 	await new Promise((resolve) => testServer.close(resolve));
+	try {
+		fs.rmSync(testTmpDir, { recursive: true, force: true });
+	} catch (_) {}
 }

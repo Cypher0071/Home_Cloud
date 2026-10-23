@@ -153,7 +153,7 @@ async function startTunnel(options = {}) {
 					str.includes("INF Registered tunnel connection"))
 			) {
 				resolved = true;
-				const url = `https://dash.${CF_DOMAIN}`;
+				const url = CF_DOMAIN ? `https://dash.${CF_DOMAIN}` : null;
 				tunnelState.status = "connected";
 				tunnelState.url = url;
 				tunnelState.error = null;

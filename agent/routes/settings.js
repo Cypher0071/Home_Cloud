@@ -5,7 +5,9 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const mime = require("mime-types");
-const { constantTimeCompare } = require("./auth");
+const dotenv = require("dotenv");
+const { constantTimeCompare, clearAuthCookie } = require("./auth");
+const preferences = require("../services/preferences");
 const {
 	getPreferences,
 	updatePreferences,
@@ -14,13 +16,13 @@ const {
 	getSessionEpoch,
 	getWallpaperPath,
 	removeCustomWallpaperFiles,
-	PREFERENCES_DIR,
-} = require("../services/preferences");
+} = preferences;
 const { BASE_DIR, DEFAULT_STORAGE_ROOTS } = require("../paths");
 const {
 	getUpdateStatus,
 	checkForUpdates,
 	applyUpdate,
+	assertReleaseTag,
 	getLastProgress,
 	isUpdating,
 	updateEmitter,
@@ -51,36 +53,55 @@ const upload = multer({
 	},
 });
 
+function encodeEnvValue(value) {
+	return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
 /**
  * Safely and atomically updates the PASSWORD in the .env file.
  * Creates .env from .env.example or defaults if .env does not exist.
+ * The new value is quoted and must round-trip through dotenv without changing other keys.
  */
 function updateEnvPassword(envPath, newPassword) {
-	let content = "";
+	if (typeof newPassword !== "string" || /[\r\n\0]/.test(newPassword)) {
+		throw new Error("Password contains unsupported control characters");
+	}
+
+	let original = "";
 	if (fs.existsSync(envPath)) {
-		content = fs.readFileSync(envPath, "utf8");
-		if (/^PASSWORD=/m.test(content)) {
-			content = content.replace(/^PASSWORD=.*$/m, () => `PASSWORD=${newPassword}`);
-		} else {
-			content += `\nPASSWORD=${newPassword}\n`;
-		}
+		original = fs.readFileSync(envPath, "utf8");
 	} else {
 		const examplePath = path.resolve(__dirname, "../.env.example");
 		const jwtSecret = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
 		if (fs.existsSync(examplePath)) {
-			content = fs.readFileSync(examplePath, "utf8");
-			if (/^PASSWORD=/m.test(content)) {
-				content = content.replace(/^PASSWORD=.*$/m, () => `PASSWORD=${newPassword}`);
-			} else {
-				content += `\nPASSWORD=${newPassword}\n`;
-			}
-			if (/^JWT_SECRET=/m.test(content)) {
-				content = content.replace(/^JWT_SECRET=.*$/m, () => `JWT_SECRET=${jwtSecret}`);
-			} else {
-				content += `\nJWT_SECRET=${jwtSecret}\n`;
-			}
+			original = fs.readFileSync(examplePath, "utf8");
 		} else {
-			content = `PASSWORD=${newPassword}\nJWT_SECRET=${jwtSecret}\n`;
+			original = `JWT_SECRET=${encodeEnvValue(jwtSecret)}\n`;
+		}
+		if (!/^JWT_SECRET=/m.test(original)) {
+			original += `\nJWT_SECRET=${encodeEnvValue(jwtSecret)}\n`;
+		} else if (PLACEHOLDER_JWT.test(original)) {
+			original = original.replace(/^JWT_SECRET=.*$/m, `JWT_SECRET=${encodeEnvValue(jwtSecret)}`);
+		}
+	}
+
+	const before = dotenv.parse(original);
+	const encoded = encodeEnvValue(newPassword);
+	let content;
+	if (/^PASSWORD=/m.test(original)) {
+		content = original.replace(/^PASSWORD=.*$/m, () => `PASSWORD=${encoded}`);
+	} else {
+		content = `${original.replace(/\s*$/, "")}\nPASSWORD=${encoded}\n`;
+	}
+
+	const after = dotenv.parse(content);
+	if (after.PASSWORD !== newPassword) {
+		throw new Error("Refusing to write .env because PASSWORD did not round-trip");
+	}
+	for (const key of Object.keys(before)) {
+		if (key === "PASSWORD") continue;
+		if (after[key] !== before[key]) {
+			throw new Error(`Refusing to write .env because ${key} would change`);
 		}
 	}
 
@@ -97,13 +118,15 @@ function updateEnvPassword(envPath, newPassword) {
 	fs.renameSync(tmpFile, envPath);
 }
 
+const PLACEHOLDER_JWT = /^JWT_SECRET=(?:"generate-a-long-random-string"|generate-a-long-random-string)\s*$/m;
+
 // GET /api/settings/preferences
 router.get("/preferences", (req, res) => {
 	try {
-		const preferences = getPreferences();
+		const prefs = getPreferences();
 		res.json({
 			status: "ok",
-			preferences,
+			preferences: prefs,
 		});
 	} catch (err) {
 		res.status(500).json({ error: err.message || "Failed to load preferences" });
@@ -158,8 +181,9 @@ router.post("/wallpaper", (req, res) => {
 				return res.status(400).json({ error: "Invalid image format. Allowed formats: JPEG, PNG, WEBP, GIF." });
 			}
 
-			if (!fs.existsSync(PREFERENCES_DIR)) {
-				fs.mkdirSync(PREFERENCES_DIR, { recursive: true });
+			const prefDir = preferences.PREFERENCES_DIR;
+			if (!fs.existsSync(prefDir)) {
+				fs.mkdirSync(prefDir, { recursive: true });
 			}
 
 			// Remove any previous custom wallpaper files first
@@ -167,7 +191,7 @@ router.post("/wallpaper", (req, res) => {
 
 			// Save the uploaded wallpaper file
 			const targetFilename = `wallpaper.${ext}`;
-			const targetPath = path.join(PREFERENCES_DIR, targetFilename);
+			const targetPath = path.join(prefDir, targetFilename);
 			fs.writeFileSync(targetPath, req.file.buffer);
 
 			// Update preferences
@@ -178,7 +202,7 @@ router.post("/wallpaper", (req, res) => {
 					hasCustomWallpaper: true,
 					customWallpaperExt: ext,
 				},
-			});
+			}, { allowWallpaperExt: true });
 
 			return res.json({
 				success: true,
@@ -203,7 +227,8 @@ router.get("/wallpaper", (req, res) => {
 
 		res.setHeader("Content-Type", contentType);
 		res.setHeader("Content-Length", stat.size);
-		res.setHeader("Cache-Control", "public, max-age=86400");
+		res.setHeader("Cache-Control", "private, max-age=86400");
+		res.setHeader("X-Content-Type-Options", "nosniff");
 
 		const stream = fs.createReadStream(wallpaperPath);
 		stream.on("error", (err) => {
@@ -231,7 +256,7 @@ router.delete("/wallpaper", (req, res) => {
 				hasCustomWallpaper: false,
 				customWallpaperExt: null,
 			},
-		});
+		}, { allowWallpaperExt: true });
 
 		return res.json({ success: true });
 	} catch (err) {
@@ -300,6 +325,9 @@ router.post("/password", (req, res) => {
 		}
 
 		const trimmedNewPassword = newPassword.trim();
+		if (/[\r\n\0]/.test(newPassword) || /[\r\n\0]/.test(trimmedNewPassword)) {
+			return res.status(400).json({ error: "Password contains unsupported control characters" });
+		}
 		if (trimmedNewPassword.length < 8) {
 			return res.status(400).json({ error: "New password must be at least 8 characters long" });
 		}
@@ -308,12 +336,12 @@ router.post("/password", (req, res) => {
 			return res.status(400).json({ error: "New password must be different from current password" });
 		}
 
-		const envPath = path.resolve(__dirname, "../.env");
+		const envPath = process.env.AGENT_ENV_FILE || path.resolve(__dirname, "../.env");
 		updateEnvPassword(envPath, trimmedNewPassword);
 
 		process.env.PASSWORD = trimmedNewPassword;
 		const newEpoch = incrementSessionEpoch();
-		res.clearCookie("token");
+		clearAuthCookie(res, req);
 
 		return res.json({
 			success: true,
@@ -363,6 +391,9 @@ router.post("/update/apply", (req, res) => {
 		}
 
 		const { targetTag } = req.body || {};
+		if (targetTag !== undefined && targetTag !== null && targetTag !== "") {
+			assertReleaseTag(targetTag);
+		}
 
 		// Trigger update asynchronously
 		applyUpdate(null, { targetTag }).catch((err) => {

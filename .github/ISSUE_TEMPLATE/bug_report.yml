@@ -55,9 +55,9 @@ body:
       options:
         - Ubuntu 24.04 / 22.04
         - Debian 12
-        - Fedora 40+
-        - Arch Linux
-        - Alpine Linux
+        - Fedora (dnf)
+        - Arch Linux (pacman)
+        - yum-based Linux
         - WSL2 Ubuntu
         - Other Linux
     validations:
@@ -67,7 +67,7 @@ body:
     attributes:
       label: Node.js Version
       description: Host Node.js version (e.g. `node -v`).
-      placeholder: "e.g. v20.18.0"
+      placeholder: "e.g. v22.14.0"
     validations:
       required: false
   - type: input
@@ -86,7 +86,7 @@ body:
       options:
         - Cloudflare Tunnel
         - Local LAN IP
-        - Tailscale / WireGuard
+        - Tailscale / other VPN
         - Reverse Proxy
     validations:
       required: true
