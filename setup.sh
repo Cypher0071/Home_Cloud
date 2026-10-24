@@ -500,9 +500,9 @@ fi
 NODE_DIR="$(dirname "$NODE_PATH")"
 echo "✔ Active Node.js:     $NODE_PATH ($NODE_VERSION)"
 
-# 4. pnpm via corepack (pinned 11.28.8; never npm -g and never get.pnpm.io)
+# 4. pnpm via corepack (pinned 12.15.0; never npm -g and never get.pnpm.io)
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-PNPM_PIN="11.28.8"
+PNPM_PIN="12.15.0"
 
 pnpm_is_pinned_line() {
     [ "${1:-}" = "$PNPM_PIN" ]
