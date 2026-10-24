@@ -450,20 +450,25 @@ SCRIPT_DIR="$INSTALL_DIR"
 TEMPLATE_FILE="$SCRIPT_DIR/home-cloud.service.template"
 
 # 3. Node.js Runtime Check (operator-installed; never piped from NodeSource)
-# Compare major.minor so 22.12 is rejected and 22.13.0 / 23.x are accepted.
+# Require Node.js >= 22.23.4, including the patch version Astro needs to build.
 node_satisfies_minimum() {
     local raw="${1#v}"
-    local major="" minor=""
-    IFS='.' read -r major minor _ <<< "$raw"
+    local major="" minor="" patch=""
+    IFS='.' read -r major minor patch <<< "$raw"
     major="${major//[^0-9]/}"
     minor="${minor//[^0-9]/}"
-    if [ -z "$major" ] || [ -z "$minor" ]; then
+    patch="${patch%%-*}"
+    patch="${patch//[^0-9]/}"
+    if [ -z "$major" ] || [ -z "$minor" ] || [ -z "$patch" ]; then
         return 1
     fi
     if [ "$major" -gt 22 ]; then
         return 0
     fi
-    if [ "$major" -eq 22 ] && [ "$minor" -ge 13 ]; then
+    if [ "$major" -eq 22 ] && [ "$minor" -gt 23 ]; then
+        return 0
+    fi
+    if [ "$major" -eq 22 ] && [ "$minor" -eq 23 ] && [ "$patch" -ge 4 ]; then
         return 0
     fi
     return 1
@@ -479,20 +484,20 @@ if [ -z "$NODE_PATH" ]; then
 else
     NODE_VERSION="$("$NODE_PATH" -v)"
     if ! node_satisfies_minimum "$NODE_VERSION"; then
-        echo "⚠️ Detected Node.js $NODE_VERSION, but Home Cloud requires Node.js >= 22.13."
+        echo "⚠️ Detected Node.js $NODE_VERSION, but Home Cloud requires Node.js >= 22.23.4."
         NEED_NODE_REFUSE=true
     fi
 fi
 
 if [ "$NEED_NODE_REFUSE" = true ]; then
     if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] Node.js >= 22.13 must be installed by the operator. Setup would refuse and exit 1. Not installing Node.js."
+        echo "[DRY-RUN] Node.js >= 22.23.4 must be installed by the operator. Setup would refuse and exit 1. Not installing Node.js."
         if [ -z "$NODE_PATH" ]; then
             NODE_PATH="/usr/bin/node"
             NODE_VERSION="(not installed)"
         fi
     else
-        echo "❌ Node.js >= 22.13 must be installed by the operator." >&2
+        echo "❌ Node.js >= 22.23.4 must be installed by the operator." >&2
         exit 1
     fi
 fi
@@ -500,9 +505,9 @@ fi
 NODE_DIR="$(dirname "$NODE_PATH")"
 echo "✔ Active Node.js:     $NODE_PATH ($NODE_VERSION)"
 
-# 4. pnpm via corepack (pinned 11.28.8; never npm -g and never get.pnpm.io)
+# 4. pnpm via corepack (pinned 12.15.0; never npm -g and never get.pnpm.io)
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-PNPM_PIN="11.28.8"
+PNPM_PIN="12.15.0"
 
 pnpm_is_pinned_line() {
     [ "${1:-}" = "$PNPM_PIN" ]
@@ -530,7 +535,7 @@ if [ "$DRY_RUN" = true ]; then
     fi
 else
     if ! command -v corepack >/dev/null 2>&1; then
-        echo "❌ corepack is required to activate pnpm@${PNPM_PIN}. Node.js >= 22.13 must be installed by the operator." >&2
+        echo "❌ corepack is required to activate pnpm@${PNPM_PIN}. Node.js >= 22.23.4 must be installed by the operator." >&2
         exit 1
     fi
     PNPM_VER=""

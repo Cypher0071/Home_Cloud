@@ -29,10 +29,10 @@ Home Cloud follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By participat
 
 Before setting up Home Cloud locally, verify that your development environment satisfies the following requirements:
 
-- **Node.js**: `>= 22.13`. Node.js 20 is not supported.
-- **pnpm**: `11.28.8`.
+- **Node.js**: `>= 22.23.4`. Node.js 20 is not supported.
+- **pnpm**: `12.15.0`.
   - This is the pinned version for CI and Corepack. It is not "pnpm >= 9" and not floating `latest`.
-  - If you use Corepack: `corepack enable && corepack prepare pnpm@11.28.8 --activate`.
+  - If you use Corepack: `corepack enable && corepack prepare pnpm@12.15.0 --activate`.
 - **Docker Engine**: Installed and running daemon.
   - Your user must belong to the `docker` group to interact with the Docker socket without root privileges:
     ```bash
