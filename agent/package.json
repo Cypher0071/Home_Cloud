@@ -2,7 +2,7 @@
 	"name": "agent",
 	"version": "1.0.1",
 	"engines": {
-		"node": ">=22.13.0"
+		"node": ">=22.23.4"
 	},
 	"description": "Home Cloud agent: Express API, Docker control, files, and the host terminal.",
 	"main": "index.js",
