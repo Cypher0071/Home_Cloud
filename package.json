@@ -1,7 +1,7 @@
 {
 	"name": "home_cloud",
 	"version": "1.0.1",
-	"packageManager": "pnpm@11.28.8",
+	"packageManager": "pnpm@12.15.0",
 	"engines": {
 		"node": ">=22.13.0"
 	},
@@ -24,12 +24,12 @@
 	"devEngines": {
 		"packageManager": {
 			"name": "pnpm",
-			"version": "11.28.8",
+			"version": "12.15.0",
 			"onFail": "download"
 		}
 	},
 	"type": "module",
 	"devDependencies": {
-		"concurrently": "^10.0.3"
+		"concurrently": "^10.0.6"
 	}
 }

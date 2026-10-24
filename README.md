@@ -136,7 +136,7 @@ The raw installer URL tracks the repository default branch (`main`):
 curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash
 ```
 
-Node.js `>= 22.13` and Docker must already be installed. The installer does not pipe NodeSource, `get.pnpm.io`, `get.docker.com`, or `cloudflared` `releases/latest`. It installs pnpm through corepack at the pinned version (`11.28.8`). `cloudflared` is optional and is downloaded only at a pinned release after sha256 verification. The installer then configures the tunnel when you ask it to, writes `agent/.env`, and installs a systemd service.
+Node.js `>= 22.13` and Docker must already be installed. The installer does not pipe NodeSource, `get.pnpm.io`, `get.docker.com`, or `cloudflared` `releases/latest`. It installs pnpm through corepack at the pinned version (`12.15.0`). `cloudflared` is optional and is downloaded only at a pinned release after sha256 verification. The installer then configures the tunnel when you ask it to, writes `agent/.env`, and installs a systemd service.
 
 The systemd unit runs as the install user, not root. The installer refuses `User=root` when there is no `SUDO_USER` and no `HOME_CLOUD_SERVICE_USER`.
 
@@ -256,7 +256,7 @@ Runtime settings are persisted dynamically by the agent:
 | **OS** | Linux | Ubuntu and Debian (apt), Fedora (dnf), yum-based distros, Arch Linux (pacman) |
 | **Architecture** | x86_64 / amd64 | ARM64 / Raspberry Pi is untested. |
 | **Node.js** | `>= 22.13` | Node.js 20 is not supported. |
-| **Package Manager**| pnpm `11.28.8` | Pinned version, installed with corepack. Not `pnpm >= 9`. |
+| **Package Manager**| pnpm `12.15.0` | Pinned version, installed with corepack. Not `pnpm >= 9`. |
 | **Docker** | `24.0.0+` | Must already be installed. The user running the agent must be in the `docker` group. |
 | **Cloudflare** | Free Account | Domain managed on Cloudflare DNS with a Named Tunnel configured |
 
