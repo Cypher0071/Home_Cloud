@@ -35,22 +35,9 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     </div>
   </div>
 ) : (
-  <section id="features" class="product-demo" aria-labelledby="demo-title">
+  <section id="features" class="product-demo" aria-label="Interactive Home Cloud desktop demo">
     <div class="container demo-container">
       <div class="demo-frame">
-        <header class="demo-intro reveal">
-          <div class="demo-kicker">
-            <span class="badge-dot" aria-hidden="true"></span>
-            <span>THE CONTROL SURFACE · FULL PRODUCT EXPERIENCE</span>
-          </div>
-          <h2 id="demo-title" class="demo-title">
-            Explore the actual Home Cloud desktop <span class="font-serif-italic">in your browser.</span>
-          </h2>
-          <p class="demo-desc">
-            Switch tools below to explore the real product interface. File Explorer, System Metrics, Docker Manager, Settings, and Terminal are 100% interactive with realistic mock data.
-          </p>
-        </header>
-
         <div class="demo-device reveal">
         <div
           class="hc-desktop hc-desktop-live"
@@ -794,53 +781,8 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     box-sizing: border-box;
   }
 
-  .demo-intro {
-    padding: clamp(56px, 7vw, 88px) clamp(24px, 4vw, 48px) clamp(24px, 3.5vw, 40px);
-  }
-
-  .demo-kicker {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: var(--hc-space-4);
-    color: var(--hc-text-tertiary);
-    font-family: var(--hc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .demo-kicker .badge-dot {
-    width: 6px;
-    height: 6px;
-    border: 1px solid var(--hc-accent);
-    background: var(--hc-accent-soft);
-    display: inline-block;
-  }
-
-  .demo-title {
-    max-width: 26ch;
-    margin-bottom: var(--hc-space-3);
-    font-family: var(--hc-font-display);
-    font-size: clamp(2.15rem, 2rem + 1.8vw, 3.15rem);
-    font-weight: 550;
-    line-height: 1.06;
-    letter-spacing: -0.04em;
-    color: var(--hc-text-primary);
-    text-wrap: balance;
-  }
-
-  .demo-desc {
-    max-width: 65ch;
-    color: var(--hc-text-secondary);
-    font-family: var(--hc-font-sans);
-    font-size: var(--hc-text-body);
-    line-height: 1.6;
-    margin: 0;
-  }
-
   .demo-device {
-    padding: 0 clamp(16px, 3.5vw, 40px) clamp(36px, 5vw, 56px);
+    padding: clamp(28px, 4vw, 48px) clamp(16px, 3.5vw, 40px) clamp(32px, 5vw, 56px);
     width: 100%;
     box-sizing: border-box;
   }
@@ -901,11 +843,8 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
   }
 
   @media (max-width: 768px) {
-    .demo-intro {
-      padding: 36px 16px 20px;
-    }
     .demo-device {
-      padding: 0 10px 32px;
+      padding: 16px 10px 24px;
     }
     .demo-caption {
       padding: 12px 16px;
