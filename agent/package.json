@@ -14,7 +14,7 @@
 	"author": "Rudra Agrawal (Cypher0071)",
 	"license": "Apache-2.0",
 	"dependencies": {
-		"cookie": "^1.1.1",
+		"cookie": "^2.0.1",
 		"cookie-parser": "^1.4.7",
 		"dockerode": "^5.0.1",
 		"dotenv": "^18.0.9",
