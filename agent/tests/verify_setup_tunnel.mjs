@@ -48,6 +48,13 @@ function createSandbox(testName) {
 	fs.mkdirSync(binDir, { recursive: true });
 	fs.mkdirSync(agentDir, { recursive: true });
 	fs.mkdirSync(cfDir, { recursive: true });
+	// Keep root-run CI and local test runs from invoking real sudo or waiting
+	// for an interactive password prompt. External tunnel commands are mocks.
+	fs.writeFileSync(
+		path.join(binDir, "sudo"),
+		'#!/usr/bin/env bash\nif [ "${1:-}" = "-u" ]; then shift 2; fi\nif [ "${1:-}" = "-H" ]; then shift; fi\nexec "$@"\n',
+		{ mode: 0o755 },
+	);
 
 	return { sandboxDir, homeDir, binDir, agentDir, cfDir };
 }
@@ -65,12 +72,14 @@ function runTunnelSetup(options) {
 		env = {},
 		stdin = "",
 		mockMissingCf = false,
+		prelude = "",
 	} = options;
 
 	const script = `
         SETUP_SH="${SETUP_SH}"
         eval "$(awk '/^run_as_current_user\\(\\)/,/# 2\\. Install/' "$SETUP_SH" | head -n -1)"
         eval "$(awk '/^setup_cloudflare_tunnel\\(\\)/,/^setup_cloudflare_tunnel$/' "$SETUP_SH" | head -n -1)"
+        ${prelude}
         ${mockMissingCf ? `
         command() {
             if [ "$1" = "-v" ] && [ "$2" = "cloudflared" ]; then return 1; fi
@@ -90,21 +99,27 @@ function runTunnelSetup(options) {
 		SCRIPT_DIR: path.resolve(agentDir, ".."),
 		NODE_PATH: process.execPath,
 		ACTIVE_IP: "192.168.1.100",
+		// Keep the extracted transaction helpers away from the real user state
+		// directory even when this file is run directly, not via the suite.
+		HOME_CLOUD_STATE_DIR: path.join(homeDir, ".state"),
+		DRY_RUN: "false",
 		...env,
 	};
 
-	const res = spawnSync("bash", ["-c", script], {
+	const spawnOptions = {
 		env: runEnv,
-		input: stdin,
 		encoding: "utf8",
-		stdio: ["pipe", "pipe", "pipe"],
-	});
+		stdio: [stdin === null ? "ignore" : "pipe", "pipe", "pipe"],
+		timeout: 15000,
+	};
+	if (stdin !== null) spawnOptions.input = stdin;
+	const res = spawnSync("bash", ["-c", script], spawnOptions);
 
 	return {
 		code: res.status,
 		stdout: res.stdout || "",
 		stderr: res.stderr || "",
-		output: (res.stdout || "") + (res.stderr || ""),
+		output: (res.stdout || "") + (res.stderr || "") + (res.error ? `\n${res.error.message}` : ""),
 	};
 }
 
@@ -416,7 +431,7 @@ esac
 			binDir,
 			agentDir,
 			env: { CF_DOMAIN: "reuse-domain.xyz", SETUP_FORCE_INTERACTIVE: "true" },
-			stdin: "y\n",
+			stdin: "y\nreuse-domain.xyz\n",
 		});
 
 		assert.equal(res.code, 0, `Execution failed: ${res.output}`);
@@ -530,11 +545,81 @@ console.log("\n[Test 8] End-of-install banner with remote HTTPS URL");
 }
 
 // -----------------------------------------------------------------------------
-// Test 9: Orphaned remote tunnel without local credentials file -> deletes & re-creates
+// Test 9: Orphaned remote tunnel without local credentials is preserved unless
+//         the journal proves this setup transaction created it.
 // -----------------------------------------------------------------------------
-console.log("\n[Test 9] Orphaned remote tunnel without local credentials file");
+console.log("\n[Test 9] Unproven orphaned remote tunnel is preserved");
 {
 	const { sandboxDir, homeDir, binDir, agentDir, cfDir } = createSandbox("test9_orphan_tunnel");
+	try {
+		const mockCf = path.join(binDir, "cloudflared");
+		const logFile = path.join(sandboxDir, "cloudflared.log");
+		const orphanedUUID = "deadbeef-dead-beef-dead-beefdeadbeef";
+
+		fs.writeFileSync(path.join(cfDir, "cert.pem"), "dummy-cert");
+
+		fs.writeFileSync(
+			mockCf,
+			`#!/usr/bin/env bash
+echo "$@" >> "${logFile}"
+case "$2" in
+    list)
+        echo "ID NAME CREATED"
+        echo "${orphanedUUID} home-cloud 2026-01-01"
+        exit 0
+        ;;
+    delete)
+        echo "ERROR: delete should NOT have been called!" >&2
+        exit 1
+        ;;
+    create)
+        echo "ERROR: create should NOT have been called!" >&2
+        exit 1
+        ;;
+    route)
+        exit 0
+        ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+
+		const envFile = path.join(agentDir, ".env");
+		fs.writeFileSync(envFile, "PORT=3000\n", { mode: 0o600 });
+
+		const res = runTunnelSetup({
+			homeDir,
+			binDir,
+			agentDir,
+			env: { CF_DOMAIN: "fresh-cloud.org" },
+			stdin: "",
+		});
+
+		assert.equal(res.code, 0, `Execution failed: ${res.output}`);
+		assert.match(res.output, /Refusing to delete a remote tunnel that was not proven/i);
+		assert.equal(
+			fs.existsSync(path.join(cfDir, "config.yml")),
+			false,
+			"unproven orphan must not yield a config pointing at missing credentials",
+		);
+		const envContent = fs.readFileSync(envFile, "utf8");
+		assert.doesNotMatch(envContent, /CF_DOMAIN/);
+		const logContent = fs.readFileSync(logFile, "utf8");
+		assert.doesNotMatch(logContent, /tunnel delete/);
+		assert.doesNotMatch(logContent, /tunnel create/);
+
+		console.log("  ✔ Unproven remote tunnel was left untouched and setup fell back to LAN-only.");
+	} finally {
+		cleanupSandbox(sandboxDir);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 9b: An orphan proven created by an interrupted setup run is rolled back
+// -----------------------------------------------------------------------------
+console.log("\n[Test 9b] Proven orphaned remote tunnel is removed and recreated");
+{
+	const { sandboxDir, homeDir, binDir, agentDir, cfDir } = createSandbox("test9b_proven_orphan");
 	try {
 		const mockCf = path.join(binDir, "cloudflared");
 		const logFile = path.join(sandboxDir, "cloudflared.log");
@@ -542,7 +627,6 @@ console.log("\n[Test 9] Orphaned remote tunnel without local credentials file");
 		const newUUID = "cafebabe-cafe-babe-cafe-babecafebabe";
 
 		fs.writeFileSync(path.join(cfDir, "cert.pem"), "dummy-cert");
-
 		fs.writeFileSync(
 			mockCf,
 			`#!/usr/bin/env bash
@@ -586,24 +670,185 @@ esac
 			agentDir,
 			env: { CF_DOMAIN: "fresh-cloud.org" },
 			stdin: "",
+			prelude: `RECOVERED_TUNNEL_DELETE_ALLOWED=yes; RECOVERED_TUNNEL_ID="${orphanedUUID}"; TUNNEL_CREATED_BY_SETUP=yes`,
 		});
 
 		assert.equal(res.code, 0, `Execution failed: ${res.output}`);
-		assert.match(res.output, /Removing orphaned remote tunnel and generating new credentials/i);
+		assert.match(res.output, /Removing an orphaned remote tunnel proven to have been created/i);
 		assert.match(res.output, /✔ Successfully generated .*config\.yml/i);
 
 		const configContent = fs.readFileSync(path.join(cfDir, "config.yml"), "utf8");
 		assert.match(configContent, new RegExp(`tunnel: ${newUUID}`));
 		assert.match(configContent, new RegExp(`credentials-file: .*${newUUID}\\.json`));
 		assert.match(configContent, /hostname: dash\.fresh-cloud\.org/);
-
 		assert.equal(fs.existsSync(path.join(cfDir, `${newUUID}.json`)), true);
 
 		const logContent = fs.readFileSync(logFile, "utf8");
 		assert.match(logContent, /tunnel delete -f home-cloud/);
 		assert.match(logContent, /tunnel create home-cloud/);
 
-		console.log("  ✔ Orphaned remote tunnel detected, cleanly purged, and recreated with local credentials.");
+		console.log("  ✔ Journal-proven orphan was deleted and recreated; credentials were not guessed.");
+	} finally {
+		cleanupSandbox(sandboxDir);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 9c: Malformed pre-existing config.yml is never overwritten without proof
+// -----------------------------------------------------------------------------
+console.log("\n[Test 9c] Malformed pre-existing config.yml is preserved");
+{
+	const { sandboxDir, homeDir, binDir, agentDir, cfDir } = createSandbox("test9c_malformed_config");
+	try {
+		const mockCf = path.join(binDir, "cloudflared");
+		fs.writeFileSync(mockCf, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o755 });
+		fs.writeFileSync(path.join(cfDir, "cert.pem"), "dummy-cert");
+
+		const malformed = "tunnel: truncated-without-ingress\n";
+		const configPath = path.join(cfDir, "config.yml");
+		fs.writeFileSync(configPath, malformed);
+
+		const envFile = path.join(agentDir, ".env");
+		const originalEnv = "PASSWORD=keep-me-123\nJWT_SECRET=keep-jwt\nPORT=3000\n";
+		fs.writeFileSync(envFile, originalEnv, { mode: 0o600 });
+
+		const res = runTunnelSetup({
+			homeDir,
+			binDir,
+			agentDir,
+			env: { CF_DOMAIN: "should-not-apply.example" },
+			stdin: "",
+		});
+
+		assert.equal(res.code, 0, `Execution failed: ${res.output}`);
+		assert.match(res.output, /incomplete or malformed/i);
+		assert.match(res.output, /Refusing to overwrite a pre-existing file/i);
+		assert.equal(fs.readFileSync(configPath, "utf8"), malformed, "malformed user config must be untouched");
+		assert.equal(fs.readFileSync(envFile, "utf8"), originalEnv, "secrets must be untouched");
+		console.log("  ✔ Malformed pre-existing config and env secrets were preserved.");
+	} finally {
+		cleanupSandbox(sandboxDir);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 9d: A malformed config previously written by setup is regenerated
+// -----------------------------------------------------------------------------
+console.log("\n[Test 9d] Interrupted setup-owned config.yml is regenerated");
+{
+	const { sandboxDir, homeDir, binDir, agentDir, cfDir } = createSandbox("test9d_owned_config");
+	try {
+		const mockCf = path.join(binDir, "cloudflared");
+		const newUUID = "12345678-1234-1234-1234-123456789abc";
+		fs.writeFileSync(path.join(cfDir, "cert.pem"), "dummy-cert");
+		fs.writeFileSync(
+			mockCf,
+			`#!/usr/bin/env bash
+case "$2" in
+    list)
+        echo "ID NAME CREATED"
+        exit 0
+        ;;
+    create)
+        touch "${cfDir}/${newUUID}.json"
+        echo "Tunnel credentials written to ${cfDir}/${newUUID}.json. Tunnel ID ${newUUID}"
+        exit 0
+        ;;
+    route)
+        exit 0
+        ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+
+		const configPath = path.join(cfDir, "config.yml");
+		fs.writeFileSync(configPath, "tunnel: trunc");
+		const envFile = path.join(agentDir, ".env");
+		fs.writeFileSync(envFile, "PORT=3000\n", { mode: 0o600 });
+
+		const res = runTunnelSetup({
+			homeDir,
+			binDir,
+			agentDir,
+			env: { CF_DOMAIN: "recovered.example" },
+			stdin: "",
+			prelude: "CF_CONFIG_CREATED_BY_SETUP=yes",
+		});
+
+		assert.equal(res.code, 0, `Execution failed: ${res.output}`);
+		assert.match(res.output, /Replacing an incomplete Cloudflare config/i);
+		const configContent = fs.readFileSync(configPath, "utf8");
+		assert.match(configContent, new RegExp(`tunnel: ${newUUID}`));
+		assert.match(configContent, /hostname: dash\.recovered\.example/);
+		assert.doesNotMatch(configContent, /tunnel: trunc/);
+		console.log("  ✔ Setup-owned incomplete config was atomically replaced.");
+	} finally {
+		cleanupSandbox(sandboxDir);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 9e: A tunnel discovered only after a failed pre-list/create is not claimed
+// -----------------------------------------------------------------------------
+console.log("\n[Test 9e] Unverifiable tunnel creation is never claimed as setup-owned");
+{
+	const { sandboxDir, homeDir, binDir, agentDir, cfDir } = createSandbox("test9e_unproven_create");
+	try {
+		const mockCf = path.join(binDir, "cloudflared");
+		const foreignUUID = "feedface-feed-face-feed-feedfacefeed";
+		const listCount = path.join(sandboxDir, "list-count");
+		fs.writeFileSync(path.join(cfDir, "cert.pem"), "dummy-cert");
+		fs.writeFileSync(
+			path.join(cfDir, `${foreignUUID}.json`),
+			`{"AccountTag":"tag","TunnelSecret":"sec","TunnelID":"${foreignUUID}"}\n`,
+		);
+		fs.writeFileSync(
+			mockCf,
+			`#!/usr/bin/env bash
+case "$2" in
+    list)
+        if [ ! -f "${listCount}" ]; then
+            : > "${listCount}"
+            exit 1
+        fi
+        echo "ID NAME CREATED"
+        echo "${foreignUUID} home-cloud 2026-01-01"
+        exit 0
+        ;;
+    create)
+        echo "network unavailable" >&2
+        exit 1
+        ;;
+    delete)
+        echo "ERROR: delete should NOT have been called!" >&2
+        exit 1
+        ;;
+    route)
+        exit 0
+        ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+
+		const envFile = path.join(agentDir, ".env");
+		fs.writeFileSync(envFile, "PORT=3000\n", { mode: 0o600 });
+
+		const res = runTunnelSetup({
+			homeDir,
+			binDir,
+			agentDir,
+			env: { CF_DOMAIN: "unproven.example" },
+			stdin: "",
+			prelude: 'journal_put() { printf "JOURNAL %s=%s\\n" "$1" "${2:-}"; }',
+		});
+
+		assert.equal(res.code, 0, `Execution failed: ${res.output}`);
+		assert.doesNotMatch(res.output, /Removing an orphaned remote tunnel/i);
+		assert.match(res.output, /JOURNAL tunnel_created_by_setup=no/);
+		assert.doesNotMatch(res.output, /JOURNAL tunnel_created_by_setup=yes/);
+		console.log("  ✔ Tunnel found only after a failed pre-list/create was used, not claimed or deleted.");
 	} finally {
 		cleanupSandbox(sandboxDir);
 	}
@@ -797,7 +1042,7 @@ console.log("\n[Test 13] EOF handling on interactive prompts under set -e");
 			binDir,
 			agentDir,
 			env: { SETUP_FORCE_INTERACTIVE: "true" },
-			stdin: "",
+			stdin: null,
 		});
 
 		assert.equal(res.code, 0, `Expected clean exit 0 on EOF, got ${res.code}: ${res.output}`);

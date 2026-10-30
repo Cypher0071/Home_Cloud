@@ -8,6 +8,8 @@ set -euo pipefail
 DRY_RUN="${DRY_RUN:-false}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_CLOUDFLARED="${SKIP_CLOUDFLARED:-false}"
+SKIP_SSH="${SKIP_SSH:-false}"
+SKIP_LID="${SKIP_LID:-false}"
 CF_DOMAIN_INPUT="${CF_DOMAIN:-${CLOUDFLARE_DOMAIN:-}}"
 TUNNEL_NAME_INPUT="${TUNNEL_NAME:-home-cloud}"
 ADMIN_PASS_INPUT="${HOME_CLOUD_PASSWORD:-}"
@@ -34,6 +36,8 @@ show_help() {
         '  --branch <branch>             Git ref to install (default: v1.0.1)' \
         '  -y, --yes, --non-interactive  Non-interactive mode (auto-accept defaults, no prompts)' \
         '  --skip-cloudflared            Skip cloudflared download, installation, and tunnel configuration' \
+        '  --skip-ssh                    Skip OpenSSH server check and installation' \
+        '  --skip-lid                    Skip laptop lid switch configuration' \
         '  --dry-run, --check-only       Verify prerequisites, flags, and configuration without modifying system' \
         '' \
         'Environment Variables:' \
@@ -45,6 +49,8 @@ show_help() {
         '  HOME_CLOUD_SERVICE_USER       Non-root account for the systemd unit when the installer is root' \
         '  NON_INTERACTIVE=true          Run non-interactively' \
         '  SKIP_CLOUDFLARED=true         Skip cloudflared' \
+        '  SKIP_SSH=true                 Skip OpenSSH server check and installation' \
+        '  SKIP_LID=true                 Skip laptop lid switch configuration' \
         '  DRY_RUN=true                  Simulate setup without modifying system' \
         '' \
         'Documentation: https://github.com/Cypher0071/home_cloud'
@@ -144,6 +150,14 @@ while [ $# -gt 0 ]; do
             SKIP_CLOUDFLARED=true
             shift
             ;;
+        --skip-ssh)
+            SKIP_SSH=true
+            shift
+            ;;
+        --skip-lid)
+            SKIP_LID=true
+            shift
+            ;;
         --dry-run|--check-only)
             DRY_RUN=true
             shift
@@ -176,7 +190,8 @@ if [ -n "$TARGET_DIR" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$PWD}")" 2>/dev/null && pwd || pwd)"
-TARGET_SERVICE="/etc/systemd/system/home-cloud.service"
+SYSTEMD_DIR="${HOME_CLOUD_SYSTEMD_DIR:-/etc/systemd/system}"
+TARGET_SERVICE="$SYSTEMD_DIR/home-cloud.service"
 
 echo "========================================================"
 echo "  Home Cloud — Production Host & Systemd Installer      "
@@ -315,6 +330,604 @@ read_input() {
     return 1
 }
 
+# ==============================================================================
+# Transaction, journal, and atomic-write helpers
+# ==============================================================================
+# >>> HOME CLOUD TRANSACTION HELPERS >>>
+# setup.sh is a long, multi-phase installer. A SIGINT/SIGTERM trap can clean up
+# the current process, but SIGKILL and power loss cannot. The journal records
+# enough intent that the next run can recognise and reconcile a stale attempt
+# without deleting pre-existing user state. Nothing here ever records secrets.
+SETUP_ATTEMPT_ID="$(date +%s 2>/dev/null || echo 0)-$$-$RANDOM"
+SETUP_STATE_BASE="${HOME_CLOUD_STATE_DIR:-${XDG_STATE_HOME:-$CURRENT_HOME/.local/state}/home-cloud}"
+SETUP_STATE_DIR="$SETUP_STATE_BASE/setup"
+SETUP_LOCK_FILE="$SETUP_STATE_BASE/setup.lock"
+SETUP_STATE_KEY=""
+SETUP_JOURNAL_FILE=""
+declare -A SETUP_JOURNAL=()
+SETUP_TXN_ACTIVE=false
+SETUP_TXN_COMPLETE=false
+SETUP_LOCK_HELD=false
+SETUP_LOCK_DIR=""
+SETUP_PHASE="init"
+SETUP_TEMP_FILES=()
+SETUP_TEMP_DIRS=()
+SETUP_ROLLBACK_FUNCS=()
+
+RECOVERED_ENV_CREATED=no
+RECOVERED_INSTALL_DIR_CLAIM=no
+RECOVERED_TUNNEL_CREATED=no
+RECOVERED_TUNNEL_DELETE_ALLOWED=no
+RECOVERED_TUNNEL_ID=""
+RECOVERED_GIT_CHECKOUT_INTERRUPTED=no
+RECOVERED_CF_CONFIG_CREATED=no
+RECOVERED_SERVICE_RESTORE_FAILED=no
+
+INSTALL_DIR_PREEXISTING=no
+INSTALL_DIR_WAS_EMPTY=no
+INSTALL_DIR_CLAIM=no
+ENV_CREATED_BY_SETUP=no
+TUNNEL_CREATED_BY_SETUP=no
+CF_CONFIG_CREATED_BY_SETUP=no
+
+durable_sync_file() {
+    [ -n "${1:-}" ] || return 0
+    sync -f -- "$1" >/dev/null 2>&1
+}
+
+durable_sync_dir() {
+    [ -n "${1:-}" ] || return 0
+    sync -f -- "$1" >/dev/null 2>&1
+}
+
+register_temp_file() {
+    [ -n "${1:-}" ] || return 0
+    SETUP_TEMP_FILES+=("$1")
+}
+
+register_temp_dir() {
+    [ -n "${1:-}" ] || return 0
+    SETUP_TEMP_DIRS+=("$1")
+}
+
+journal_put() {
+    local key="$1"
+    local value="${2:-}"
+    [ -n "$SETUP_JOURNAL_FILE" ] || return 0
+    case "$key" in
+        *[!A-Za-z0-9_]*|'') return 1 ;;
+    esac
+    case "$value" in
+        *$'\r'*|*$'\n'*) return 1 ;;
+    esac
+    SETUP_JOURNAL["$key"]="$value"
+    journal_flush
+}
+
+journal_put_critical() {
+    local key="$1"
+    local value="${2:-}"
+    if ! journal_put "$key" "$value"; then
+        echo "❌ Fatal: Failed to persist critical journal record ($key=$value) to $SETUP_JOURNAL_FILE." >&2
+        echo "   Aborting to prevent untracked state modifications." >&2
+        exit 1
+    fi
+}
+
+journal_flush() {
+    [ -n "$SETUP_JOURNAL_FILE" ] || return 0
+    [ "${HOME_CLOUD_SIMULATE_JOURNAL_FAIL:-0}" != "1" ] || return 1
+    local tmp="" key
+    tmp="$(mktemp "${SETUP_JOURNAL_FILE}.home-cloud-tmp.XXXXXX")" || return 1
+    {
+        printf 'version=1\n'
+        for key in "${!SETUP_JOURNAL[@]}"; do
+            printf '%s=%s\n' "$key" "${SETUP_JOURNAL[$key]}"
+        done
+    } > "$tmp" || { rm -f "$tmp"; return 1; }
+    chmod 600 "$tmp" 2>/dev/null || true
+    durable_sync_file "$tmp" || { rm -f -- "$tmp"; return 1; }
+    mv -fT -- "$tmp" "$SETUP_JOURNAL_FILE" || { rm -f "$tmp"; return 1; }
+    durable_sync_dir "$(dirname "$SETUP_JOURNAL_FILE")" || return 1
+}
+
+journal_load() {
+    local file="$1"
+    local key value
+    SETUP_JOURNAL=()
+    [ -f "$file" ] || return 0
+    while IFS='=' read -r key value; do
+        case "$key" in
+            ''|'#'*) continue ;;
+        esac
+        [[ "$key" =~ ^[A-Za-z0-9_]+$ ]] || continue
+        SETUP_JOURNAL["$key"]="$value"
+    done < "$file"
+}
+
+dir_has_entries() {
+    local dir="$1"
+    local entry
+    [ -d "$dir" ] || return 1
+    for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+        if [ -e "$entry" ] || [ -L "$entry" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+cleanup_pattern_in_dir() {
+    local dir="$1"
+    local pattern="$2"
+    local entry
+    [ -d "$dir" ] || return 0
+    for entry in "$dir"/$pattern; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        rm -f -- "$entry" 2>/dev/null || run_privileged rm -f -- "$entry" 2>/dev/null || true
+    done
+}
+
+cleanup_owned_temp_files() {
+    local install_dir="${INSTALL_DIR:-}"
+    local parent=""
+    local entry=""
+    cleanup_pattern_in_dir "$CURRENT_HOME/.cloudflared" '.config.yml.home-cloud-tmp.*'
+    cleanup_pattern_in_dir "$SETUP_STATE_DIR" 'transaction-*.home-cloud-tmp.*'
+    if [ -n "$SETUP_STATE_KEY" ]; then
+        cleanup_pattern_in_dir "$SETUP_STATE_DIR" "service-unit.${SETUP_STATE_KEY}.render.*"
+    fi
+    cleanup_pattern_in_dir "$(dirname "$TARGET_SERVICE")" '.home-cloud.service.home-cloud-tmp.*'
+    cleanup_pattern_in_dir "/usr/local/bin" '.cloudflared.home-cloud-tmp.*'
+    if [ -n "$install_dir" ]; then
+        cleanup_pattern_in_dir "$install_dir/agent" '.env.home-cloud-tmp.*'
+        parent="$(dirname "$install_dir")"
+        for entry in "$parent"/"$(basename "$install_dir")".home-cloud-clone.*; do
+            if [ -d "$entry" ] && [ ! -L "$entry" ]; then
+                # Only remove staging directories that carry our marker, plus
+                # empty shells left between mkdir and marker creation.
+                if [ -f "$entry/.home-cloud-attempt" ] || ! dir_has_entries "$entry"; then
+                    rm -rf -- "$entry" 2>/dev/null || run_privileged rm -rf -- "$entry" 2>/dev/null || true
+                fi
+            fi
+        done
+    fi
+    for entry in "${TMPDIR:-/tmp}"/home-cloud-setup.*; do
+        if [ -d "$entry" ] && [ ! -L "$entry" ] && [ -f "$entry/.home-cloud-attempt" ]; then
+            rm -rf -- "$entry" 2>/dev/null || run_privileged rm -rf -- "$entry" 2>/dev/null || true
+        fi
+    done
+}
+cleanup_current_temps() {
+    local entry
+    for entry in "${SETUP_TEMP_FILES[@]}"; do
+        [ -e "$entry" ] || [ -L "$entry" ] || continue
+        rm -f -- "$entry" 2>/dev/null || run_privileged rm -f -- "$entry" 2>/dev/null || true
+    done
+    for entry in "${SETUP_TEMP_DIRS[@]}"; do
+        [ -d "$entry" ] || continue
+        rm -rf -- "$entry" 2>/dev/null || run_privileged rm -rf -- "$entry" 2>/dev/null || true
+    done
+    SETUP_TEMP_FILES=()
+    SETUP_TEMP_DIRS=()
+}
+
+recover_service_unit_backup() {
+    local touched="${SETUP_JOURNAL[service_unit_touched]:-no}"
+    local backup="${SETUP_JOURNAL[service_unit_backup]:-}"
+    local journal_target="${SETUP_JOURNAL[service_unit_target]:-}"
+    local restore_tmp=""
+
+    # A backup is recorded before it is created. If the process died before
+    # the target replacement intent was committed, the target is untouched;
+    # remove only that journal-owned partial backup on the next run.
+    if [ "$touched" != "yes" ]; then
+        if [ "${SETUP_JOURNAL[service_unit_preexisting]:-no}" = "yes" ] && [ -n "$backup" ]; then
+            case "$backup" in
+                "$SETUP_STATE_DIR/service-unit.$SETUP_STATE_KEY.backup."*) ;;
+                *)
+                    echo "⚠️ Interrupted setup recorded an invalid systemd backup path; refusing to remove it." >&2
+                    RECOVERED_SERVICE_RESTORE_FAILED=yes
+                    return 0
+                    ;;
+            esac
+            if [ -e "$backup" ] || [ -L "$backup" ]; then
+                if ! rm -f -- "$backup" 2>/dev/null && ! run_privileged rm -f -- "$backup" 2>/dev/null; then
+                    echo "⚠️ Could not remove the incomplete systemd backup at $backup." >&2
+                    RECOVERED_SERVICE_RESTORE_FAILED=yes
+                    return 0
+                fi
+                durable_sync_dir "$SETUP_STATE_DIR" || {
+                    echo "⚠️ Could not sync systemd backup cleanup in $SETUP_STATE_DIR." >&2
+                    RECOVERED_SERVICE_RESTORE_FAILED=yes
+                    return 0
+                }
+            fi
+        fi
+        return 0
+    fi
+    if [ "${SETUP_JOURNAL[service_unit_preexisting]:-no}" != "yes" ]; then
+        run_privileged rm -f -- "$TARGET_SERVICE" 2>/dev/null || true
+        return 0
+    fi
+    case "$backup" in
+        "$SETUP_STATE_DIR/service-unit.$SETUP_STATE_KEY.backup."*) ;;
+        *)
+            echo "⚠️ Interrupted setup recorded an invalid systemd backup path; refusing to restore it." >&2
+            RECOVERED_SERVICE_RESTORE_FAILED=yes
+            return 0
+            ;;
+    esac
+    if [ -z "$backup" ] || [ ! -f "$backup" ] || [ -L "$backup" ]; then
+        echo "⚠️ Interrupted setup recorded a pre-existing systemd unit backup, but $backup is missing or invalid." >&2
+        RECOVERED_SERVICE_RESTORE_FAILED=yes
+        return 0
+    fi
+    if [ -n "$journal_target" ] && [ "$journal_target" != "$TARGET_SERVICE" ]; then
+        echo "⚠️ Interrupted setup recorded a different systemd unit path; leaving its backup in place." >&2
+        RECOVERED_SERVICE_RESTORE_FAILED=yes
+        return 0
+    fi
+    if [ -L "$TARGET_SERVICE" ]; then
+        echo "⚠️ $TARGET_SERVICE is now a symlink; refusing to overwrite it from the transaction backup." >&2
+        RECOVERED_SERVICE_RESTORE_FAILED=yes
+        return 0
+    fi
+    restore_tmp="$(run_privileged mktemp "$(dirname "$TARGET_SERVICE")/.home-cloud.service.home-cloud-tmp.XXXXXX")" || {
+        echo "⚠️ Could not stage a systemd unit restore from $backup." >&2
+        RECOVERED_SERVICE_RESTORE_FAILED=yes
+        return 0
+    }
+    if run_privileged cp -p "$backup" "$restore_tmp" && \
+       run_privileged mv -fT -- "$restore_tmp" "$TARGET_SERVICE"; then
+        durable_sync_file "$TARGET_SERVICE" && durable_sync_dir "$(dirname "$TARGET_SERVICE")" || {
+            echo "⚠️ Restored the systemd unit but could not confirm it was synced; keeping backup at $backup." >&2
+            RECOVERED_SERVICE_RESTORE_FAILED=yes
+            return 0
+        }
+        rm -f -- "$backup" 2>/dev/null || run_privileged rm -f -- "$backup" 2>/dev/null || true
+        durable_sync_dir "$(dirname "$backup")"
+        echo "↩ Restored the pre-existing systemd unit from the interrupted transaction."
+        return 0
+    fi
+    rm -f -- "$restore_tmp" 2>/dev/null || run_privileged rm -f -- "$restore_tmp" 2>/dev/null || true
+    echo "⚠️ Could not restore the pre-existing systemd unit; its backup was kept at $backup." >&2
+    RECOVERED_SERVICE_RESTORE_FAILED=yes
+}
+recover_stale_transaction() {
+    local prior_phase="${SETUP_JOURNAL[phase]:-unknown}"
+    echo "♻️  Recovering interrupted Home Cloud setup transaction (last phase: $prior_phase)..."
+    RECOVERED_ENV_CREATED="${SETUP_JOURNAL[env_created_by_setup]:-no}"
+    RECOVERED_INSTALL_DIR_CLAIM="${SETUP_JOURNAL[install_dir_claim]:-no}"
+    RECOVERED_TUNNEL_CREATED="${SETUP_JOURNAL[tunnel_created_by_setup]:-no}"
+    RECOVERED_TUNNEL_ID="${SETUP_JOURNAL[tunnel_id]:-}"
+    RECOVERED_CF_CONFIG_CREATED="${SETUP_JOURNAL[cf_config_created_by_setup]:-no}"
+    if [ "$prior_phase" = "git_checkout" ]; then
+        RECOVERED_GIT_CHECKOUT_INTERRUPTED=yes
+    fi
+    if [ "$RECOVERED_TUNNEL_CREATED" = "yes" ] || \
+       { [ "${SETUP_JOURNAL[tunnel_pre_create_absent]:-no}" = "yes" ] && \
+         [ "${SETUP_JOURNAL[tunnel_create_attempted]:-no}" = "yes" ]; }; then
+        RECOVERED_TUNNEL_DELETE_ALLOWED=yes
+    fi
+    recover_service_unit_backup
+    echo "✔ Stale transaction state identified; setup-owned temporary files will be reconciled."
+}
+
+begin_transaction() {
+    local install_dir="$1"
+    local state_key=""
+    [ "$DRY_RUN" = true ] && return 0
+
+    SETUP_TXN_ACTIVE=true
+    SETUP_TXN_COMPLETE=false
+    if command -v sha256sum >/dev/null 2>&1; then
+        state_key="$(printf '%s' "$install_dir" | sha256sum | awk '{print $1}')"
+    else
+        state_key="$(printf '%s' "$install_dir" | cksum | awk '{print $1 "-" $2}')"
+    fi
+    SETUP_STATE_KEY="$state_key"
+    SETUP_JOURNAL_FILE="$SETUP_STATE_DIR/transaction-${state_key}.state"
+
+    if [ -f "$SETUP_JOURNAL_FILE" ]; then
+        journal_load "$SETUP_JOURNAL_FILE"
+        if [ -n "${SETUP_JOURNAL[install_dir]:-}" ] && [ "${SETUP_JOURNAL[install_dir]}" != "$install_dir" ]; then
+            echo "❌ Refusing to reuse a setup journal that belongs to a different installation directory." >&2
+            SETUP_TXN_ACTIVE=false
+            SETUP_JOURNAL_FILE=""
+            exit 1
+        fi
+        if [ "${SETUP_JOURNAL[status]:-unknown}" != "complete" ]; then
+            recover_stale_transaction
+        fi
+    fi
+
+    # Keep stale backup references if restoration could not be confirmed
+    if [ "$RECOVERED_SERVICE_RESTORE_FAILED" = "yes" ]; then
+        echo "❌ Cannot safely proceed: pre-existing systemd unit backup could not be restored." >&2
+        echo "   The backup file and journal reference have been preserved." >&2
+        exit 1
+    fi
+
+    # Clean setup-owned leftovers even when a previous run had already marked
+    # its journal complete but was killed before removing its temporary files.
+    cleanup_owned_temp_files
+
+    if [ -e "$install_dir" ]; then
+        INSTALL_DIR_PREEXISTING=yes
+        if [ -d "$install_dir" ] && ! dir_has_entries "$install_dir"; then
+            INSTALL_DIR_WAS_EMPTY=yes
+        fi
+    fi
+    if [ "$RECOVERED_INSTALL_DIR_CLAIM" = "yes" ] || \
+       { [ "$INSTALL_DIR_PREEXISTING" = "no" ] || [ "$INSTALL_DIR_WAS_EMPTY" = "yes" ]; }; then
+        INSTALL_DIR_CLAIM=yes
+    fi
+    if [ "$RECOVERED_ENV_CREATED" = "yes" ]; then
+        ENV_CREATED_BY_SETUP=yes
+    fi
+    if [ "$RECOVERED_TUNNEL_CREATED" = "yes" ]; then
+        TUNNEL_CREATED_BY_SETUP=yes
+    fi
+    if [ "$RECOVERED_CF_CONFIG_CREATED" = "yes" ]; then
+        CF_CONFIG_CREATED_BY_SETUP=yes
+    fi
+
+    SETUP_JOURNAL=()
+    journal_put_critical status running
+    journal_put_critical attempt "$SETUP_ATTEMPT_ID"
+    journal_put_critical pid "$$"
+    journal_put_critical started "$(date +%s 2>/dev/null || echo 0)"
+    journal_put_critical install_dir "$install_dir"
+    journal_put_critical service_unit_target "$TARGET_SERVICE"
+    journal_put_critical phase init
+    journal_put_critical install_dir_claim "$INSTALL_DIR_CLAIM"
+    journal_put_critical install_dir_preexisting "$INSTALL_DIR_PREEXISTING"
+    journal_put_critical install_dir_was_empty "$INSTALL_DIR_WAS_EMPTY"
+    journal_put_critical env_created_by_setup "$ENV_CREATED_BY_SETUP"
+    journal_put_critical tunnel_created_by_setup "$TUNNEL_CREATED_BY_SETUP"
+    journal_put_critical cf_config_created_by_setup "$CF_CONFIG_CREATED_BY_SETUP"
+    if [ -f "$install_dir/agent/.env" ]; then
+        journal_put_critical env_preexisting yes
+    else
+        journal_put_critical env_preexisting no
+    fi
+    if [ -f "$CURRENT_HOME/.cloudflared/config.yml" ]; then
+        journal_put_critical cf_config_preexisting yes
+    else
+        journal_put_critical cf_config_preexisting no
+    fi
+}
+set_phase() {
+    SETUP_PHASE="$1"
+    journal_put phase "$1" || true
+}
+
+set_phase_critical() {
+    SETUP_PHASE="$1"
+    if ! journal_put phase "$1"; then
+        echo "❌ Fatal: Failed to persist phase '$1' to journal at $SETUP_JOURNAL_FILE." >&2
+        echo "   Aborting to prevent untracked state modifications." >&2
+        exit 1
+    fi
+}
+
+finish_transaction() {
+    [ "$SETUP_TXN_ACTIVE" = true ] || return 0
+    if [ -n "$SETUP_JOURNAL_FILE" ]; then
+        journal_put status complete || true
+        journal_put phase complete || true
+    fi
+    SETUP_TXN_COMPLETE=true
+    cleanup_current_temps
+    if [ -n "${SERVICE_UNIT_BACKUP:-}" ]; then
+        rm -f -- "$SERVICE_UNIT_BACKUP" 2>/dev/null || run_privileged rm -f -- "$SERVICE_UNIT_BACKUP" 2>/dev/null || true
+    fi
+    if [ -n "$SETUP_JOURNAL_FILE" ]; then
+        rm -f -- "$SETUP_JOURNAL_FILE" 2>/dev/null || true
+    fi
+    release_setup_lock
+}
+
+is_pid_alive() {
+    local pid="$1"
+    [ -n "$pid" ] || return 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+        return 1
+    fi
+    if [ -f "/proc/$pid/stat" ]; then
+        local state=""
+        state="$(awk '{print $3}' "/proc/$pid/stat" 2>/dev/null || true)"
+        if [ "$state" = "Z" ]; then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+acquire_setup_lock() {
+    [ "$DRY_RUN" = true ] && return 0
+    mkdir -p "$SETUP_STATE_DIR" || {
+        echo "❌ Could not create setup state directory: $SETUP_STATE_DIR" >&2
+        exit 1
+    }
+    chmod 700 "$SETUP_STATE_BASE" "$SETUP_STATE_DIR" 2>/dev/null || true
+    if [ "$EUID" -eq 0 ] && [ "$CURRENT_USER" != "root" ]; then
+        chown -R "$CURRENT_USER:$CURRENT_GROUP" "$SETUP_STATE_BASE" 2>/dev/null || true
+    fi
+    if command -v flock >/dev/null 2>&1 && [ "${HOME_CLOUD_FORCE_LOCK_DIR:-false}" != "true" ]; then
+        exec 9>"$SETUP_LOCK_FILE" || {
+            echo "❌ Could not open setup lock: $SETUP_LOCK_FILE" >&2
+            exit 1
+        }
+        if ! flock -w 30 9; then
+            echo "❌ Another setup.sh run is already using this installation state." >&2
+            exit 1
+        fi
+        printf '%s\n' "$$" >&9 2>/dev/null || true
+        SETUP_LOCK_HELD=true
+        return 0
+    fi
+    SETUP_LOCK_DIR="$SETUP_LOCK_FILE.d"
+    local elapsed=0
+    local timeout=30
+    while ! mkdir "$SETUP_LOCK_DIR" 2>/dev/null; do
+        local lock_owner=""
+        if [ -f "$SETUP_LOCK_DIR/pid" ]; then
+            IFS= read -r lock_owner < "$SETUP_LOCK_DIR/pid" || true
+        fi
+        if [ -n "$lock_owner" ]; then
+            if is_pid_alive "$lock_owner"; then
+                if [ "$elapsed" -eq 0 ]; then
+                    echo "⏳ Another setup.sh run (pid $lock_owner) holds the lock. Waiting..."
+                fi
+                sleep 1
+                elapsed=$((elapsed + 1))
+                if [ "$elapsed" -ge "$timeout" ]; then
+                    echo "❌ Another setup.sh run (pid $lock_owner) is already using this installation state." >&2
+                    exit 1
+                fi
+                continue
+            fi
+            # Stale lock: PID is not running
+            rm -rf -- "$SETUP_LOCK_DIR" 2>/dev/null || true
+            continue
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ "$elapsed" -ge "$timeout" ]; then
+            echo "❌ Timed out waiting for setup lock directory to become available." >&2
+            exit 1
+        fi
+        if [ ! -f "$SETUP_LOCK_DIR/pid" ] && [ "$elapsed" -ge 2 ]; then
+            rm -rf -- "$SETUP_LOCK_DIR" 2>/dev/null || true
+        fi
+    done
+    local pid_tmp="$SETUP_STATE_DIR/lock-pid.$$.tmp"
+    printf '%s\n' "$$" > "$pid_tmp"
+    durable_sync_file "$pid_tmp"
+    mv -f -- "$pid_tmp" "$SETUP_LOCK_DIR/pid" 2>/dev/null || printf '%s\n' "$$" > "$SETUP_LOCK_DIR/pid"
+    SETUP_LOCK_HELD=true
+}
+release_setup_lock() {
+    [ "$SETUP_LOCK_HELD" = true ] || return 0
+    if [ -n "$SETUP_LOCK_DIR" ]; then
+        rm -rf -- "$SETUP_LOCK_DIR" 2>/dev/null || true
+    else
+        flock -u 9 2>/dev/null || true
+        exec 9>&- 2>/dev/null || true
+    fi
+    SETUP_LOCK_HELD=false
+}
+
+register_rollback() {
+    SETUP_ROLLBACK_FUNCS+=("$1")
+}
+
+clear_rollbacks() {
+    SETUP_ROLLBACK_FUNCS=()
+}
+
+setup_on_signal() {
+    local signal_name="$1"
+    local exit_code="$2"
+    echo "" >&2
+    echo "⚠️  Setup interrupted by SIG${signal_name}. Recording transaction state for a safe rerun..." >&2
+    exit "$exit_code"
+}
+
+setup_finalize_on_exit() {
+    local rc=$?
+    trap - EXIT
+    if [ "$SETUP_TXN_ACTIVE" = true ] && [ "$SETUP_TXN_COMPLETE" != true ]; then
+        if [ -n "$SETUP_JOURNAL_FILE" ]; then
+            journal_put status interrupted || true
+            journal_put phase "${SETUP_PHASE:-unknown}" || true
+            journal_put exit_code "$rc" || true
+        fi
+        local i
+        for ((i=${#SETUP_ROLLBACK_FUNCS[@]}-1; i>=0; i--)); do
+            "${SETUP_ROLLBACK_FUNCS[$i]}" || true
+        done
+        cleanup_current_temps || true
+    fi
+    release_setup_lock || true
+    exit "$rc"
+}
+
+trap setup_finalize_on_exit EXIT
+trap 'setup_on_signal INT 130' INT
+trap 'setup_on_signal TERM 143' TERM
+trap 'setup_on_signal HUP 129' HUP
+
+# Update one key in an env file through a same-directory temp file plus rename.
+# Values travel through the child environment, never argv, so secrets do not
+# appear in process listings.
+apply_env_update() {
+    local env_path="$1"
+    local env_key="$2"
+    local env_value="$3"
+    HOME_CLOUD_ENV_PATH="$env_path" \
+    HOME_CLOUD_ENV_KEY="$env_key" \
+    HOME_CLOUD_ENV_VALUE="$env_value" \
+    "$NODE_PATH" -e '
+        const fs = require("fs");
+        const path = require("path");
+        const crypto = require("crypto");
+        const envPath = process.env.HOME_CLOUD_ENV_PATH;
+        const key = process.env.HOME_CLOUD_ENV_KEY;
+        const value = process.env.HOME_CLOUD_ENV_VALUE;
+        if (!envPath || !key || typeof value !== "string") {
+            console.error("Missing HOME_CLOUD_ENV_PATH, HOME_CLOUD_ENV_KEY, or HOME_CLOUD_ENV_VALUE.");
+            process.exit(1);
+        }
+        if (!/^[A-Z][A-Z0-9_]*$/.test(key) || /[\r\n]/.test(value)) {
+            console.error("Invalid environment key or value.");
+            process.exit(1);
+        }
+        let content = fs.readFileSync(envPath, "utf8");
+        const regex = new RegExp("^" + key + "=.*$", "gm");
+        const matches = content.match(regex) || [];
+        if (matches.length > 1) throw new Error(`Refusing to update duplicate ${key} entries.`);
+        if (matches.length === 1) {
+            // A function replacer keeps $&, $1 and similar sequences in the
+            // value literal instead of treating them as replacement patterns.
+            content = content.replace(regex, () => key + "=" + value);
+        } else {
+            const trimmed = content.replace(/\s*$/, "");
+            content = (trimmed ? trimmed + "\n" : "") + key + "=" + value + "\n";
+        }
+        const tempPath = path.join(
+            path.dirname(envPath),
+            "." + path.basename(envPath) + ".home-cloud-tmp." + process.pid + "." + crypto.randomBytes(4).toString("hex"),
+        );
+        let fd = null;
+        try {
+            fd = fs.openSync(tempPath, "wx", 0o600);
+            fs.writeFileSync(fd, content);
+            fs.fsyncSync(fd);
+            fs.closeSync(fd);
+            fd = null;
+            fs.renameSync(tempPath, envPath);
+        } catch (error) {
+            if (fd !== null) {
+                try { fs.closeSync(fd); } catch {}
+            }
+            try { fs.unlinkSync(tempPath); } catch {}
+            throw error;
+        }
+        try {
+            const dirFd = fs.openSync(path.dirname(envPath), "r");
+            fs.fsyncSync(dirFd);
+            fs.closeSync(dirFd);
+        } catch {}
+    '
+}
+
+# <<< HOME CLOUD TRANSACTION HELPERS <<<
+
+acquire_setup_lock
+
 # Resolve active outbound network gateway IP early for status messages
 ACTIVE_IP="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' || true)"
 if [ -z "$ACTIVE_IP" ]; then
@@ -416,6 +1029,49 @@ else
     exit 1
 fi
 
+# 2b. OpenSSH Server Check & Setup
+setup_openssh() {
+    if [ "$SKIP_SSH" = true ]; then
+        echo "ℹ Skipping OpenSSH server check (--skip-ssh)."
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY-RUN] Would verify OpenSSH server is installed and active on port 22."
+        return 0
+    fi
+
+    if systemctl is-active --quiet ssh 2>/dev/null || systemctl is-active --quiet sshd 2>/dev/null; then
+        echo "✔ OpenSSH server is active and running."
+    elif command -v sshd >/dev/null 2>&1; then
+        echo "🔄 Enabling and starting OpenSSH server..."
+        run_privileged systemctl enable --now ssh 2>/dev/null || run_privileged systemctl enable --now sshd 2>/dev/null || true
+        echo "✔ OpenSSH server is active and running."
+    else
+        echo "📦 Installing OpenSSH server..."
+        local installed=false
+        if [ "$PKG_MANAGER" = "apt" ]; then
+            wait_for_apt_lock
+            run_privileged apt-get install -y -qq openssh-server
+            installed=true
+        elif [ "$PKG_MANAGER" = "dnf" ] || [ "$PKG_MANAGER" = "yum" ]; then
+            run_privileged "$PKG_MANAGER" install -y openssh-server
+            installed=true
+        elif [ "$PKG_MANAGER" = "pacman" ]; then
+            run_privileged pacman -S --noconfirm openssh
+            installed=true
+        else
+            echo "⚠️ Unsupported package manager for OpenSSH server installation." >&2
+        fi
+        if [ "$installed" = true ]; then
+            run_privileged systemctl enable --now ssh 2>/dev/null || run_privileged systemctl enable --now sshd 2>/dev/null || true
+            echo "✔ OpenSSH server installed and active."
+        fi
+    fi
+}
+
+setup_openssh
+
 # Determine Canonical Installation Directory & ensure repository tree is present
 if [ -n "$TARGET_DIR" ]; then
     INSTALL_DIR="$TARGET_DIR"
@@ -424,25 +1080,97 @@ elif [ -f "$SCRIPT_DIR/home-cloud.service.template" ] && [ -f "$SCRIPT_DIR/agent
 else
     INSTALL_DIR="$CURRENT_HOME/home-cloud"
 fi
+while [ "$INSTALL_DIR" != "/" ] && [ "${INSTALL_DIR%/}" != "$INSTALL_DIR" ]; do
+    INSTALL_DIR="${INSTALL_DIR%/}"
+done
+
+install_dir_ready() {
+    [ -f "$1/home-cloud.service.template" ] && [ -f "$1/agent/package.json" ]
+}
+
+begin_transaction "$INSTALL_DIR"
 
 # Ensure repository tree is present (in case setup.sh was executed standalone or via curl)
-if [ ! -f "$INSTALL_DIR/home-cloud.service.template" ] || [ ! -f "$INSTALL_DIR/agent/package.json" ]; then
+if ! install_dir_ready "$INSTALL_DIR"; then
     echo "⚠️ Home Cloud repository files not found in $INSTALL_DIR."
     echo "⬇ Cloning full repository (branch: $BRANCH) from https://github.com/Cypher0071/home_cloud.git..."
     if [ "$DRY_RUN" = true ]; then
         echo "[DRY-RUN] Would clone https://github.com/Cypher0071/home_cloud.git (branch: $BRANCH) to $INSTALL_DIR"
     else
-        mkdir -p "$INSTALL_DIR"
-        run_as_current_user git clone --branch "$BRANCH" https://github.com/Cypher0071/home_cloud.git "$INSTALL_DIR"
+        if [ -d "$INSTALL_DIR" ] && dir_has_entries "$INSTALL_DIR"; then
+            echo "❌ $INSTALL_DIR already exists and is not a complete Home Cloud checkout." >&2
+            echo "   Refusing to delete or overwrite pre-existing files. Move it aside or choose --dir." >&2
+            exit 1
+        fi
+        set_phase_critical repo_clone
+        journal_put_critical install_dir_claim yes
+        INSTALL_DIR_CLAIM=yes
+        CLONE_STAGE="${INSTALL_DIR}.home-cloud-clone.$$.$RANDOM"
+        CLONE_TMP="$CLONE_STAGE/repo"
+        register_temp_dir "$CLONE_STAGE"
+        run_as_current_user mkdir -p "$CLONE_STAGE" || {
+            echo "❌ Could not create a staging directory next to $INSTALL_DIR." >&2
+            exit 1
+        }
+        # The marker proves ownership of the staging directory to later runs.
+        printf '%s\n' "$SETUP_ATTEMPT_ID" > "$CLONE_STAGE/.home-cloud-attempt" || {
+            echo "❌ Could not mark the clone staging directory." >&2
+            exit 1
+        }
+        durable_sync_file "$CLONE_STAGE/.home-cloud-attempt"
+        durable_sync_dir "$CLONE_STAGE"
+        if ! run_as_current_user git clone --branch "$BRANCH" https://github.com/Cypher0071/home_cloud.git "$CLONE_TMP"; then
+            rm -rf -- "$CLONE_STAGE" 2>/dev/null || true
+            echo "❌ Repository clone failed. Any partial clone was discarded; rerun setup.sh to retry." >&2
+            exit 1
+        fi
+        if ! install_dir_ready "$CLONE_TMP"; then
+            rm -rf -- "$CLONE_STAGE" 2>/dev/null || true
+            echo "❌ Cloned repository is incomplete (missing template or agent/package.json)." >&2
+            exit 1
+        fi
+        if [ -d "$INSTALL_DIR" ]; then
+            rmdir "$INSTALL_DIR" 2>/dev/null || {
+                echo "❌ $INSTALL_DIR became non-empty during install. Refusing to overwrite it." >&2
+                rm -rf -- "$CLONE_STAGE" 2>/dev/null || true
+                exit 1
+            }
+        fi
+        mv -T -- "$CLONE_TMP" "$INSTALL_DIR" || {
+            echo "❌ Could not atomically move the fresh clone into $INSTALL_DIR." >&2
+            rm -rf -- "$CLONE_STAGE" 2>/dev/null || true
+            exit 1
+        }
+        rm -rf -- "$CLONE_STAGE" 2>/dev/null || true
+        durable_sync_dir "$(dirname "$INSTALL_DIR")"
+        set_phase repo_ready
     fi
 fi
+
+git_process_running() {
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -x git >/dev/null 2>&1
+    else
+        ps -eo comm= 2>/dev/null | awk '$1 == "git" { found = 1 } END { exit found ? 0 : 1 }'
+    fi
+}
 
 if [ -d "$INSTALL_DIR/.git" ] && [ "$DRY_RUN" = false ]; then
     CURRENT_GIT_BRANCH="$(run_as_current_user git -C "$INSTALL_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     CURRENT_GIT_TAG="$(run_as_current_user git -C "$INSTALL_DIR" describe --tags --exact-match 2>/dev/null || true)"
     if [ -n "$BRANCH" ] && [ "$CURRENT_GIT_BRANCH" != "$BRANCH" ] && [ "$CURRENT_GIT_TAG" != "$BRANCH" ]; then
+        if [ "$RECOVERED_GIT_CHECKOUT_INTERRUPTED" = "yes" ] && [ -f "$INSTALL_DIR/.git/index.lock" ]; then
+            if git_process_running; then
+                echo "⚠️ Found a stale git index.lock, but another git process may be running; leaving it in place." >&2
+                exit 1
+            fi
+            echo "♻️  Removing a stale git index.lock from an interrupted setup checkout..."
+            rm -f -- "$INSTALL_DIR/.git/index.lock" 2>/dev/null || true
+        fi
         echo "🔄 Checking out '$BRANCH' in $INSTALL_DIR..."
+        set_phase git_checkout
         run_as_current_user git -C "$INSTALL_DIR" checkout "$BRANCH"
+        set_phase repo_ready
     fi
 fi
 
@@ -614,6 +1342,7 @@ fi
 
 # 6. Check & Prompt for Cloudflared (Optional Remote Tunnel)
 # Pin cloudflared to a release whose published asset hashes are checked in below.
+# >>> CLOUDFLARED HELPERS >>>
 CLOUDFLARED_VERSION="2026.10.3"
 CLOUDFLARED_RELEASE_BASE="https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}"
 
@@ -642,74 +1371,132 @@ expected_sha256_for_asset() {
     printf '%s\n' "$expected"
 }
 
+cloudflared_work_dir() {
+    if [ -z "${CLOUDFLARED_TMP_DIR:-}" ]; then
+        CLOUDFLARED_TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/home-cloud-setup.XXXXXX")" || {
+            echo "❌ Could not create a temporary directory for cloudflared." >&2
+            exit 1
+        }
+        printf '%s\n' "$SETUP_ATTEMPT_ID" > "$CLOUDFLARED_TMP_DIR/.home-cloud-attempt"
+        chmod 700 "$CLOUDFLARED_TMP_DIR" 2>/dev/null || true
+        register_temp_dir "$CLOUDFLARED_TMP_DIR"
+    fi
+}
+
+remove_temp_file() {
+    local path="$1"
+    [ -n "$path" ] || return 0
+    rm -f -- "$path" 2>/dev/null || run_privileged rm -f -- "$path" 2>/dev/null || true
+}
+
 download_verified_cloudflared() {
     local asset_name="$1"
     local dest="$2"
+    local part="${dest}.part"
     local expected="" actual=""
-    rm -f "$dest"
-    if ! curl -fsSL "${CLOUDFLARED_RELEASE_BASE}/${asset_name}" -o "$dest"; then
-        rm -f "$dest"
+    remove_temp_file "$part"
+    if ! curl -fsSL "${CLOUDFLARED_RELEASE_BASE}/${asset_name}" -o "$part"; then
+        remove_temp_file "$part"
         echo "❌ Failed to download ${asset_name} for cloudflared ${CLOUDFLARED_VERSION}." >&2
         exit 1
     fi
     if ! expected="$(expected_sha256_for_asset "$asset_name")"; then
-        rm -f "$dest"
+        remove_temp_file "$part"
         echo "❌ Refusing to install unverified ${asset_name}." >&2
         exit 1
     fi
     expected="${expected//$'\r'/}"
     expected="${expected//$'\n'/}"
     if ! command -v sha256sum >/dev/null 2>&1; then
-        rm -f "$dest"
+        remove_temp_file "$part"
         echo "❌ sha256sum is required to verify ${asset_name}." >&2
         exit 1
     fi
-    actual="$(sha256sum "$dest" | awk '{print tolower($1)}')"
+    actual="$(sha256sum "$part" | awk '{print tolower($1)}')"
     if [ -z "$expected" ] || [ "$actual" != "$expected" ]; then
-        rm -f "$dest"
-        echo "❌ SHA256 verification failed for ${asset_name}. Deleted the temp file." >&2
+        remove_temp_file "$part"
+        echo "❌ SHA256 verification failed for ${asset_name}. Deleted the partial download." >&2
         exit 1
     fi
+    mv -fT -- "$part" "$dest" || {
+        remove_temp_file "$part"
+        echo "❌ Could not promote the verified ${asset_name} download." >&2
+        exit 1
+    }
+    durable_sync_file "$dest"
     echo "✔ SHA256 verified ${asset_name} (${CLOUDFLARED_VERSION})"
+}
+
+install_cloudflared_binary_atomic() {
+    local src="$1"
+    local dest="/usr/local/bin/cloudflared"
+    local dest_dir="" tmp=""
+    dest_dir="$(dirname "$dest")"
+    run_privileged mkdir -p "$dest_dir" || {
+        echo "❌ Could not create $dest_dir." >&2
+        exit 1
+    }
+    tmp="$(run_privileged mktemp "$dest_dir/.cloudflared.home-cloud-tmp.XXXXXX")" || {
+        echo "❌ Could not create a temporary cloudflared binary in $dest_dir." >&2
+        exit 1
+    }
+    register_temp_file "$tmp"
+    if command -v install >/dev/null 2>&1; then
+        if ! run_privileged install -m 0755 "$src" "$tmp"; then
+            remove_temp_file "$tmp"
+            echo "❌ Could not stage the cloudflared binary." >&2
+            exit 1
+        fi
+    else
+        if ! run_privileged cp "$src" "$tmp"; then
+            remove_temp_file "$tmp"
+            echo "❌ Could not stage the cloudflared binary." >&2
+            exit 1
+        fi
+        run_privileged chmod 0755 "$tmp"
+    fi
+    run_privileged chown root:root "$tmp" 2>/dev/null || true
+    durable_sync_file "$tmp"
+    if ! run_privileged mv -fT -- "$tmp" "$dest"; then
+        remove_temp_file "$tmp"
+        echo "❌ Could not atomically replace $dest." >&2
+        exit 1
+    fi
+    durable_sync_dir "$dest_dir"
 }
 
 install_verified_cloudflared_package() {
     local asset_name="$1"
     local kind="$2"
     local tmp=""
-    tmp="$(mktemp)"
+    cloudflared_work_dir
+    tmp="$(mktemp "$CLOUDFLARED_TMP_DIR/cloudflared.XXXXXX")" || {
+        echo "❌ Could not create a temporary cloudflared file." >&2
+        exit 1
+    }
+    register_temp_file "$tmp"
     download_verified_cloudflared "$asset_name" "$tmp"
     if [ "$kind" = "deb" ]; then
         if ! run_privileged dpkg -i "$tmp"; then
             if ! run_privileged apt-get install -f -y; then
-                rm -f "$tmp"
+                remove_temp_file "$tmp"
                 exit 1
             fi
         fi
     elif [ "$kind" = "rpm" ]; then
         if ! run_privileged "$PKG_MANAGER" install -y "$tmp"; then
             if ! run_privileged rpm -i "$tmp"; then
-                rm -f "$tmp"
+                remove_temp_file "$tmp"
                 exit 1
             fi
         fi
     else
-        if command -v install >/dev/null 2>&1; then
-            if ! run_privileged install -m 0755 "$tmp" /usr/local/bin/cloudflared; then
-                rm -f "$tmp"
-                exit 1
-            fi
-        else
-            if ! run_privileged cp "$tmp" /usr/local/bin/cloudflared; then
-                rm -f "$tmp"
-                exit 1
-            fi
-            run_privileged chmod +x /usr/local/bin/cloudflared
-        fi
+        install_cloudflared_binary_atomic "$tmp"
     fi
-    rm -f "$tmp"
+    remove_temp_file "$tmp"
     echo "✔ cloudflared ${CLOUDFLARED_VERSION} installed: $(command -v cloudflared || echo '/usr/local/bin/cloudflared')"
 }
+# <<< CLOUDFLARED HELPERS <<<
 
 if [ "${SKIP_CLOUDFLARED:-false}" = "true" ]; then
     echo "ℹ Skipping cloudflared installation (--skip-cloudflared specified)."
@@ -763,21 +1550,10 @@ fi
 # 7. Environment & Secure Admin Password Configuration (Using Node.js to prevent delimiter bugs)
 # Password and JWT are passed only through the node process environment, never argv.
 write_jwt_secret() {
-    HOME_CLOUD_ENV_PATH="$SCRIPT_DIR/agent/.env" \
-    HOME_CLOUD_NEW_JWT="$1" \
-    "$NODE_PATH" -e '
-        const fs = require("fs");
-        const envPath = process.env.HOME_CLOUD_ENV_PATH;
-        const secret = process.env.HOME_CLOUD_NEW_JWT;
-        if (!envPath || typeof secret !== "string" || secret.length === 0 || /[\r\n]/.test(secret)) {
-            console.error("Missing or invalid HOME_CLOUD_NEW_JWT.");
-            process.exit(1);
-        }
-        let content = fs.readFileSync(envPath, "utf8");
-        content = content.replace(/^JWT_SECRET=.*/m, "JWT_SECRET=" + secret);
-        fs.writeFileSync(envPath, content, { mode: 0o600 });
-    '
-    chmod 600 "$SCRIPT_DIR/agent/.env"
+    local secret="$1"
+    local env_path="${2:-$SCRIPT_DIR/agent/.env}"
+    apply_env_update "$env_path" "JWT_SECRET" "$secret"
+    chmod 600 "$env_path"
 }
 
 write_admin_password() {
@@ -786,8 +1562,8 @@ write_admin_password() {
     "$NODE_PATH" -e '
         const fs = require("fs");
         const path = require("path");
+        const crypto = require("crypto");
         const dotenv = require(require.resolve("dotenv", { paths: [path.join(process.argv[1], "agent")] }));
-        const projectDir = process.argv[1];
         const envPath = process.env.HOME_CLOUD_ENV_PATH;
         const pass = process.env.HOME_CLOUD_NEW_PASSWORD;
         if (!envPath || typeof pass !== "string") {
@@ -817,14 +1593,31 @@ write_admin_password() {
             if (key !== "PASSWORD" && !Object.hasOwn(before, key)) throw new Error(`Updating PASSWORD added ${key}.`);
         }
 
-        const tempPath = `${envPath}.${process.pid}.${require("crypto").randomBytes(4).toString("hex")}.tmp`;
+        const tempPath = path.join(
+            path.dirname(envPath),
+            "." + path.basename(envPath) + ".home-cloud-tmp." + process.pid + "." + crypto.randomBytes(4).toString("hex"),
+        );
+        let fd = null;
         try {
-            fs.writeFileSync(tempPath, updated, { mode: 0o600, flag: "wx" });
+            fd = fs.openSync(tempPath, "wx", 0o600);
+            fs.writeFileSync(fd, updated);
+            fs.fsyncSync(fd);
+            fs.closeSync(fd);
+            fd = null;
             fs.renameSync(tempPath, envPath);
-        } finally {
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (error) {
+            if (fd !== null) {
+                try { fs.closeSync(fd); } catch {}
+            }
+            try { fs.unlinkSync(tempPath); } catch {}
+            throw error;
         }
-    '
+        try {
+            const dirFd = fs.openSync(path.dirname(envPath), "r");
+            fs.fsyncSync(dirFd);
+            fs.closeSync(dirFd);
+        } catch {}
+    ' \
     "$SCRIPT_DIR"
     chmod 600 "$SCRIPT_DIR/agent/.env"
 }
@@ -836,15 +1629,52 @@ if [ "$DRY_RUN" = true ]; then
     echo "[DRY-RUN] Would generate a JWT_SECRET and write the admin password only to ${SCRIPT_DIR}/agent/.env (mode 0600). The password would not be printed."
 else
     if [ ! -f "$SCRIPT_DIR/agent/.env" ]; then
+        set_phase_critical env_create
+        journal_put_critical env_created_by_setup yes
+        ENV_CREATED_BY_SETUP=yes
+        ENV_TMP="$(mktemp "$SCRIPT_DIR/agent/.env.home-cloud-tmp.XXXXXX")" || {
+            echo "❌ Could not create a temporary agent/.env file." >&2
+            exit 1
+        }
+        register_temp_file "$ENV_TMP"
         if [ -f "$SCRIPT_DIR/agent/.env.example" ]; then
-            cp "$SCRIPT_DIR/agent/.env.example" "$SCRIPT_DIR/agent/.env"
+            cp "$SCRIPT_DIR/agent/.env.example" "$ENV_TMP"
         else
-            printf '%s\n' 'PASSWORD=change-me' 'JWT_SECRET=generate-a-long-random-string' 'PORT=3000' > "$SCRIPT_DIR/agent/.env"
+            printf '%s\n' 'PASSWORD=change-me' 'JWT_SECRET=generate-a-long-random-string' 'PORT=3000' > "$ENV_TMP"
         fi
+        chmod 600 "$ENV_TMP"
         # Generate cryptographically secure JWT secret (not passed on argv)
         RANDOM_JWT="$("$NODE_PATH" -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
-        write_jwt_secret "$RANDOM_JWT"
+        write_jwt_secret "$RANDOM_JWT" "$ENV_TMP"
+        if ! awk -F= '$1 == "JWT_SECRET" && length($2) > 0 { found = 1 } END { exit found ? 0 : 1 }' "$ENV_TMP"; then
+            echo "❌ Generated agent/.env is missing JWT_SECRET; refusing to install it." >&2
+            exit 1
+        fi
+        durable_sync_file "$ENV_TMP"
+        mv -fT -- "$ENV_TMP" "$SCRIPT_DIR/agent/.env" || {
+            echo "❌ Could not atomically install agent/.env." >&2
+            exit 1
+        }
+        durable_sync_dir "$SCRIPT_DIR/agent"
         echo "✔ Generated secure random JWT_SECRET."
+    else
+        # Repair only a missing/placeholder JWT secret. Real secrets are never regenerated.
+        CURRENT_JWT_STATE="$(
+            "$NODE_PATH" -e '
+                const fs = require("fs");
+                const path = require("path");
+                const dotenv = require(require.resolve("dotenv", { paths: [path.join(process.argv[1], "agent")] }));
+                const parsed = dotenv.parse(fs.readFileSync(path.join(process.argv[1], "agent", ".env"), "utf8"));
+                const secret = parsed.JWT_SECRET || "";
+                process.stdout.write(!secret ? "missing" : secret === "generate-a-long-random-string" ? "placeholder" : "configured");
+            ' "$SCRIPT_DIR"
+        )"
+        if [ "$CURRENT_JWT_STATE" = "missing" ] || [ "$CURRENT_JWT_STATE" = "placeholder" ]; then
+            set_phase env_repair
+            RANDOM_JWT="$("$NODE_PATH" -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')"
+            write_jwt_secret "$RANDOM_JWT"
+            echo "✔ Repaired missing/placeholder JWT_SECRET in agent/.env."
+        fi
     fi
 
     # Secure file permissions on agent/.env
@@ -958,36 +1788,49 @@ setup_cloudflare_tunnel() {
         fi
         chmod 700 "$CF_DIR" 2>/dev/null || true
 
-        if [ -f "$CF_CONFIG_FILE" ]; then
-            echo "✔ Existing Cloudflare Tunnel configuration detected: $CF_CONFIG_FILE"
-            EXISTING_DASH_HOST="$(awk '/hostname:.*dash\./ {print $NF}' "$CF_CONFIG_FILE" 2>/dev/null | head -n1 || true)"
-            if [ -n "$EXISTING_DASH_HOST" ]; then
-                EXISTING_CF_DOMAIN="$(clean_domain "$EXISTING_DASH_HOST")"
-                HOME_CLOUD_ENV_PATH="$SCRIPT_DIR/agent/.env" \
-                HOME_CLOUD_CF_DOMAIN="$EXISTING_CF_DOMAIN" \
-                "$NODE_PATH" -e '
-                    const fs = require("fs");
-                    const envPath = process.env.HOME_CLOUD_ENV_PATH;
-                    const cfDomain = process.env.HOME_CLOUD_CF_DOMAIN;
-                    let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+        cf_config_valid() {
+            [ -f "$1" ] || return 1
+            awk '
+                /^[[:space:]]*tunnel:[[:space:]]*[^[:space:]]/ { tunnel = 1 }
+                /^[[:space:]]*credentials-file:[[:space:]]*[^[:space:]]/ { credentials = 1 }
+                /^[[:space:]]*ingress:[[:space:]]*$/ { ingress = 1 }
+                /{{/ { unresolved = 1 }
+                END { exit (tunnel && credentials && ingress && !unresolved) ? 0 : 1 }
+            ' "$1"
+        }
 
-                    function updateOrAppend(key, val) {
-                        const regex = new RegExp("^" + key + "=.*", "m");
-                        if (regex.test(content)) {
-                            content = content.replace(regex, key + "=" + val);
-                        } else {
-                            const trimmed = content.trimEnd();
-                            content = (trimmed ? trimmed + "\n" : "") + key + "=" + val + "\n";
-                        }
-                    }
-
-                    updateOrAppend("CF_DOMAIN", cfDomain);
-                    updateOrAppend("TUNNEL_NAME", "home-cloud");
-                    fs.writeFileSync(envPath, content, { mode: 0o600 });
-                '
-                echo "✔ Synced CF_DOMAIN=$EXISTING_CF_DOMAIN from config.yml to agent/.env"
+        CF_CONFIG_EXISTING=no
+        CF_CONFIG_UNUSABLE_PREEXISTING=no
+        if [ -L "$CF_CONFIG_FILE" ] && [ ! -f "$CF_CONFIG_FILE" ]; then
+            CF_CONFIG_UNUSABLE_PREEXISTING=yes
+            echo "❌ Existing Cloudflare Tunnel configuration is a dangling symlink: $CF_CONFIG_FILE" >&2
+            echo "   Refusing to replace a pre-existing link. Repair or remove it, then rerun setup.sh." >&2
+            echo "ℹ Home Cloud will run in LAN-only mode (http://$ACTIVE_IP:3000)."
+        fi
+        if [ "$CF_CONFIG_UNUSABLE_PREEXISTING" = "no" ] && [ -f "$CF_CONFIG_FILE" ]; then
+            if cf_config_valid "$CF_CONFIG_FILE"; then
+                CF_CONFIG_EXISTING=yes
+                echo "✔ Existing Cloudflare Tunnel configuration detected: $CF_CONFIG_FILE"
+                EXISTING_DASH_HOST="$(awk '/hostname:.*dash\./ {print $NF}' "$CF_CONFIG_FILE" 2>/dev/null | head -n1 || true)"
+                if [ -n "$EXISTING_DASH_HOST" ]; then
+                    EXISTING_CF_DOMAIN="$(clean_domain "$EXISTING_DASH_HOST")"
+                    set_phase tunnel_env_sync
+                    apply_env_update "$SCRIPT_DIR/agent/.env" "CF_DOMAIN" "$EXISTING_CF_DOMAIN"
+                    apply_env_update "$SCRIPT_DIR/agent/.env" "TUNNEL_NAME" "home-cloud"
+                    chmod 600 "$SCRIPT_DIR/agent/.env" 2>/dev/null || true
+                    run_privileged chown "$CURRENT_USER:$CURRENT_GROUP" "$SCRIPT_DIR/agent/.env" 2>/dev/null || true
+                    echo "✔ Synced CF_DOMAIN=$EXISTING_CF_DOMAIN from config.yml to agent/.env"
+                fi
+            elif [ "$CF_CONFIG_CREATED_BY_SETUP" = "yes" ] || [ "${SETUP_JOURNAL[cf_config_preexisting]:-yes}" = "no" ]; then
+                echo "♻️  Replacing an incomplete Cloudflare config left by an interrupted setup run..."
+            else
+                CF_CONFIG_UNUSABLE_PREEXISTING=yes
+                echo "❌ Existing Cloudflare Tunnel configuration is incomplete or malformed: $CF_CONFIG_FILE" >&2
+                echo "   Refusing to overwrite a pre-existing file. Repair or move it aside, then rerun setup.sh." >&2
+                echo "ℹ Home Cloud will run in LAN-only mode (http://$ACTIVE_IP:3000)."
             fi
-        else
+        fi
+        if [ "$CF_CONFIG_EXISTING" = "no" ] && [ "$CF_CONFIG_UNUSABLE_PREEXISTING" = "no" ]; then
             SETUP_CF=""
             if [ -t 0 ] || [ "${SETUP_FORCE_INTERACTIVE:-false}" = "true" ]; then
                 echo ""
@@ -996,8 +1839,13 @@ setup_cloudflare_tunnel() {
                 echo "│ Expose Home Cloud securely on your custom domain without  │"
                 echo "│ opening router ports or exposing your public home IP.    │"
                 echo "└──────────────────────────────────────────────────────────┘"
-                read -rp "Would you like to set up Cloudflare Tunnel now for free remote HTTPS access on a custom domain? [Y/n] " SETUP_CF || SETUP_CF="N"
-                SETUP_CF="${SETUP_CF:-Y}"
+                if read -rp "Would you like to set up Cloudflare Tunnel now for free remote HTTPS access on a custom domain? [Y/n] " SETUP_CF; then
+                    SETUP_CF="${SETUP_CF:-Y}"
+                else
+                    # EOF is a refusal, not an implicit yes. This also keeps
+                    # unattended reruns from entering follow-up prompts.
+                    SETUP_CF="N"
+                fi
             elif [ "${NON_INTERACTIVE:-false}" != "true" ] && read_input "Would you like to set up Cloudflare Tunnel now for free remote HTTPS access on a custom domain? [Y/n] " PROMPT_CF; then
                 SETUP_CF="${PROMPT_CF:-Y}"
             else
@@ -1052,7 +1900,9 @@ setup_cloudflare_tunnel() {
                                     CF_DOMAIN_VAL="$INPUT_CLEAN"
                                 fi
                             else
-                                read -rp "Enter your root domain name (e.g. home-cloud.live): " INPUT_DOMAIN || true
+                                if ! read -rp "Enter your root domain name (e.g. home-cloud.live): " INPUT_DOMAIN; then
+                                    break
+                                fi
                                 CF_DOMAIN_VAL="$(clean_domain "${INPUT_DOMAIN:-}")"
                             fi
                             if [ -n "$CF_DOMAIN_VAL" ]; then
@@ -1091,7 +1941,10 @@ setup_cloudflare_tunnel() {
                     else
                         TUNNEL_NAME="${TUNNEL_NAME_INPUT:-${TUNNEL_NAME:-home-cloud}}"
                         echo "🔍 Checking for existing Cloudflare tunnel '$TUNNEL_NAME'..."
-                        TUNNEL_ID="$(run_as_current_user cloudflared tunnel list 2>/dev/null | awk -v name="$TUNNEL_NAME" '$2 == name {print $1; exit}' || true)"
+                        TUNNEL_LIST_OK=no
+                        TUNNEL_LIST_OUT="$(run_as_current_user cloudflared tunnel list 2>/dev/null)" && TUNNEL_LIST_OK=yes || true
+                        TUNNEL_ID="$(printf '%s\n' "$TUNNEL_LIST_OUT" | awk -v name="$TUNNEL_NAME" '$2 == name {print $1; exit}')"
+                        TUNNEL_UNUSABLE=no
 
                         # If tunnel was found remotely in cloudflared tunnel list, verify local credentials exist
                         if [ -n "$TUNNEL_ID" ]; then
@@ -1123,30 +1976,66 @@ setup_cloudflare_tunnel() {
 
                                 if [ -z "$MATCHED_CRED" ] && [ ! -f "$CF_DIR/$TUNNEL_ID.json" ]; then
                                     echo "⚠️ Tunnel '$TUNNEL_NAME' exists on Cloudflare, but local credentials file was not found."
-                                    echo "🔄 Removing orphaned remote tunnel and generating new credentials..."
-                                    run_as_current_user cloudflared tunnel delete -f "$TUNNEL_NAME" >/dev/null 2>&1 || true
-                                    TUNNEL_ID=""
+                                    if { [ "$RECOVERED_TUNNEL_DELETE_ALLOWED" = "yes" ] || [ "$TUNNEL_CREATED_BY_SETUP" = "yes" ]; } && \
+                                       { [ -z "$RECOVERED_TUNNEL_ID" ] || [ "$RECOVERED_TUNNEL_ID" = "$TUNNEL_ID" ]; }; then
+                                        echo "🔄 Removing an orphaned remote tunnel proven to have been created by an interrupted setup run..."
+                                        run_as_current_user cloudflared tunnel delete -f "$TUNNEL_NAME" >/dev/null 2>&1 || true
+                                        TUNNEL_ID=""
+                                        TUNNEL_CREATED_BY_SETUP=no
+                                        journal_put tunnel_created_by_setup no || true
+                                        journal_put tunnel_id "" || true
+                                    else
+                                        echo "ℹ Refusing to delete a remote tunnel that was not proven to be owned by this setup transaction."
+                                        echo "ℹ Home Cloud will run in LAN-only mode until $CF_DIR/$TUNNEL_ID.json is restored or the tunnel is removed manually."
+                                        TUNNEL_UNUSABLE=yes
+                                    fi
                                 fi
                             fi
                         fi
 
                         # c) Create tunnel if it does not exist (or was cleaned up due to missing local credentials)
-                        if [ -z "$TUNNEL_ID" ]; then
+                        if [ "$TUNNEL_UNUSABLE" = "no" ] && [ -z "$TUNNEL_ID" ]; then
                             echo "🔨 Creating tunnel '$TUNNEL_NAME'..."
+                            set_phase_critical tunnel_create
+                            if [ "$TUNNEL_LIST_OK" = "yes" ]; then
+                                journal_put_critical tunnel_pre_create_absent yes
+                            else
+                                journal_put_critical tunnel_pre_create_absent no
+                            fi
+                            # Any ID this run creates is new ownership; never
+                            # inherit a stale proof from an earlier attempt.
+                            TUNNEL_CREATED_BY_SETUP=no
+                            journal_put_critical tunnel_created_by_setup no
+                            journal_put_critical tunnel_id ""
+                            journal_put_critical tunnel_name "$TUNNEL_NAME"
+                            journal_put_critical tunnel_create_attempted yes
                             CREATE_OUTPUT="$(run_as_current_user cloudflared tunnel create "$TUNNEL_NAME" 2>&1 || true)"
                             echo "$CREATE_OUTPUT"
+                            TUNNEL_CREATED_PROVEN=no
                             if [[ "$CREATE_OUTPUT" =~ ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}) ]]; then
                                 TUNNEL_ID="${BASH_REMATCH[1]}"
+                                TUNNEL_CREATED_PROVEN=yes
                             fi
                             if [ -z "$TUNNEL_ID" ]; then
                                 TUNNEL_ID="$(run_as_current_user cloudflared tunnel list 2>/dev/null | awk -v name="$TUNNEL_NAME" '$2 == name {print $1; exit}' || true)"
+                                # A post-create listing only proves ownership when
+                                # the pre-create listing succeeded and was empty.
+                                if [ -n "$TUNNEL_ID" ] && [ "$TUNNEL_LIST_OK" = "yes" ]; then
+                                    TUNNEL_CREATED_PROVEN=yes
+                                fi
                             fi
-                        else
+                            if [ -n "$TUNNEL_ID" ] && [ "$TUNNEL_CREATED_PROVEN" = "yes" ]; then
+                                TUNNEL_CREATED_BY_SETUP=yes
+                                journal_put_critical tunnel_created_by_setup yes
+                                journal_put_critical tunnel_id "$TUNNEL_ID"
+                                set_phase_critical tunnel_created
+                            fi
+                        elif [ "$TUNNEL_UNUSABLE" = "no" ]; then
                             echo "✔ Found existing tunnel '$TUNNEL_NAME' with ID: $TUNNEL_ID"
                         fi
 
                         # d) Extract Tunnel UUID from JSON credentials file or tunnel list
-                        if [ -z "$TUNNEL_ID" ] || [ ! -f "$CF_DIR/$TUNNEL_ID.json" ]; then
+                        if [ "$TUNNEL_UNUSABLE" = "no" ] && { [ -z "$TUNNEL_ID" ] || [ ! -f "$CF_DIR/$TUNNEL_ID.json" ]; }; then
                             for cred_file in "$CF_DIR"/*.json; do
                                 if [ -f "$cred_file" ]; then
                                     base_name="$(basename "$cred_file" .json)"
@@ -1158,13 +2047,19 @@ setup_cloudflare_tunnel() {
                             done
                         fi
 
-                        if [ -z "$TUNNEL_ID" ] || [ ! -f "$CF_DIR/$TUNNEL_ID.json" ]; then
+                        if [ "$TUNNEL_UNUSABLE" = "yes" ] || [ -z "$TUNNEL_ID" ] || [ ! -f "$CF_DIR/$TUNNEL_ID.json" ]; then
                             echo "❌ Failed to determine Tunnel UUID or credentials file for '$TUNNEL_NAME'."
                             echo "ℹ Home Cloud will run in LAN-only mode (http://$ACTIVE_IP:3000)."
                             echo "  Remote access can be enabled later by running: cloudflared tunnel login && cloudflared tunnel create home-cloud"
                         else
-                            # e) Automatically generate config.yml
+                            # e) Automatically generate config.yml atomically
                             echo "📝 Generating $CF_CONFIG_FILE..."
+                            set_phase_critical tunnel_config
+                            CF_CONFIG_TMP="$(mktemp "$CF_DIR/.config.yml.home-cloud-tmp.XXXXXX")" || {
+                                echo "❌ Could not create a temporary Cloudflare config file." >&2
+                                exit 1
+                            }
+                            register_temp_file "$CF_CONFIG_TMP"
                             printf '%s\n' \
                                 "tunnel: $TUNNEL_ID" \
                                 "credentials-file: $CF_DIR/$TUNNEL_ID.json" \
@@ -1172,41 +2067,43 @@ setup_cloudflare_tunnel() {
                                 'ingress:' \
                                 "  - hostname: dash.$CF_DOMAIN_VAL" \
                                 '    service: http://localhost:3000' \
-                                '  - service: http_status:404' > "$CF_CONFIG_FILE"
+                                '  - service: http_status:404' > "$CF_CONFIG_TMP"
+                            if ! cf_config_valid "$CF_CONFIG_TMP"; then
+                                echo "❌ Rendered Cloudflare config failed validation; refusing to install it." >&2
+                                exit 1
+                            fi
+                            chmod 644 "$CF_CONFIG_TMP" 2>/dev/null || true
+                            if [ "$EUID" -eq 0 ]; then
+                                chown "$CURRENT_USER:$CURRENT_GROUP" "$CF_CONFIG_TMP" 2>/dev/null || true
+                            fi
+                            durable_sync_file "$CF_CONFIG_TMP"
+                            CF_CONFIG_CREATED_BY_SETUP=yes
+                            journal_put_critical cf_config_created_by_setup yes
+                            mv -fT -- "$CF_CONFIG_TMP" "$CF_CONFIG_FILE" || {
+                                echo "❌ Could not atomically install $CF_CONFIG_FILE." >&2
+                                exit 1
+                            }
+                            durable_sync_dir "$CF_DIR"
                             echo "✔ Successfully generated $CF_CONFIG_FILE"
 
                             # f) Automatically route DNS for the dashboard subdomain
                             echo "🌐 Routing DNS for dash.$CF_DOMAIN_VAL..."
-                            DNS_OUT="$(run_as_current_user cloudflared tunnel route dns --overwrite-dns "$TUNNEL_NAME" "dash.$CF_DOMAIN_VAL" 2>&1 || true)"
-                            echo "$DNS_OUT"
-                            echo "✔ DNS routing configured for dash.$CF_DOMAIN_VAL"
+                            set_phase tunnel_dns
+                            if DNS_OUT="$(run_as_current_user cloudflared tunnel route dns --overwrite-dns "$TUNNEL_NAME" "dash.$CF_DOMAIN_VAL" 2>&1)"; then
+                                echo "$DNS_OUT"
+                                echo "✔ DNS routing configured for dash.$CF_DOMAIN_VAL"
+                            else
+                                echo "$DNS_OUT"
+                                echo "⚠️ DNS routing did not complete; setup is idempotent and a rerun will retry it."
+                            fi
 
-                            # g) Update agent/.env using Node-based environment updater
+                            # g) Update agent/.env atomically
                             echo "⚙ Updating agent/.env with CF_DOMAIN and TUNNEL_NAME..."
-                            HOME_CLOUD_ENV_PATH="$SCRIPT_DIR/agent/.env" \
-                            HOME_CLOUD_CF_DOMAIN="$CF_DOMAIN_VAL" \
-                            HOME_CLOUD_TUNNEL_NAME="$TUNNEL_NAME" \
-                            "$NODE_PATH" -e '
-                                const fs = require("fs");
-                                const envPath = process.env.HOME_CLOUD_ENV_PATH;
-                                const cfDomain = process.env.HOME_CLOUD_CF_DOMAIN;
-                                const tunnelName = process.env.HOME_CLOUD_TUNNEL_NAME;
-                                let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
-
-                                function updateOrAppend(key, val) {
-                                    const regex = new RegExp("^" + key + "=.*", "m");
-                                    if (regex.test(content)) {
-                                        content = content.replace(regex, key + "=" + val);
-                                    } else {
-                                        const trimmed = content.trimEnd();
-                                        content = (trimmed ? trimmed + "\n" : "") + key + "=" + val + "\n";
-                                    }
-                                }
-
-                                updateOrAppend("CF_DOMAIN", cfDomain);
-                                updateOrAppend("TUNNEL_NAME", tunnelName);
-                                fs.writeFileSync(envPath, content, { mode: 0o600 });
-                            '
+                            set_phase tunnel_env_sync
+                            apply_env_update "$SCRIPT_DIR/agent/.env" "CF_DOMAIN" "$CF_DOMAIN_VAL"
+                            apply_env_update "$SCRIPT_DIR/agent/.env" "TUNNEL_NAME" "$TUNNEL_NAME"
+                            chmod 600 "$SCRIPT_DIR/agent/.env" 2>/dev/null || true
+                            run_privileged chown "$CURRENT_USER:$CURRENT_GROUP" "$SCRIPT_DIR/agent/.env" 2>/dev/null || true
                             echo "✔ Updated agent/.env with CF_DOMAIN=$CF_DOMAIN_VAL and TUNNEL_NAME=$TUNNEL_NAME"
 
                             # h) Ensure file permissions
@@ -1258,9 +2155,51 @@ else
         if firewall_status="$(run_privileged ufw status 2>/dev/null)" && [[ "$firewall_status" == *"Status: active"* ]]; then
             echo "🛡 UFW is active. Allowing incoming traffic on port 3000/tcp..."
             run_privileged ufw allow 3000/tcp comment "Home Cloud Dashboard" >/dev/null 2>&1 || true
+            if [ "$SKIP_SSH" != true ]; then
+                run_privileged ufw allow OpenSSH >/dev/null 2>&1 || run_privileged ufw allow 22/tcp >/dev/null 2>&1 || true
+            fi
         fi
     fi
 fi
+
+# 10b. Configure Laptop Lid Switch Behavior (Prevent sleep on lid close)
+configure_laptop_lid() {
+    if [ "$SKIP_LID" = true ]; then
+        echo "ℹ Skipping laptop lid switch configuration (--skip-lid)."
+        return 0
+    fi
+
+    if [ -d /proc/acpi/button/lid ] || [ -f /proc/acpi/button/lid/*/state ] 2>/dev/null || grep -qi "lid" /proc/bus/input/devices 2>/dev/null; then
+        echo "💻 Laptop lid switch detected."
+    else
+        echo "⚙ Configuring laptop lid behavior for headless server use."
+    fi
+
+    local logind_dir="/etc/systemd/logind.conf.d"
+    if [ -n "${HOME_CLOUD_LOGIND_DIR:-}" ]; then
+        logind_dir="$HOME_CLOUD_LOGIND_DIR"
+    elif [ -n "${HOME_CLOUD_SYSTEMD_DIR:-}" ] && [ "$HOME_CLOUD_SYSTEMD_DIR" != "/etc/systemd/system" ]; then
+        logind_dir="$(dirname "$HOME_CLOUD_SYSTEMD_DIR")/logind.conf.d"
+    fi
+
+    if grep -qsE '^[[:space:]]*HandleLidSwitch=ignore' /etc/systemd/logind.conf /etc/systemd/logind.conf.d/*.conf "$logind_dir"/*.conf 2>/dev/null; then
+        echo "✔ Laptop lid close behavior already set to ignore."
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY-RUN] Would configure $logind_dir/10-home-cloud-lid.conf to ignore lid switch."
+        return 0
+    fi
+
+    run_privileged mkdir -p "$logind_dir"
+    printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\n' | run_privileged tee "$logind_dir/10-home-cloud-lid.conf" >/dev/null
+    run_privileged chmod 644 "$logind_dir/10-home-cloud-lid.conf" 2>/dev/null || true
+    run_privileged systemctl kill -s HUP systemd-logind 2>/dev/null || true
+    echo "✔ Configured systemd-logind to prevent system sleep on laptop lid close."
+}
+
+configure_laptop_lid
 
 # 11. Render & Inject Systemd Service File
 reject_systemd_unit_value() {
@@ -1290,6 +2229,34 @@ reject_systemd_unit_value "NODE_DIR" "$NODE_DIR"
 reject_systemd_unit_value "CURRENT_USER" "$CURRENT_USER"
 reject_systemd_unit_value "CURRENT_GROUP" "$CURRENT_GROUP"
 
+SERVICE_UNIT_BACKUP=""
+SERVICE_UNIT_PREEXISTING=no
+SERVICE_UNIT_TOUCHED=no
+
+rollback_service_unit() {
+    [ "$SERVICE_UNIT_TOUCHED" = "yes" ] || return 0
+    echo "↩ Restoring the previous systemd unit after setup failed..." >&2
+    if [ "$SERVICE_UNIT_PREEXISTING" = "yes" ] && [ -f "$SERVICE_UNIT_BACKUP" ]; then
+        local restore_tmp=""
+        restore_tmp="$(run_privileged mktemp "$(dirname "$TARGET_SERVICE")/.home-cloud.service.home-cloud-tmp.XXXXXX")" || return 1
+        if run_privileged cp -p "$SERVICE_UNIT_BACKUP" "$restore_tmp" && \
+           run_privileged mv -fT -- "$restore_tmp" "$TARGET_SERVICE"; then
+            durable_sync_file "$TARGET_SERVICE"
+            durable_sync_dir "$(dirname "$TARGET_SERVICE")"
+            rm -f -- "$SERVICE_UNIT_BACKUP" 2>/dev/null || run_privileged rm -f -- "$SERVICE_UNIT_BACKUP" 2>/dev/null || true
+            durable_sync_dir "$(dirname "$SERVICE_UNIT_BACKUP")"
+            SERVICE_UNIT_TOUCHED=no
+            journal_put service_unit_touched no || true
+            journal_put service_unit_backup "" || true
+            return 0
+        fi
+        rm -f -- "$restore_tmp" 2>/dev/null || run_privileged rm -f -- "$restore_tmp" 2>/dev/null || true
+        return 1
+    fi
+    run_privileged rm -f -- "$TARGET_SERVICE" 2>/dev/null || true
+    SERVICE_UNIT_TOUCHED=no
+    journal_put service_unit_touched no || true
+}
 if [ "$DRY_RUN" = true ]; then
     echo ""
     echo "[DRY-RUN] Would compile ${TEMPLATE_FILE} -> $TARGET_SERVICE with:"
@@ -1299,16 +2266,87 @@ else
         echo "❌ Error: Template file $TEMPLATE_FILE not found!" >&2
         exit 1
     fi
+    if [ -L "$TARGET_SERVICE" ]; then
+        echo "❌ Refusing to replace the symlink at $TARGET_SERVICE." >&2
+        echo "   Install the unit as a regular file, or remove the link and rerun setup.sh." >&2
+        exit 1
+    fi
     echo ""
     echo "⚙ Compiling $TEMPLATE_FILE -> $TARGET_SERVICE..."
+    set_phase_critical service_install
+    run_privileged mkdir -p "$(dirname "$TARGET_SERVICE")" || {
+        echo "❌ Could not create systemd unit directory $(dirname "$TARGET_SERVICE")." >&2
+        exit 1
+    }
+    SERVICE_RENDER_TMP="$(mktemp "$SETUP_STATE_DIR/service-unit.${SETUP_STATE_KEY}.render.XXXXXX")" || {
+        echo "❌ Could not create a temporary systemd unit." >&2
+        exit 1
+    }
+    register_temp_file "$SERVICE_RENDER_TMP"
     sed \
         -e "s|{{USER}}|$CURRENT_USER|g" \
         -e "s|{{GROUP}}|$CURRENT_GROUP|g" \
         -e "s|{{WORKING_DIR}}|$SCRIPT_DIR|g" \
         -e "s|{{NODE_PATH}}|$NODE_PATH|g" \
         -e "s|{{NODE_DIR}}|$NODE_DIR|g" \
-        "$TEMPLATE_FILE" | run_privileged tee "$TARGET_SERVICE" > /dev/null
+        "$TEMPLATE_FILE" > "$SERVICE_RENDER_TMP"
+    if awk '/{{/ { found = 1 } END { exit found ? 0 : 1 }' "$SERVICE_RENDER_TMP"; then
+        echo "❌ Rendered systemd unit contains unresolved template variables; refusing to install it." >&2
+        exit 1
+    fi
+    if [ -f "$TARGET_SERVICE" ]; then
+        SERVICE_UNIT_PREEXISTING=yes
+        SERVICE_UNIT_BACKUP="$SETUP_STATE_DIR/service-unit.${SETUP_STATE_KEY}.backup.$$"
+        # Persist the exact owned path before creating the backup so a SIGKILL
+        # during cp leaves a recoverable reference rather than an orphan.
+        journal_put_critical service_unit_preexisting yes
+        journal_put_critical service_unit_backup "$SERVICE_UNIT_BACKUP"
+        journal_put_critical service_unit_touched no
+        run_privileged cp -p "$TARGET_SERVICE" "$SERVICE_UNIT_BACKUP" || {
+            echo "❌ Could not back up the existing systemd unit." >&2
+            exit 1
+        }
+        durable_sync_file "$SERVICE_UNIT_BACKUP" || {
+            echo "❌ Could not sync the systemd unit backup." >&2
+            exit 1
+        }
+        durable_sync_dir "$SETUP_STATE_DIR" || {
+            echo "❌ Could not sync the systemd unit backup directory." >&2
+            exit 1
+        }
+    else
+        SERVICE_UNIT_PREEXISTING=no
+        SERVICE_UNIT_BACKUP=""
+        journal_put_critical service_unit_preexisting no
+        journal_put_critical service_unit_backup ""
+    fi
+    journal_put_critical service_unit_target "$TARGET_SERVICE"
+    SERVICE_TMP="$(run_privileged mktemp "$(dirname "$TARGET_SERVICE")/.home-cloud.service.home-cloud-tmp.XXXXXX")" || {
+        echo "❌ Could not create a temporary systemd unit in $(dirname "$TARGET_SERVICE")." >&2
+        exit 1
+    }
+    register_temp_file "$SERVICE_TMP"
+    if ! run_privileged cp "$SERVICE_RENDER_TMP" "$SERVICE_TMP"; then
+        echo "❌ Could not stage the systemd unit." >&2
+        exit 1
+    fi
+    run_privileged chmod 0644 "$SERVICE_TMP" 2>/dev/null || true
+    run_privileged chown root:root "$SERVICE_TMP" 2>/dev/null || true
+    durable_sync_file "$SERVICE_TMP"
 
+    # Close recovery gap: register rollback and persist critical journal state
+    # BEFORE modifying the live target unit on disk
+    SERVICE_UNIT_TOUCHED=yes
+    register_rollback rollback_service_unit
+    journal_put_critical service_unit_touched yes
+
+    if ! run_privileged mv -fT -- "$SERVICE_TMP" "$TARGET_SERVICE"; then
+        echo "❌ Could not atomically install $TARGET_SERVICE." >&2
+        exit 1
+    fi
+    durable_sync_dir "$(dirname "$TARGET_SERVICE")"
+    set_phase_critical service_installed
+    rm -f -- "$SERVICE_RENDER_TMP" 2>/dev/null || true
     echo "✔ Successfully generated $TARGET_SERVICE"
 fi
 
@@ -1331,10 +2369,15 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 echo "🔄 Reloading systemd daemon..."
+set_phase systemd_reload
 run_privileged systemctl daemon-reload
 
 echo "🚀 Enabling and starting home-cloud.service..."
+set_phase systemd_enable
 run_privileged systemctl enable --now home-cloud.service
+
+finish_transaction
+clear_rollbacks
 
 echo ""
 echo "========================================================"
@@ -1343,6 +2386,7 @@ echo "========================================================"
 echo ""
 
 echo "  Access locally at:  http://$ACTIVE_IP:3000"
+echo "  Local SSH:          ssh $CURRENT_USER@$ACTIVE_IP"
 ACTIVE_CF_DOMAIN=""
 if [ -f "$SCRIPT_DIR/agent/.env" ]; then
     ACTIVE_CF_DOMAIN="$(
