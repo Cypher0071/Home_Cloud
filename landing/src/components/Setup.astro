@@ -1,336 +1,572 @@
 ---
-// landing/src/components/Setup.astro
-// Compact 3-step setup: prepare -> run installer -> open dashboard.
-// Copy states plainly that remote access needs separate Cloudflare setup;
-// the installer terminal dramatization was removed for that reason.
+// A local-first deployment path, with the pinned installer as the focal action.
+const installCommand = `curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/v1.0.1/setup.sh -o setup.sh && \\
+less setup.sh && \\
+bash setup.sh`;
 ---
 
-<section id="setup" class="setup-section">
+<section id="setup" class="setup-section" aria-labelledby="setup-title">
   <div class="container">
-    <div class="setup-box">
-      <div class="setup-header reveal">
-      <p class="setup-eyebrow">GET STARTED</p>
-      <h2 class="setup-title">
-        From spare PC to private cloud.
-      </h2>
-      <p class="setup-desc">
-        Install Home Cloud on a compatible Linux machine, then open the
-        dashboard on your local network. Configure Cloudflare Tunnel separately
-        if you want remote access.
-      </p>
-    </div>
-
-    <div class="setup-steps-grid">
-      <!-- Step 1 -->
-      <div class="step-card reveal">
-        <div class="step-badge">01</div>
-        <h3 class="step-heading">Prepare your machine</h3>
-        <p class="step-body">
-          Use a compatible Linux machine with systemd and sudo access. Docker
-          and the required dependencies are installed as part of setup where
-          supported.
-        </p>
-      </div>
-
-      <!-- Step 2 -->
-      <div class="step-card reveal">
-        <div class="step-badge">02</div>
-        <h3 class="step-heading">Run the installer</h3>
-        <p class="step-body">
-          Run the bootstrap command on your machine to install dependencies,
-          build the dashboard, and configure the Home Cloud service.
-        </p>
-        <div class="step-cmd-box">
-          <div class="step-cmd-header">
-            <span class="step-cmd-label">Installer:</span>
-            <button
-              type="button"
-              class="step-copy-btn"
-              id="setup-step-copy"
-              aria-label="Copy setup command"
-              data-copy="curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash"
-            >
-              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8">
-                <rect x="5" y="5" width="8" height="8" rx="1.5"></rect>
-                <path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"></path>
-              </svg>
-              <span id="setup-copy-text">Copy</span>
-            </button>
-          </div>
-          <code class="step-cmd" id="setup-step-cmd">curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash</code>
+    <div class="setup-shell">
+      <header class="setup-header reveal">
+        <div class="setup-heading-group">
+          <p class="setup-eyebrow"><span aria-hidden="true">03</span> / DEPLOYMENT</p>
+          <h2 id="setup-title" class="setup-title">Your hardware.<br /><em>Your control plane.</em></h2>
         </div>
-      </div>
-
-      <!-- Step 3 -->
-      <div class="step-card reveal">
-        <div class="step-badge">03</div>
-        <h3 class="step-heading">Open your dashboard</h3>
-        <p class="step-body">
-          Open the dashboard using your machine's LAN address. To access it
-          remotely, complete Cloudflare Tunnel login and configure your domain
-          and DNS.
-        </p>
-        <div class="access-rows">
-          <div class="access-row">
-            <span class="access-tag">LOCAL</span>
-            <code class="access-addr">http://&lt;your-machine-ip&gt;:3000</code>
-          </div>
-          <div class="access-row is-remote">
-            <span class="access-tag">REMOTE</span>
-            <code class="access-addr">https://dash.&lt;your-domain&gt;</code>
-            <span class="access-note">Requires Cloudflare setup</span>
+        <div class="setup-intro">
+          <p>Turn a Linux machine into a private cloud in three deliberate steps. Start on your local network; add remote access when you need it.</p>
+          <div class="setup-route">
+            <span>LINUX HOST</span>
+            <svg viewBox="0 0 42 10" aria-hidden="true"><path d="M1 5h37m-4-4 4 4-4 4" /></svg>
+            <span>DASHBOARD</span>
+            <span class="route-optional">+ TUNNEL (OPTIONAL)</span>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-</div>
+      </header>
 
-  <div class="container">
-    <div class="hatch setup-hatch" aria-hidden="true"></div>
+      <ol class="setup-sequence" aria-label="Home Cloud installation steps">
+        <li class="setup-step reveal" data-reveal-delay="1">
+          <div class="step-index"><span>01</span></div>
+          <div class="step-content step-prereq">
+            <div class="step-copy">
+              <p class="step-kicker">CHECK THE HOST</p>
+              <h3>Prepare a Linux machine</h3>
+              <p>Use a systemd-based Linux host with sudo access. Have Node.js 22.13 or newer and Docker installed before you begin.</p>
+            </div>
+            <ul class="prereq-readout" aria-label="Required host prerequisites">
+              <li><b>01</b> systemd</li>
+              <li><b>02</b> Node.js ≥ 22.13</li>
+              <li><b>03</b> Docker + sudo</li>
+            </ul>
+          </div>
+        </li>
+
+        <li class="setup-step setup-step-install reveal" data-reveal-delay="2">
+          <div class="step-index"><span>02</span></div>
+          <div class="step-content">
+            <div class="step-copy">
+              <p class="step-kicker">FETCH · REVIEW · RUN</p>
+              <h3>Install from a pinned release</h3>
+              <p>Download the v1.0.1 installer, review it locally, then run it. The setup flow builds the dashboard and registers the system service.</p>
+            </div>
+
+            <div class="command-panel">
+              <div class="command-toolbar">
+                <div class="command-file"><span class="terminal-mark" aria-hidden="true">$</span><span>setup.sh</span><span class="command-mode">bash</span></div>
+                <button type="button" class="copy-command" id="setup-copy" aria-label="Copy installer commands" data-copy={installCommand}>
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1" /><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" /></svg>
+                  <span id="setup-copy-label">Copy commands</span>
+                </button>
+              </div>
+              <pre class="command-code"><code id="setup-command">{installCommand}</code></pre>
+              <span id="setup-copy-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></span>
+            </div>
+          </div>
+        </li>
+
+        <li class="setup-step reveal" data-reveal-delay="3">
+          <div class="step-index"><span>03</span></div>
+          <div class="step-content step-access">
+            <div class="step-copy">
+              <p class="step-kicker">CONNECT</p>
+              <h3>Open your dashboard</h3>
+              <p>Use the host’s LAN address right away. Configure Cloudflare Tunnel during setup or later for remote HTTPS access.</p>
+            </div>
+            <div class="endpoints">
+              <div class="endpoint endpoint-local">
+                <span class="endpoint-label"><i aria-hidden="true"></i> LOCAL NETWORK</span>
+                <code>http://&lt;server-ip&gt;:3000</code>
+              </div>
+              <div class="endpoint endpoint-remote">
+                <span class="endpoint-label"><i aria-hidden="true"></i> REMOTE · OPTIONAL</span>
+                <code>https://dash.&lt;your-domain&gt;</code>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ol>
+
+      <footer class="setup-footer">
+        <span>INSTALL TARGET <b>HOME-CLOUD.SERVICE</b></span>
+        <span>DEFAULT ACCESS <b>LAN · PORT 3000</b></span>
+        <a href="https://github.com/Cypher0071/Home_Cloud/blob/v1.0.1/setup.sh" target="_blank" rel="noreferrer">READ INSTALLER SOURCE <span aria-hidden="true">↗</span></a>
+      </footer>
+    </div>
+    <div class="setup-hatch" aria-hidden="true"></div>
   </div>
 </section>
 
 <style>
   .setup-section {
     position: relative;
-    padding-block: 0;
+    padding-block: clamp(4.5rem, 8vw, 8rem) 0;
     background: var(--hc-canvas);
   }
 
-  .setup-box {
-    border-left: 1px solid var(--hc-border-subtle);
-    border-right: 1px solid var(--hc-border-subtle);
-    padding-block: clamp(64px, 8vw, 96px);
-    padding-inline: clamp(24px, 4vw, 48px);
-    box-sizing: border-box;
-    width: 100%;
+  .setup-shell {
+    border: 1px solid var(--hc-border-default);
+    border-top-color: var(--hc-border-strong);
+    background: var(--hc-surface-1);
+    position: relative;
+    overflow: hidden;
   }
 
-  .setup-hatch {
-    height: 28px;
-    background-color: var(--hc-canvas);
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent 0 6px,
-      var(--hc-border-default) 6px 7px
-    );
-    border: 1px solid var(--hc-border-subtle);
-    box-sizing: border-box;
+  .setup-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: var(--hc-accent);
+    opacity: 0.82;
   }
 
   .setup-header {
-    text-align: center;
-    max-width: 680px;
-    margin-inline: auto;
-    margin-bottom: var(--space-6);
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+    align-items: end;
+    gap: clamp(2rem, 6vw, 6rem);
+    padding: clamp(2rem, 5.4vw, 5rem) clamp(1.5rem, 5vw, 5rem) clamp(2rem, 4vw, 3.5rem);
+    border-bottom: 1px solid var(--hc-border-default);
+  }
+
+  .setup-eyebrow,
+  .step-kicker,
+  .setup-route,
+  .step-index,
+  .command-file,
+  .command-mode,
+  .endpoint-label,
+  .setup-footer {
+    font-family: var(--hc-font-mono);
+    font-size: var(--hc-text-mono);
+    letter-spacing: 0.025em;
   }
 
   .setup-eyebrow {
-    margin-bottom: var(--space-3);
-    font-family: var(--font-mono);
-    font-size: 0.76rem;
-    letter-spacing: 0.08em;
-    color: var(--text-tertiary);
+    color: var(--hc-text-tertiary);
+    margin-bottom: 1.25rem;
+  }
+
+  .setup-eyebrow span {
+    color: var(--hc-accent);
   }
 
   .setup-title {
-    font-family: var(--font-display);
-    font-size: clamp(2rem, 3.2vw, 2.8rem);
-    font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.03em;
-    color: var(--text-primary);
-    margin-bottom: var(--space-3);
+    font-size: clamp(2.5rem, 5vw, 4.75rem);
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    font-weight: 520;
   }
 
-  .setup-desc {
-    font-size: 1.02rem;
-    color: var(--text-secondary);
-    line-height: 1.6;
+  .setup-title em {
+    color: var(--hc-text-secondary);
+    font-style: normal;
+    font-weight: 420;
   }
 
-  /* Compact 3-step row */
-  .setup-steps-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: clamp(1rem, 1.6vw, 1.5rem);
+  .setup-intro {
+    max-width: 35rem;
+    justify-self: end;
   }
 
-  .step-card {
-    background: var(--hc-surface-1);
-    border: 1px solid var(--hc-border-default);
-    border-radius: 16px;
-    padding: 20px;
+  .setup-intro > p {
+    color: var(--hc-text-secondary);
+    font-size: clamp(1rem, 1.3vw, 1.125rem);
+    line-height: 1.65;
+    max-width: 40ch;
+    margin-bottom: 1.5rem;
+  }
+
+  .setup-route {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    color: var(--hc-text-tertiary);
+    font-size: 0.67rem;
+  }
+
+  .setup-route svg {
+    width: 2rem;
+    fill: none;
+    stroke: var(--hc-accent);
+    stroke-width: 1.2;
+  }
+
+  .route-optional {
+    color: var(--hc-text-muted);
+  }
+
+  .setup-sequence {
+    list-style: none;
+    margin: 0;
+    padding: 0 clamp(1.5rem, 5vw, 5rem);
+  }
+
+  .setup-step {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    position: relative;
+    border-bottom: 1px solid var(--hc-border-default);
+  }
+
+  .step-index {
+    position: relative;
+    display: flex;
+    justify-content: flex-start;
+    padding-top: clamp(1.65rem, 3vw, 2.4rem);
+    color: var(--hc-accent);
+  }
+
+  .step-index::after {
+    content: '';
+    position: absolute;
+    left: 0.4rem;
+    top: 3.4rem;
+    bottom: -1px;
+    border-left: 1px dashed var(--hc-border-strong);
+  }
+
+  .setup-step:last-child .step-index::after {
+    display: none;
+  }
+
+  .step-content {
+    display: grid;
+    grid-template-columns: minmax(12rem, 0.75fr) minmax(18rem, 1.25fr);
+    align-items: start;
+    gap: clamp(1.5rem, 5vw, 5rem);
+    padding: clamp(1.65rem, 3vw, 2.4rem) 0;
     min-width: 0;
   }
 
-  .step-badge {
-    font-family: var(--font-mono);
-    font-size: 0.78rem;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    color: var(--text-muted);
-    margin-bottom: 10px;
+  .step-copy h3 {
+    margin: 0 0 0.65rem;
+    font-size: clamp(1.1rem, 1.5vw, 1.35rem);
+    letter-spacing: -0.025em;
+    font-weight: 560;
   }
 
-  .step-heading {
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 8px;
+  .step-kicker {
+    color: var(--hc-text-tertiary);
+    font-size: 0.67rem;
+    margin-bottom: 0.7rem;
   }
 
-  .step-body {
-    font-size: 0.86rem;
-    line-height: 1.55;
-    color: var(--text-secondary);
-    margin-bottom: 16px;
+  .step-copy > p:last-child {
+    max-width: 43ch;
+    color: var(--hc-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.65;
   }
 
-  .step-cmd-box,
-  .access-rows {
-    margin-top: auto;
+  .prereq-readout {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    align-self: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    min-width: 0;
   }
 
-  .step-cmd-box {
-    background: var(--hc-canvas);
+  .prereq-readout li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.65rem 0.8rem;
     border: 1px solid var(--hc-border-default);
-    border-radius: 8px;
-    padding: 10px 12px;
-    min-width: 0;
+    background: var(--hc-canvas);
+    color: var(--hc-text-secondary);
+    font-family: var(--hc-font-mono);
+    font-size: 0.72rem;
+    line-height: 1.4;
   }
 
-  .step-cmd-header {
+  .prereq-readout b {
+    color: var(--hc-text-muted);
+    font-size: 0.64rem;
+    font-weight: 450;
+  }
+
+  .setup-step-install .step-content {
+    align-items: start;
+  }
+
+  .command-panel {
+    min-width: 0;
+    border: 1px solid var(--hc-border-strong);
+    background: var(--hc-canvas);
+  }
+
+  .command-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: 1rem;
+    min-height: 2.8rem;
+    padding: 0.45rem 0.65rem 0.45rem 1rem;
+    border-bottom: 1px solid var(--hc-border-default);
   }
 
-  .step-cmd-label {
-    font-size: 0.72rem;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-  }
-
-  .step-cmd {
-    display: block;
-    font-family: var(--font-mono);
-    font-size: 0.74rem;
+  .command-file {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     color: var(--hc-text-primary);
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    font-size: 0.72rem;
   }
 
-  .step-copy-btn {
+  .terminal-mark {
+    color: var(--hc-accent);
+  }
+
+  .command-mode {
+    padding: 0.15rem 0.35rem;
+    border: 1px solid var(--hc-border-default);
+    color: var(--hc-text-tertiary);
+    font-size: 0.6rem;
+  }
+
+  .copy-command {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: var(--text-primary);
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--hc-border-strong);
+    color: var(--hc-text-primary);
     font-size: 0.72rem;
-    font-weight: 600;
-    cursor: pointer;
-    flex-shrink: 0;
+    line-height: 1;
+    transition: border-color var(--hc-duration-micro), background-color var(--hc-duration-micro);
   }
 
-  .step-copy-btn:hover {
-    background: rgba(255, 255, 255, 0.16);
+  .copy-command:hover {
+    border-color: var(--hc-accent);
+    background: var(--hc-accent-faint);
   }
 
-  /* Access paths: local plain, remote flagged */
-  .access-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .copy-command svg {
+    width: 0.9rem;
+    height: 0.9rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.25;
+  }
+
+  .command-code {
+    margin: 0;
+    padding: 1.2rem 1rem 1.35rem;
+    overflow-x: auto;
+    color: var(--hc-text-primary);
+    font-family: var(--hc-font-mono);
+    font-size: clamp(0.68rem, 1vw, 0.78rem);
+    line-height: 1.95;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 2;
+  }
+
+  .command-code code {
+    font: inherit;
+  }
+
+  .step-access {
+    align-items: center;
+  }
+
+  .endpoints {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
     min-width: 0;
   }
 
-  .access-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  .endpoint {
+    min-width: 0;
+    padding: 0.85rem 0.9rem 0.95rem;
     background: var(--hc-canvas);
     border: 1px solid var(--hc-border-default);
-    border-radius: 8px;
-    padding: 9px 12px;
-    min-width: 0;
-    flex-wrap: wrap;
   }
 
-  .access-tag {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    color: var(--text-tertiary);
-    flex-shrink: 0;
+  .endpoint-label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.7rem;
+    font-size: 0.61rem;
+    color: var(--hc-text-tertiary);
   }
 
-  .access-row.is-remote .access-tag {
-    color: var(--signal-text);
+  .endpoint-label i {
+    width: 0.38rem;
+    height: 0.38rem;
+    border: 1px solid var(--hc-text-tertiary);
+    border-radius: 50%;
   }
 
-  .access-addr {
-    font-family: var(--font-mono);
-    font-size: 0.74rem;
+  .endpoint-local .endpoint-label i {
+    border-color: var(--hc-success);
+    background: var(--hc-success);
+  }
+
+  .endpoint-remote .endpoint-label i {
+    border-color: var(--hc-accent);
+  }
+
+  .endpoint code {
+    display: block;
     color: var(--hc-text-primary);
+    font-size: clamp(0.66rem, 0.95vw, 0.76rem);
+    line-height: 1.6;
     overflow-wrap: anywhere;
-    word-break: break-word;
-    flex: 1;
-    min-width: 0;
   }
 
-  .access-note {
-    width: 100%;
-    font-size: 0.72rem;
-    color: var(--text-tertiary);
+  .setup-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem 2rem;
+    padding: 1rem clamp(1.5rem, 5vw, 5rem);
+    background: var(--hc-canvas);
+    color: var(--hc-text-tertiary);
+    font-size: 0.62rem;
+  }
+
+  .setup-footer b {
+    color: var(--hc-text-secondary);
+    font-weight: 500;
+  }
+
+  .setup-footer a {
+    margin-left: auto;
+    color: var(--hc-text-primary);
+    transition: color var(--hc-duration-micro);
+  }
+
+  .setup-footer a:hover {
+    color: var(--hc-accent);
+  }
+
+  .setup-hatch {
+    height: 1.25rem;
+    border: 1px solid var(--hc-border-subtle);
+    border-top: 0;
+    background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--hc-border-default) 6px 7px);
   }
 
   @media (max-width: 900px) {
-    .setup-steps-grid {
+    .setup-header {
       grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    .setup-intro {
+      justify-self: start;
+    }
+
+    .step-content {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 1.25rem;
+    }
+
+    .step-copy > p:last-child {
+      max-width: 60ch;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .setup-header {
+      padding-inline: 1.25rem;
+    }
+
+    .setup-title {
+      font-size: clamp(2.35rem, 11vw, 3.4rem);
+    }
+
+    .setup-route {
+      gap: 0.4rem;
+      font-size: 0.6rem;
+    }
+
+    .setup-route svg {
+      width: 1.4rem;
+    }
+
+    .setup-sequence {
+      padding-inline: 1.25rem;
+    }
+
+    .setup-step {
+      grid-template-columns: 2.3rem minmax(0, 1fr);
+    }
+
+    .step-index::after {
+      left: 0.3rem;
+    }
+
+    .prereq-readout li {
+      padding: 0.55rem 0.6rem;
+      font-size: 0.67rem;
+    }
+
+    .command-toolbar {
+      padding-left: 0.7rem;
+    }
+
+    .copy-command {
+      padding-inline: 0.5rem;
+      font-size: 0.68rem;
+    }
+
+    .endpoints {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .setup-footer {
+      padding-inline: 1.25rem;
+    }
+
+    .setup-footer a {
+      margin-left: 0;
+      flex-basis: 100%;
     }
   }
 </style>
 
 <script>
-  // Setup step copy button
-  const stepCopyBtn = document.getElementById('setup-step-copy');
-  const stepCopyText = document.getElementById('setup-copy-text');
-  const stepCmd = document.getElementById('setup-step-cmd');
+  const copyButton = document.getElementById('setup-copy');
+  const commandCode = document.getElementById('setup-command');
+  const copyLabel = document.getElementById('setup-copy-label');
+  const copyStatus = document.getElementById('setup-copy-status');
 
-  if (stepCopyBtn && stepCmd) {
-    stepCopyBtn.addEventListener('click', async () => {
-      const textToCopy = stepCopyBtn.getAttribute('data-copy') || stepCmd.textContent || '';
+  if (copyButton && commandCode) {
+    copyButton.addEventListener('click', async () => {
+      const text = copyButton.getAttribute('data-copy') || commandCode.textContent || '';
+      let copied = false;
+
       try {
-        await navigator.clipboard.writeText(textToCopy);
-        if (stepCopyText) stepCopyText.textContent = 'Copied!';
-        setTimeout(() => {
-          if (stepCopyText) stepCopyText.textContent = 'Copy';
-        }, 2200);
-      } catch (err) {
-        // Fallback
-        const textarea = document.createElement('textarea');
-        textarea.value = textToCopy;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-
-        if (stepCopyText) stepCopyText.textContent = 'Copied!';
-        setTimeout(() => {
-          if (stepCopyText) stepCopyText.textContent = 'Copy';
-        }, 2200);
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        const field = document.createElement('textarea');
+        field.value = text;
+        field.setAttribute('readonly', '');
+        field.style.position = 'fixed';
+        field.style.opacity = '0';
+        document.body.appendChild(field);
+        field.select();
+        copied = document.execCommand('copy');
+        field.remove();
       }
+
+      if (copyLabel) copyLabel.textContent = copied ? 'Copied' : 'Copy failed';
+      if (copyStatus) copyStatus.textContent = copied ? 'Installer commands copied to clipboard.' : 'Could not copy commands. Select and copy them manually.';
+      window.setTimeout(() => {
+        if (copyLabel) copyLabel.textContent = 'Copy commands';
+      }, 2200);
     });
   }
 </script>

@@ -3,13 +3,15 @@
 // "How it works" — Griffin-style scroll story: sticky narrative rail on the
 // left (eyebrow, heading, three numbered stages on a progress line), one
 // continuous visual canvas on the right with a tall panel per stage.
-// Active stage follows scroll via IntersectionObserver; the rail fill tracks
-// section scroll continuously. No animation libraries, no elaborate scenes:
+// Active stage follows page scroll via IntersectionObserver; the rail fill
+// tracks section scroll. No animation libraries, no elaborate scenes:
 // typography and restrained geometry carry the visuals.
+import ProductDemo from './ProductDemo.astro';
 ---
 
 <section id="how-it-works" class="hiw">
-  <div class="container">
+  <div class="container hiw-container">
+    <div class="hatch hiw-header-hatch" aria-hidden="true"></div>
     <div class="hiw-box">
       <div class="hiw-cols">
     <!-- Left: narrative + progress rail -->
@@ -73,31 +75,15 @@
 
       <div class="hiw-panel" id="hiw-stage-3">
         <p class="viz-caption" aria-hidden="true"><span>03</span>Access it anywhere</p>
-        <div class="viz-browser">
-          <div class="viz-chrome">
-            <span class="chrome-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="chrome-addr">dash.&lt;domain&gt;</span>
-            <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-              <rect x="3.5" y="7" width="9" height="6.5" rx="1"></rect>
-              <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"></path>
-            </svg>
-          </div>
-          <p class="viz-auth"><span class="auth-dot" aria-hidden="true"></span>SHARED PASSCODE ACCEPTED</p>
-          <ul class="viz-apps">
-            <li><span>TERMINAL</span><span>PTY</span></li>
-            <li><span>FILES</span><span>DISK</span></li>
-            <li><span>METRICS</span><span>LIVE</span></li>
-            <li><span>DOCKER</span><span>ENGINE</span></li>
-          </ul>
+        <div class="hiw-static-dashboard" aria-label="Home Cloud desktop dashboard preview">
+          <ProductDemo mode="preview" />
         </div>
       </div>
     </div>
   </div>
 </div>
-</div>
 
-<div class="container">
-  <div class="hatch hiw-hatch" aria-hidden="true"></div>
+<div class="hatch hiw-hatch" aria-hidden="true"></div>
 </div>
 </section>
 
@@ -115,7 +101,8 @@
     box-sizing: border-box;
   }
 
-  .hiw-hatch {
+  .hiw-hatch,
+  .hiw-header-hatch {
     height: 28px;
     background-color: var(--hc-canvas);
     background-image: repeating-linear-gradient(
@@ -125,6 +112,12 @@
     );
     border: 1px solid var(--hc-border-subtle);
     box-sizing: border-box;
+  }
+
+  .hiw-header-hatch {
+    position: sticky;
+    top: 56px;
+    z-index: 20;
   }
 
   .hiw-cols {
@@ -137,7 +130,7 @@
   /* ---- Left rail ---- */
   .hiw-rail {
     position: sticky;
-    top: 108px;
+    top: 84px;
     padding-block: clamp(64px, 8vh, 96px);
     padding-inline: clamp(24px, 4vw, 48px);
     box-sizing: border-box;
@@ -279,6 +272,18 @@
     display: none;
   }
 
+  .hiw-static-dashboard {
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+    pointer-events: none;
+  }
+
+  .hiw-static-dashboard :global(.hc-desktop-preview) {
+    transform: none;
+    animation: none;
+  }
+
   .viz-kicker {
     font-family: var(--hc-font-mono);
     font-size: 12px;
@@ -361,91 +366,13 @@
     color: var(--hc-text-secondary);
   }
 
-  /* Stage 03: legible browser */
-  .viz-browser {
-    border: 1px solid var(--hc-border-default);
-    border-radius: var(--hc-radius-md);
-    background: var(--hc-surface-1);
-    overflow: hidden;
-  }
-
-  .viz-chrome {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--hc-border-subtle);
-    color: var(--hc-text-tertiary);
-  }
-
-  .chrome-dots {
-    display: inline-flex;
-    gap: 6px;
-  }
-
-  .chrome-dots i {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--hc-text-muted);
-  }
-
-  .chrome-addr {
-    flex: 1;
-    font-family: var(--hc-font-mono);
-    font-size: 13px;
-    color: var(--hc-text-secondary);
-  }
-
-  .viz-auth {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--hc-border-subtle);
-    font-family: var(--hc-font-mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--hc-text-tertiary);
-  }
-
-  .auth-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--hc-success);
-  }
-
-  .viz-apps {
-    list-style: none;
-    margin: 0;
-    padding: 4px 0;
-  }
-
-  .viz-apps li {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 13px 16px;
-    font-family: var(--hc-font-mono);
-    font-size: 15px;
-    color: var(--hc-text-primary);
-  }
-
-  .viz-apps li + li {
-    border-top: 1px solid var(--hc-border-subtle);
-  }
-
-  .viz-apps li span:last-child {
-    font-size: 11px;
-    color: var(--hc-text-tertiary);
-  }
-
   /* ---- Mobile: vertical text+visual sequence ---- */
   @media (max-width: 900px) {
     .hiw-cols {
       grid-template-columns: 1fr;
+    }
+    .hiw-header-hatch {
+      position: static;
     }
     .hiw-rail {
       position: static;
@@ -455,6 +382,7 @@
     .hiw-canvas {
       border-left: none;
       border-top: 1px solid var(--hc-border-subtle);
+      overflow: visible;
     }
     .hiw-panel {
       min-height: 0;
@@ -483,7 +411,8 @@
   }
 
   @media (max-width: 640px) {
-    .hiw-hatch {
+    .hiw-hatch,
+    .hiw-header-hatch {
       height: 22px;
     }
   }
