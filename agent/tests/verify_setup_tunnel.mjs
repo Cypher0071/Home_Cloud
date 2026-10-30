@@ -365,6 +365,8 @@ credentials-file: ${cfDir}/11223344-5566-7788-9900-aabbccddeeff.json
 ingress:
   - hostname: dash.myserver.live
     service: http://localhost:3000
+  - hostname: ssh.myserver.live
+    service: ssh://localhost:22
   - service: http_status:404
 `;
 		assert.equal(configContent.trim(), expectedConfig.trim());
@@ -381,6 +383,7 @@ ingress:
 		assert.match(logs, /tunnel login/);
 		assert.match(logs, /tunnel create home-cloud/);
 		assert.match(logs, /tunnel route dns (--overwrite-dns )?home-cloud dash\.myserver\.live/);
+		assert.match(logs, /tunnel route dns (--overwrite-dns )?home-cloud ssh\.myserver\.live/);
 
 		console.log("  ✔ Full automated Cloudflare tunnel flow completed successfully.");
 	} finally {

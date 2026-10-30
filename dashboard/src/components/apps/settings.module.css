@@ -1381,6 +1381,90 @@
   }
 }
 
+/* Remote SSH Access Card Styles */
+.sshHostCode {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+  background: #111111;
+  color: #ededed;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #262626;
+}
+
+.sshSnippetContainer {
+  margin-top: 14px;
+  background: #0d0d0d;
+  border: 1px solid #262626;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sshSnippetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid #1f1f1f;
+  background: #141414;
+}
+
+.sshSnippetLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #a1a1a1);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+.sshSnippetPre {
+  margin: 0;
+  padding: 14px;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #ededed;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.sshSnippetPre code {
+  font-family: inherit;
+}
+
+.sshClientNote {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted, #737373);
+}
+
+.sshLanFallback {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #262626;
+  border-radius: 6px;
+}
+
+.sshLanText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #a1a1a1);
+  line-height: 1.5;
+}
+
+.inlineCode {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  background: #171717;
+  color: #ededed;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #2e2e2e;
+}
+
 @container (min-width: 820px) {
   .nav {
     width: 220px;

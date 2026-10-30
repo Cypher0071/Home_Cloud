@@ -11,6 +11,7 @@ const CONFIG_PATH = CF_CONFIG;
 
 const RESERVED_SUBDOMAINS = new Set([
 	"dash",
+	"ssh",
 	"api",
 	"admin",
 	"administrator",
@@ -205,7 +206,7 @@ function restoreBackupConfig() {
 	return false;
 }
 
-// ─── Internal Unlocked Operations ────────────────────────────────────────────
+// ─── Internal Unlocked Operations ───────────────────────────────────────────
 
 function _getIngressRulesInternal() {
 	try {
@@ -214,7 +215,7 @@ function _getIngressRulesInternal() {
 		const config = yaml.load(file);
 		const baseDomain = CF_DOMAIN;
 		return (config.ingress || [])
-			.filter((r) => r.hostname && r.hostname !== `dash.${baseDomain}`)
+			.filter((r) => r.hostname && r.hostname !== `dash.${baseDomain}` && r.hostname !== `ssh.${baseDomain}`)
 			.map((r) => {
 				const suffix = `.${baseDomain}`;
 				const subdomain = r.hostname.endsWith(suffix)
@@ -284,6 +285,10 @@ function _removeIngressRuleInternal(subdomain) {
 	const clean = String(subdomain || "").trim().toLowerCase();
 	if (!clean) throw new Error("Subdomain is required");
 
+	if (RESERVED_SUBDOMAINS.has(clean)) {
+		throw new Error(`Cannot remove protected system ingress rule for '${clean}'`);
+	}
+
 	if (!fs.existsSync(CONFIG_PATH)) return false;
 
 	const file = fs.readFileSync(CONFIG_PATH, "utf8");
@@ -304,6 +309,8 @@ function _removeIngressRuleInternal(subdomain) {
 function _removeIngressByPortInternal(localPort) {
 	try {
 		if (!CF_DOMAIN) return false;
+		const portNum = Number(localPort);
+		if (portNum === 22 || portNum === 3001) return false; // Protected system services
 		if (!fs.existsSync(CONFIG_PATH)) return false;
 		const file = fs.readFileSync(CONFIG_PATH, "utf8");
 		const config = yaml.load(file);
@@ -410,6 +417,7 @@ async function unexposeContainer(subdomain) {
 module.exports = {
 	validateSubdomain,
 	getIngressRules,
+	_getIngressRulesInternal,
 	removeIngressByPort,
 	addIngressRule,
 	removeIngressRule,
