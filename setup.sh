@@ -2067,6 +2067,8 @@ setup_cloudflare_tunnel() {
                                 'ingress:' \
                                 "  - hostname: dash.$CF_DOMAIN_VAL" \
                                 '    service: http://localhost:3000' \
+                                "  - hostname: ssh.$CF_DOMAIN_VAL" \
+                                '    service: ssh://localhost:22' \
                                 '  - service: http_status:404' > "$CF_CONFIG_TMP"
                             if ! cf_config_valid "$CF_CONFIG_TMP"; then
                                 echo "❌ Rendered Cloudflare config failed validation; refusing to install it." >&2
@@ -2095,6 +2097,15 @@ setup_cloudflare_tunnel() {
                             else
                                 echo "$DNS_OUT"
                                 echo "⚠️ DNS routing did not complete; setup is idempotent and a rerun will retry it."
+                            fi
+
+                            echo "🌐 Routing DNS for ssh.$CF_DOMAIN_VAL..."
+                            if DNS_SSH_OUT="$(run_as_current_user cloudflared tunnel route dns --overwrite-dns "$TUNNEL_NAME" "ssh.$CF_DOMAIN_VAL" 2>&1)"; then
+                                echo "$DNS_SSH_OUT"
+                                echo "✔ DNS routing configured for ssh.$CF_DOMAIN_VAL"
+                            else
+                                echo "$DNS_SSH_OUT"
+                                echo "⚠️ DNS routing for ssh.$CF_DOMAIN_VAL did not complete; setup is idempotent and a rerun will retry it."
                             fi
 
                             # g) Update agent/.env atomically
@@ -2401,6 +2412,13 @@ if [ -f "$SCRIPT_DIR/agent/.env" ]; then
 fi
 if [ -n "$ACTIVE_CF_DOMAIN" ] && [ -f "$CURRENT_HOME/.cloudflared/config.yml" ]; then
     echo "  Access remotely at: https://dash.$ACTIVE_CF_DOMAIN"
+    echo "  Remote SSH:         ssh.$ACTIVE_CF_DOMAIN (requires cloudflared)"
+    echo ""
+    echo "  Remote SSH configuration (~/.ssh/config):"
+    echo "    Host home-cloud"
+    echo "        HostName ssh.$ACTIVE_CF_DOMAIN"
+    echo "        User $CURRENT_USER"
+    echo "        ProxyCommand cloudflared access ssh --hostname %h"
 fi
 echo ""
 echo "Service management commands:"

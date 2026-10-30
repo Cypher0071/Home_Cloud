@@ -22,6 +22,13 @@ router.get("/info", (req, res) => {
 			if (serverLocalIp) break;
 		}
 
+		let user = "user";
+		try {
+			user = os.userInfo().username || process.env.USER || "user";
+		} catch {
+			user = process.env.USER || "user";
+		}
+
 		res.json({
 			status: "ok",
 			serverLocalIp,
@@ -29,6 +36,7 @@ router.get("/info", (req, res) => {
 			baseDir: BASE_DIR,
 			cfDomain: CF_DOMAIN,
 			tunnel: getTunnelStatus(),
+			user,
 		});
 	} catch (err) {
 		res.status(500).json({ error: err.message });
