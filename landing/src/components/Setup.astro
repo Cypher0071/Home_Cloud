@@ -92,7 +92,7 @@ bash setup.sh`;
         <a href="https://github.com/Cypher0071/Home_Cloud/blob/v1.0.1/setup.sh" target="_blank" rel="noreferrer">READ INSTALLER SOURCE <span aria-hidden="true">↗</span></a>
       </footer>
     </div>
-    <div class="setup-hatch" aria-hidden="true"></div>
+    <div class="hatch setup-hatch" aria-hidden="true"></div>
   </div>
 </section>
 
@@ -451,10 +451,16 @@ bash setup.sh`;
   }
 
   .setup-hatch {
-    height: 1.25rem;
+    height: var(--hc-hatch-height, 28px);
+    margin-top: -1px;
     border: 1px solid var(--hc-border-subtle);
-    border-top: 0;
-    background-image: repeating-linear-gradient(-45deg, transparent 0 6px, var(--hc-border-default) 6px 7px);
+    background-color: var(--hc-canvas);
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent 0 6px,
+      var(--hc-border-default) 6px 7px
+    );
+    box-sizing: border-box;
   }
 
   @media (max-width: 900px) {

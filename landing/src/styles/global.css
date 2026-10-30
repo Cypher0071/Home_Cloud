@@ -145,6 +145,32 @@ pre {
 
 /* ---------- Foundation primitives ---------- */
 
+/* Structural diagonal-hatch divider bands — consistent 28px height across all sections */
+.hatch,
+.ft-hatch,
+.setup-hatch,
+.demo-hatch {
+  height: var(--hc-hatch-height, 28px);
+  background-color: var(--hc-canvas);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    var(--hc-border-default) 6px 7px
+  );
+  border: 1px solid var(--hc-border-subtle);
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .hatch,
+  .ft-hatch,
+  .setup-hatch,
+  .demo-hatch {
+    height: var(--hc-hatch-height-sm, 22px);
+  }
+}
+
+
 .container {
   width: 100%;
   max-width: calc(var(--hc-container) + var(--hc-gutter) * 2);

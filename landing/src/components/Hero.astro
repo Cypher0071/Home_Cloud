@@ -502,7 +502,7 @@
 
   /* Full-bleed diagonal-hatch divider bands */
   .hatch {
-    height: 28px;
+    height: var(--hc-hatch-height, 28px);
     flex-shrink: 0;
     background-color: var(--hc-canvas);
     background-image: repeating-linear-gradient(
@@ -565,9 +565,7 @@
     .hero-visual {
       max-width: 100%;
     }
-    .hatch {
-      height: 22px;
-    }
+    /* .hatch height controlled via --hc-hatch-height */
   }
 
   @media (prefers-reduced-motion: reduce) {

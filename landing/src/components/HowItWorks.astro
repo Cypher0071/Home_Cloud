@@ -103,7 +103,7 @@ import ProductDemo from './ProductDemo.astro';
 
   .hiw-hatch,
   .hiw-header-hatch {
-    height: 28px;
+    height: var(--hc-hatch-height, 28px);
     background-color: var(--hc-canvas);
     background-image: repeating-linear-gradient(
       -45deg,
@@ -410,12 +410,7 @@ import ProductDemo from './ProductDemo.astro';
     }
   }
 
-  @media (max-width: 640px) {
-    .hiw-hatch,
-    .hiw-header-hatch {
-      height: 22px;
-    }
-  }
+  /* .hiw-hatch height controlled via --hc-hatch-height */
 
   @media (prefers-reduced-motion: reduce) {
     .hiw-panel,
