@@ -14,6 +14,7 @@ const suites = {
 		"agent/tests/verify_drives_cache.mjs",
 		"agent/tests/verify_setup_tunnel.mjs",
 		"agent/tests/verify_setup_interruption.mjs",
+		"agent/tests/verify_setup_system_configs.mjs",
 		"agent/tests/verify_compose.mjs",
 		"agent/tests/verify_storage_scope.mjs",
 		"agent/tests/verify_session_revocation.mjs",

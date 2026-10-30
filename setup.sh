@@ -8,6 +8,8 @@ set -euo pipefail
 DRY_RUN="${DRY_RUN:-false}"
 NON_INTERACTIVE="${NON_INTERACTIVE:-false}"
 SKIP_CLOUDFLARED="${SKIP_CLOUDFLARED:-false}"
+SKIP_SSH="${SKIP_SSH:-false}"
+SKIP_LID="${SKIP_LID:-false}"
 CF_DOMAIN_INPUT="${CF_DOMAIN:-${CLOUDFLARE_DOMAIN:-}}"
 TUNNEL_NAME_INPUT="${TUNNEL_NAME:-home-cloud}"
 ADMIN_PASS_INPUT="${HOME_CLOUD_PASSWORD:-}"
@@ -34,6 +36,8 @@ show_help() {
         '  --branch <branch>             Git ref to install (default: v1.0.1)' \
         '  -y, --yes, --non-interactive  Non-interactive mode (auto-accept defaults, no prompts)' \
         '  --skip-cloudflared            Skip cloudflared download, installation, and tunnel configuration' \
+        '  --skip-ssh                    Skip OpenSSH server check and installation' \
+        '  --skip-lid                    Skip laptop lid switch configuration' \
         '  --dry-run, --check-only       Verify prerequisites, flags, and configuration without modifying system' \
         '' \
         'Environment Variables:' \
@@ -45,6 +49,8 @@ show_help() {
         '  HOME_CLOUD_SERVICE_USER       Non-root account for the systemd unit when the installer is root' \
         '  NON_INTERACTIVE=true          Run non-interactively' \
         '  SKIP_CLOUDFLARED=true         Skip cloudflared' \
+        '  SKIP_SSH=true                 Skip OpenSSH server check and installation' \
+        '  SKIP_LID=true                 Skip laptop lid switch configuration' \
         '  DRY_RUN=true                  Simulate setup without modifying system' \
         '' \
         'Documentation: https://github.com/Cypher0071/home_cloud'
@@ -142,6 +148,14 @@ while [ $# -gt 0 ]; do
             ;;
         --skip-cloudflared)
             SKIP_CLOUDFLARED=true
+            shift
+            ;;
+        --skip-ssh)
+            SKIP_SSH=true
+            shift
+            ;;
+        --skip-lid)
+            SKIP_LID=true
             shift
             ;;
         --dry-run|--check-only)
@@ -1014,6 +1028,49 @@ else
     echo "❌ git could not be found or installed. Please install git manually." >&2
     exit 1
 fi
+
+# 2b. OpenSSH Server Check & Setup
+setup_openssh() {
+    if [ "$SKIP_SSH" = true ]; then
+        echo "ℹ Skipping OpenSSH server check (--skip-ssh)."
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY-RUN] Would verify OpenSSH server is installed and active on port 22."
+        return 0
+    fi
+
+    if systemctl is-active --quiet ssh 2>/dev/null || systemctl is-active --quiet sshd 2>/dev/null; then
+        echo "✔ OpenSSH server is active and running."
+    elif command -v sshd >/dev/null 2>&1; then
+        echo "🔄 Enabling and starting OpenSSH server..."
+        run_privileged systemctl enable --now ssh 2>/dev/null || run_privileged systemctl enable --now sshd 2>/dev/null || true
+        echo "✔ OpenSSH server is active and running."
+    else
+        echo "📦 Installing OpenSSH server..."
+        local installed=false
+        if [ "$PKG_MANAGER" = "apt" ]; then
+            wait_for_apt_lock
+            run_privileged apt-get install -y -qq openssh-server
+            installed=true
+        elif [ "$PKG_MANAGER" = "dnf" ] || [ "$PKG_MANAGER" = "yum" ]; then
+            run_privileged "$PKG_MANAGER" install -y openssh-server
+            installed=true
+        elif [ "$PKG_MANAGER" = "pacman" ]; then
+            run_privileged pacman -S --noconfirm openssh
+            installed=true
+        else
+            echo "⚠️ Unsupported package manager for OpenSSH server installation." >&2
+        fi
+        if [ "$installed" = true ]; then
+            run_privileged systemctl enable --now ssh 2>/dev/null || run_privileged systemctl enable --now sshd 2>/dev/null || true
+            echo "✔ OpenSSH server installed and active."
+        fi
+    fi
+}
+
+setup_openssh
 
 # Determine Canonical Installation Directory & ensure repository tree is present
 if [ -n "$TARGET_DIR" ]; then
@@ -2098,9 +2155,51 @@ else
         if firewall_status="$(run_privileged ufw status 2>/dev/null)" && [[ "$firewall_status" == *"Status: active"* ]]; then
             echo "🛡 UFW is active. Allowing incoming traffic on port 3000/tcp..."
             run_privileged ufw allow 3000/tcp comment "Home Cloud Dashboard" >/dev/null 2>&1 || true
+            if [ "$SKIP_SSH" != true ]; then
+                run_privileged ufw allow OpenSSH >/dev/null 2>&1 || run_privileged ufw allow 22/tcp >/dev/null 2>&1 || true
+            fi
         fi
     fi
 fi
+
+# 10b. Configure Laptop Lid Switch Behavior (Prevent sleep on lid close)
+configure_laptop_lid() {
+    if [ "$SKIP_LID" = true ]; then
+        echo "ℹ Skipping laptop lid switch configuration (--skip-lid)."
+        return 0
+    fi
+
+    if [ -d /proc/acpi/button/lid ] || [ -f /proc/acpi/button/lid/*/state ] 2>/dev/null || grep -qi "lid" /proc/bus/input/devices 2>/dev/null; then
+        echo "💻 Laptop lid switch detected."
+    else
+        echo "⚙ Configuring laptop lid behavior for headless server use."
+    fi
+
+    local logind_dir="/etc/systemd/logind.conf.d"
+    if [ -n "${HOME_CLOUD_LOGIND_DIR:-}" ]; then
+        logind_dir="$HOME_CLOUD_LOGIND_DIR"
+    elif [ -n "${HOME_CLOUD_SYSTEMD_DIR:-}" ] && [ "$HOME_CLOUD_SYSTEMD_DIR" != "/etc/systemd/system" ]; then
+        logind_dir="$(dirname "$HOME_CLOUD_SYSTEMD_DIR")/logind.conf.d"
+    fi
+
+    if grep -qsE '^[[:space:]]*HandleLidSwitch=ignore' /etc/systemd/logind.conf /etc/systemd/logind.conf.d/*.conf "$logind_dir"/*.conf 2>/dev/null; then
+        echo "✔ Laptop lid close behavior already set to ignore."
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY-RUN] Would configure $logind_dir/10-home-cloud-lid.conf to ignore lid switch."
+        return 0
+    fi
+
+    run_privileged mkdir -p "$logind_dir"
+    printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\n' | run_privileged tee "$logind_dir/10-home-cloud-lid.conf" >/dev/null
+    run_privileged chmod 644 "$logind_dir/10-home-cloud-lid.conf" 2>/dev/null || true
+    run_privileged systemctl kill -s HUP systemd-logind 2>/dev/null || true
+    echo "✔ Configured systemd-logind to prevent system sleep on laptop lid close."
+}
+
+configure_laptop_lid
 
 # 11. Render & Inject Systemd Service File
 reject_systemd_unit_value() {
@@ -2287,6 +2386,7 @@ echo "========================================================"
 echo ""
 
 echo "  Access locally at:  http://$ACTIVE_IP:3000"
+echo "  Local SSH:          ssh $CURRENT_USER@$ACTIVE_IP"
 ACTIVE_CF_DOMAIN=""
 if [ -f "$SCRIPT_DIR/agent/.env" ]; then
     ACTIVE_CF_DOMAIN="$(
