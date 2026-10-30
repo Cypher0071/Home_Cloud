@@ -111,6 +111,9 @@ function validateWithCloudflared(filePath) {
 		});
 		return true;
 	} catch (err) {
+		if (err.code === "ENOENT") {
+			return false;
+		}
 		const detail = err.stderr || err.stdout || err.message;
 		throw new Error(`Cloudflare ingress validation failed: ${detail.trim()}`);
 	}
