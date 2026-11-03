@@ -88,10 +88,12 @@ Home Cloud includes a built-in **Storage Scope Engine** that strictly governs fi
 - **Fixed-window login lockout**:
   - The limit is not exponential backoff. 5 failures within 60 seconds produce a 5 minute lockout.
   - The window uses the TCP peer address. `CF-Connecting-IP` is honored only when that peer is loopback (the local `cloudflared`). Clients cannot rotate `X-Forwarded-For` to reset the window.
+  - Known limitation: any process that connects over loopback is trusted the same way as `cloudflared`, including other local users and containers using `network_mode: host`. Until this is fixed, the lockout protects the LAN and tunnel interfaces, not loopback.
 - **Server-side session revocation**:
   - Authentication tokens (JWT) embed a `sessionEpoch` identifier.
-  - Logout and "log out everywhere" both increment `sessionEpoch`.
-  - Old JWTs are rejected on HTTP and on WebSocket upgrades (terminal and container exec).
+  - Logout, "log out everywhere", and password change increment `sessionEpoch`.
+  - Old JWTs are rejected on HTTP and on new WebSocket upgrades (terminal and container exec).
+  - Known limitation: a terminal or container-exec WebSocket that is already open is not closed when the epoch changes. To fully evict another session today, change the password and restart the service (`sudo systemctl restart home-cloud`).
   - `clearCookie` uses the same `httpOnly`, `sameSite`, `secure`, and `path` flags as login.
 - **Host-only cookie and same-site checks**:
   - The cookie is `HttpOnly`, `SameSite=Lax`, and host-only (no `Domain` attribute). It is `Secure` on HTTPS.
@@ -122,5 +124,14 @@ When deploying Home Cloud in production or on a home server:
 1. [ ] Set a password of at least 8 characters and a JWT secret of at least 16 characters. The agent will not listen if either value is missing, too short, or still a placeholder.
 2. [ ] Keep Cloudflare Zero Trust credentials and credentials files (`~/.cloudflared`) secured with `chmod 600`.
 3. [ ] Keep Safe Server Mode enabled unless you explicitly require root filesystem navigation.
-4. [ ] Regularly update the system using the built-in update manager or `git pull && pnpm install`.
+4. [ ] Regularly update the system using the built-in update manager, or manually with `git fetch --tags && git checkout <release-tag> && pnpm install --frozen-lockfile && pnpm --filter dashboard build`. Do not run an unpinned `git pull && pnpm install`.
 5. [ ] Verify that the systemd service runs as an unprivileged user and not as `root`.
+6. [ ] If the installer published `ssh.<domain>`, protect it with a Cloudflare Access application and policy, and prefer key-only SSH (`PasswordAuthentication no`). The tunnel itself does not authenticate SSH clients, and `sshd` sees every tunnel client as `127.0.0.1`, so source-IP bans and rate limits do not separate attackers.
+7. [ ] Pass the installer password through `HOME_CLOUD_PASSWORD` or the interactive prompt, not `--password`. Command-line arguments are readable by other local users while the installer runs.
+8. [ ] Keep port 3000 restricted to trusted LAN devices (firewall), and only expose apps on `<sub>.<domain>` whose content you control. Exposed apps share a site with the dashboard.
+
+---
+
+## 5. Security Audits
+
+Internal audit reports live in [`docs/security_audit/`](docs/security_audit/REPORT.md). Treat open findings there under the private-disclosure rules in section 2. Do not publish them before a fix ships.
