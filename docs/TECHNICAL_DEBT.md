@@ -53,3 +53,38 @@ This document tracks active technical debt, architectural tradeoffs, and deferre
 
 ### 8. Host Power Management & System Diagnostics
 * **Debt**: Host-level actions (system reboot, shutdown) and advanced host networking interface diagnostics are deferred.
+
+### 9. Settings UI: Copy SSH Config Clipboard Fallback in Insecure/HTTP Contexts
+* **Debt**: The "Copy SSH Config" button in `dashboard/src/components/apps/SettingsApp.tsx` directly relies on `navigator.clipboard.writeText()`. When accessing the dashboard over plain HTTP IP (e.g. `http://192.168.29.74:3000`), modern browsers disable `navigator.clipboard` because the origin is not considered a Secure Context.
+* **Impact**: Clicking the "Copy SSH Config" button silently fails when accessed locally over HTTP, requiring the user to manually highlight and copy the `<pre>` text block.
+* **Target Fix**: Implement a fallback using a temporary hidden `<textarea>` element with `document.execCommand('copy')` when `navigator.clipboard?.writeText` is unavailable or rejected.
+
+---
+
+## 🔐 Open Security Items (audit run-2, 2026-11-03)
+
+Details, reproductions, and fixes are in [`docs/security_audit/REPORT.md`](security_audit/REPORT.md). Keep these private until fixed (see `SECURITY.md` §2).
+
+### 10. WebSocket protocol errors are not contained (High)
+* **Debt**: Accepted WebSocket sockets have no `'error'` listener and there is no process-level handler, so a malformed frame from an unauthenticated client terminates the agent (`agent/index.js`, `agent/sockets/*.js`).
+* **Target Fix**: Attach `ws.on('error')` to every accepted socket before any close/dispatch, reject disallowed upgrades with `noServer` + `server.on('upgrade')`, set a small `maxPayload`, and add a regression test that sends a malformed frame.
+
+### 11. Revocation does not close open WebSockets (Medium)
+* **Debt**: `sessionEpoch` is checked only at WebSocket upgrade; open `/terminal` and `/ws/docker/exec` sockets survive logout-all and password change.
+* **Target Fix**: Track the epoch per socket and close stale sockets plus their PTY/exec streams on every epoch increment; re-check in message handlers.
+
+### 12. State-changing GET route (Medium)
+* **Debt**: `GET /api/docker/images/pull` pulls an image, and `originGuard` exempts GET, so a cross-site navigation can trigger it.
+* **Target Fix**: Make it a POST (stream progress from the `fetch` response) and reject cookie-authenticated requests with `Sec-Fetch-Site: cross-site`.
+
+### 13. Loopback peers are trusted for `CF-Connecting-IP` (Low)
+* **Target Fix**: Count failures against the real socket peer with an aggregate cap, or honor the header only on a cloudflared-only listener.
+
+### 14. Password change applies the credential before revocation (Low)
+* **Target Fix**: Persist the epoch increment first and refuse the rotation if it fails; then rewrite `.env`.
+
+### 15. Installer accepts the password on argv (Low)
+* **Target Fix**: Deprecate `-p/--password`; add `--password-file` / `--password-stdin`; keep `HOME_CLOUD_PASSWORD`.
+
+### 16. Leads needing owner validation
+* `ssh.<domain>` published without a Cloudflare Access policy; LAN auto-switch trusts any 200 from `/api/ping`; no `frame-ancestors`/`X-Frame-Options`; ingress rules can outlive deleted containers/compose projects; updater falls back to a non-frozen `pnpm install`. See `docs/security_audit/NEEDS-VALIDATION.md`.

@@ -113,7 +113,7 @@ flowchart TD
 ### 🛡️ Hardened Single-User Security
 - **Constant-Time Authentication**: Mitigates side-channel timing attacks using pre-hashed SHA-256 buffers via `crypto.timingSafeEqual`.
 - **Fixed-window rate limiting**: 5 failures within 60 seconds, then a 5 minute lockout with `Retry-After`. This is not exponential backoff. The window uses the TCP peer address. `CF-Connecting-IP` is honored only when that peer is loopback (the local `cloudflared`). Clients cannot rotate `X-Forwarded-For` to reset the window.
-- **Session revocation (token epoch)**: Logout and "log out everywhere" both increment `sessionEpoch` and reject old JWTs on HTTP and WebSocket.
+- **Session revocation (token epoch)**: Logout, "log out everywhere", and password change increment `sessionEpoch` and reject old JWTs on HTTP and on new WebSocket connections. Terminal sockets that are already open are not closed yet; restart the service to drop them.
 - **Host-only cookie**: `HttpOnly`, `SameSite=Lax`, no `Domain` attribute, and `Secure` on HTTPS. It is not sent to sibling hostnames such as `grafana.example.com`.
 - **Credential Autofill & Biometrics**: Standard `<form>` credentials semantics paired with hidden identity bindings allow Google Password Manager, Chrome Autofill, Samsung Pass, and Apple Keychain to save credentials and unlock the dashboard using biometrics (Windows Hello, Fingerprint, Face Unlock).
 - **Dynamic Passcode Management**: Change master server passcodes directly from the dashboard with atomic `.env` rewrites.
@@ -145,20 +145,21 @@ The systemd unit runs as the install user, not root. The installer refuses `User
 For automated deployments or cloud-init scripts, pass CLI flags:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | HOME_CLOUD_PASSWORD="YourStrongPassword123" bash -s -- \
   --domain "example.com" \
   --tunnel "my-tunnel" \
-  --password "YourStrongPassword123" \
   --dir "/opt/home-cloud" \
   --yes
 ```
+
+Pass the password through `HOME_CLOUD_PASSWORD` (or the interactive prompt) rather than `--password`. Command-line arguments are visible to other local users in the process list while the installer runs.
 
 Available flags:
 - `--help`: Print usage and exit.
 - `--branch <name>`: Git branch to clone.
 - `--check-only`, `--dry-run`: Validate prerequisites, flags, and configuration without changing the system.
 - `-d, --domain <domain>`: Cloudflare root domain for tunnel routing. This sets `CF_DOMAIN`. It does not default to any domain.
-- `-p, --password <pass>`: Dashboard master password (at least 8 characters).
+- `-p, --password <pass>`: Dashboard master password (at least 8 characters). Not recommended: the value is visible in the process list. Prefer `HOME_CLOUD_PASSWORD`.
 - `--tunnel <name>`: Cloudflare tunnel name (default: `home-cloud`).
 - `--dir <path>`: Target installation directory (default: `$HOME/home-cloud`).
 - `-y, --yes`, `--non-interactive`: Accept defaults and skip interactive prompts.

