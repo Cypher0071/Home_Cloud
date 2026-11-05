@@ -10,6 +10,10 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 
+// Generated per run so no password-like literals live in the source.
+const FILE_PW = `pw-${crypto.randomUUID()}`;
+const STDIN_PW = `pw-${crypto.randomUUID()}`;
+const ARGV_PW = `pw-${crypto.randomUUID()}`;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../..");
@@ -43,7 +47,7 @@ function runSetup(args, options = {}) {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hc-pw-test-"));
 	try {
 		const pwFile = path.join(tmpDir, "password.txt");
-		fs.writeFileSync(pwFile, "super-secret-password-123\n", { mode: 0o600 });
+		fs.writeFileSync(pwFile, `${FILE_PW}\n`, { mode: 0o600 });
 
 		const res = runSetup(["--password-file", pwFile]);
 		assert.equal(res.status, 0, `Failed with code ${res.status}: ${res.stderr}`);
@@ -74,7 +78,7 @@ function runSetup(args, options = {}) {
 
 // 1.3 --password-stdin reads from stdin
 {
-	const res = runSetup(["--password-stdin"], { stdin: "stdin-master-password-456\n" });
+	const res = runSetup(["--password-stdin"], { stdin: `${STDIN_PW}\n` });
 	assert.equal(res.status, 0, `Failed with code ${res.status}: ${res.stderr}`);
 	assert.doesNotMatch(res.stderr, /Warning:.*visible to other local users/);
 	console.log("  ✔ --password-stdin reads password safely without argv warnings");
@@ -82,15 +86,15 @@ function runSetup(args, options = {}) {
 
 // 1.4 -p / --password emits visible-in-/proc stderr warning
 {
-	const resShort = runSetup(["-p", "compat-pass-789"]);
+	const resShort = runSetup(["-p", ARGV_PW]);
 	assert.equal(resShort.status, 0);
 	assert.match(resShort.stderr, /Warning: -p is visible to other local users via \/proc/);
 
-	const resLong = runSetup(["--password", "compat-pass-789"]);
+	const resLong = runSetup(["--password", ARGV_PW]);
 	assert.equal(resLong.status, 0);
 	assert.match(resLong.stderr, /Warning: --password is visible to other local users via \/proc/);
 
-	const resEqual = runSetup(["--password=compat-pass-789"]);
+	const resEqual = runSetup([`--password=${ARGV_PW}`]);
 	assert.equal(resEqual.status, 0);
 	assert.match(resEqual.stderr, /Warning: --password is visible to other local users via \/proc/);
 	console.log("  ✔ -p, --password, and --password= emit deprecation warnings to stderr");
