@@ -9,15 +9,15 @@ export const REPO_URL = `https://github.com/${REPO}`;
 
 export const links = {
   repo: REPO_URL,
-  // Docs live in the README until a dedicated docs site exists.
-  // Point these at the docs site later; everything on the page follows.
-  docs: `${REPO_URL}#readme`,
-  docsQuickstart: `${REPO_URL}#quickstart`,
-  docsArchitecture: `${REPO_URL}#architecture-overview`,
-  docsSecurity: `${REPO_URL}#security-model--threat-boundaries`,
-  docsRequirements: `${REPO_URL}#requirements--compatibility`,
-  docsConfig: `${REPO_URL}#configuration-reference`,
-  changelog: `${REPO_URL}/blob/main/CHANGELOG.md`,
+  // Docs are served by Starlight from this site (src/content/docs/docs/).
+  docs: '/docs/',
+  docsQuickstart: '/docs/getting-started/install/',
+  docsArchitecture: '/docs/project/architecture/',
+  docsSecurity: '/docs/security/threat-model/',
+  docsRequirements: '/docs/getting-started/requirements/',
+  docsConfig: '/docs/configuration/environment/',
+  changelog: '/docs/project/changelog/',
+  changelogFile: `${REPO_URL}/blob/main/CHANGELOG.md`,
   releases: `${REPO_URL}/releases`,
   issues: `${REPO_URL}/issues`,
   discussions: `${REPO_URL}/discussions`,

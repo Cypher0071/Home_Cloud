@@ -1,0 +1,123 @@
+---
+// landing/src/pages/404.astro
+// Not-found page in the ruled-band language. Served for unknown paths via
+// `not_found_handling = "404-page"` in wrangler.toml.
+import Base from '../layouts/Base.astro';
+import { links } from '../data/site';
+---
+
+<Base title="Page not found · Home Cloud" description="This page does not exist on home-cloud.live." noindex>
+  <main id="main-content" class="nf">
+    <div class="container">
+      <div class="band-hatch" aria-hidden="true"></div>
+      <div class="band-frame nf-frame">
+        <a href="/" class="nf-brand" aria-label="Home Cloud home">
+          <svg viewBox="0 0 32 32" width="24" height="24" fill="none" aria-hidden="true">
+            <defs>
+              <mask id="nf-mask">
+                <rect width="32" height="32" fill="#fff" />
+                <path d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z" fill="#000" stroke="#000" stroke-width="2" stroke-linejoin="round" />
+              </mask>
+            </defs>
+            <circle cx="22.5" cy="9.5" r="3" fill="var(--hc-accent)" mask="url(#nf-mask)" />
+            <path d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z" stroke="var(--hc-text-primary)" stroke-width="2" stroke-linejoin="round" />
+          </svg>
+          <span>Home Cloud</span>
+        </a>
+
+        <div class="nf-body band-pad">
+          <p class="band-eyebrow">ERROR 404</p>
+          <h1 class="nf-title">This page doesn’t exist<span class="nf-period">.</span></h1>
+          <p class="nf-lede">The link may be old or mistyped. Everything about Home Cloud is on the home page and in the docs.</p>
+          <div class="nf-actions">
+            <a class="btn btn-primary" href="/">Back to home</a>
+            <a class="btn btn-ghost nf-ghost" href={links.docs}>
+              Read the docs
+            </a>
+          </div>
+        </div>
+
+        <div class="band-foot">
+          <p>Found a broken link on our site?</p>
+          <a href={links.issues} target="_blank" rel="noopener noreferrer">Report it <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+        </div>
+      </div>
+      <div class="band-hatch" aria-hidden="true"></div>
+    </div>
+  </main>
+</Base>
+
+<style>
+  .nf {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    padding-block: var(--hc-space-6);
+    background: var(--hc-canvas);
+  }
+
+  .nf-frame {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nf-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    padding: var(--hc-space-5) clamp(24px, 4vw, 48px);
+    font-size: 0.95rem;
+    font-weight: 550;
+    letter-spacing: -0.01em;
+    color: var(--hc-text-primary);
+  }
+
+  .nf-body {
+    padding-block: var(--hc-space-9);
+  }
+
+  .nf-title {
+    max-width: 16ch;
+    font-family: var(--hc-font-display);
+    font-size: clamp(2.5rem, 1.8rem + 3vw, 4.25rem);
+    font-weight: 600;
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    color: var(--hc-text-primary);
+  }
+
+  .nf-period {
+    color: var(--hc-accent);
+  }
+
+  .nf-lede {
+    max-width: 46ch;
+    margin-top: var(--hc-space-5);
+    font-size: var(--hc-text-body);
+    line-height: 1.6;
+    color: var(--hc-text-secondary);
+  }
+
+  .nf-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: var(--hc-space-6);
+  }
+
+  .nf-ghost {
+    border-color: var(--hc-border-strong);
+  }
+
+  @media (max-width: 640px) {
+    .nf-brand {
+      padding-inline: var(--hc-space-4);
+    }
+
+    .nf-body {
+      padding-block: var(--hc-space-8);
+    }
+  }
+</style>

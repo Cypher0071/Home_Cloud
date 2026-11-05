@@ -1,0 +1,65 @@
+---
+// Docs header brand: same mark as the landing nav, links back to the site,
+// with a mono "DOCS" tag that links to the docs overview.
+---
+
+<div class="hc-docs-brand">
+  <a href="/" class="hc-docs-home" aria-label="Home Cloud home">
+    <svg viewBox="0 0 32 32" width="24" height="24" fill="none" aria-hidden="true">
+      <defs>
+        <mask id="docs-brand-mask">
+          <rect width="32" height="32" fill="#fff" />
+          <path d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z" fill="#000" stroke="#000" stroke-width="2" stroke-linejoin="round" />
+        </mask>
+      </defs>
+      <circle cx="22.5" cy="9.5" r="3" fill="var(--hc-accent)" mask="url(#docs-brand-mask)" />
+      <path d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z" stroke="var(--hc-text-primary)" stroke-width="2" stroke-linejoin="round" />
+    </svg>
+    <span translate="no">Home Cloud</span>
+  </a>
+  <a href="/docs/" class="hc-docs-tag">Docs</a>
+</div>
+
+<style>
+  .hc-docs-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .hc-docs-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--hc-font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--hc-text-primary);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .hc-docs-home svg {
+    flex-shrink: 0;
+  }
+
+  .hc-docs-tag {
+    padding: 2px 7px;
+    border: 1px solid var(--hc-border-strong);
+    border-radius: var(--hc-radius-sm);
+    font-family: var(--hc-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--hc-text-tertiary);
+    text-decoration: none;
+    transition: color var(--hc-duration-micro) var(--hc-ease-out), border-color var(--hc-duration-micro) var(--hc-ease-out);
+  }
+
+  .hc-docs-tag:hover {
+    color: var(--hc-text-primary);
+    border-color: var(--hc-text-tertiary);
+  }
+</style>
