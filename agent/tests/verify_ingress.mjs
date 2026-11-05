@@ -194,3 +194,24 @@ const postRemoveRules = ingressWithDomain.getIngressRules();
 assert.equal(postRemoveRules.length, 2);
 assert.deepEqual(postRemoveRules.map((r) => r.subdomain), ["photos", "files"]);
 console.log("✔ removeIngressRule and removeIngressByPort protect system services 'ssh' and 'dash' while allowing custom rules");
+
+// Ensure removeIngressByPort does not remove dash (port 3000) or ssh (port 22)
+assert.equal(await ingressWithDomain.removeIngressByPort(3000), false, "removeIngressByPort must not remove dash rule even on port 3000");
+const postDashCheckYaml = fs.readFileSync(configPath, "utf8");
+assert.ok(postDashCheckYaml.includes("dash.example.test"), "dash.example.test must remain in config");
+assert.ok(postDashCheckYaml.includes("ssh.example.test"), "ssh.example.test must remain in config");
+
+// Test getHostPortsFromContainerInfo
+const stoppedContainerInfo = {
+	NetworkSettings: { Ports: { "80/tcp": null } },
+	HostConfig: { PortBindings: { "80/tcp": [{ HostIp: "", HostPort: "18080" }] } },
+};
+const extractedStoppedPorts = ingressWithDomain.getHostPortsFromContainerInfo(stoppedContainerInfo);
+assert.deepEqual(extractedStoppedPorts, ["18080"], "Must extract host port from stopped container HostConfig.PortBindings");
+
+const runningContainerInfo = {
+	NetworkSettings: { Ports: { "80/tcp": [{ HostIp: "0.0.0.0", HostPort: "8080" }] } },
+};
+const extractedRunningPorts = ingressWithDomain.getHostPortsFromContainerInfo(runningContainerInfo);
+assert.deepEqual(extractedRunningPorts, ["8080"], "Must extract host port from running container NetworkSettings.Ports");
+console.log("✔ getHostPortsFromContainerInfo correctly extracts ports from running and stopped container inspect formats");

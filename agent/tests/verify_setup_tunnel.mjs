@@ -337,12 +337,35 @@ esac
 			{ mode: 0o600 },
 		);
 
+		// Mock authorized_keys and sshd configuration for key-only SSH tunnel
+		const sshDir = path.join(homeDir, ".ssh");
+		fs.mkdirSync(sshDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(sshDir, "authorized_keys"),
+			"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGeneratedTestKeyForSshTunnel test@local\n",
+		);
+		const mockEtcSsh = path.join(sandboxDir, "etc", "ssh");
+		fs.mkdirSync(path.join(mockEtcSsh, "sshd_config.d"), { recursive: true });
+		fs.writeFileSync(
+			path.join(mockEtcSsh, "sshd_config"),
+			"Include /etc/ssh/sshd_config.d/*.conf\n",
+		);
+		fs.writeFileSync(
+			path.join(binDir, "sshd"),
+			"#!/usr/bin/env bash\nexit 0\n",
+			{ mode: 0o755 },
+		);
+
 		// Input: 'y' for setup prompt, 'https://myserver.live/' for domain (tests url cleanup)
 		const res = runTunnelSetup({
 			homeDir,
 			binDir,
 			agentDir,
-			env: { SETUP_FORCE_INTERACTIVE: "true" },
+			env: {
+				SETUP_FORCE_INTERACTIVE: "true",
+				HOME_CLOUD_SSHD_CONFIG: path.join(mockEtcSsh, "sshd_config"),
+				HOME_CLOUD_SSHD_CONFIG_DIR: path.join(mockEtcSsh, "sshd_config.d"),
+			},
 			stdin: "y\nhttps://myserver.live/\n",
 		});
 

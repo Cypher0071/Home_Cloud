@@ -1,6 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const EventEmitter = require("events");
+
+const epochEvents = new EventEmitter();
+epochEvents.setMaxListeners(100);
 
 function getPreferencesDir() {
 	return (
@@ -186,6 +190,7 @@ function incrementSessionEpoch() {
 	const currentEpoch = getSessionEpoch();
 	const newEpoch = currentEpoch + 1;
 	updatePreferences({ sessionEpoch: newEpoch });
+	epochEvents.emit("revoked", newEpoch);
 	return newEpoch;
 }
 
@@ -268,6 +273,7 @@ module.exports = {
 	isSystemRootAllowed,
 	getSessionEpoch,
 	incrementSessionEpoch,
+	epochEvents,
 	get PREFERENCES_FILE() {
 		return getPreferencesFile();
 	},

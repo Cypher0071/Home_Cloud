@@ -13,6 +13,7 @@ SKIP_LID="${SKIP_LID:-false}"
 CF_DOMAIN_INPUT="${CF_DOMAIN:-${CLOUDFLARE_DOMAIN:-}}"
 TUNNEL_NAME_INPUT="${TUNNEL_NAME:-home-cloud}"
 ADMIN_PASS_INPUT="${HOME_CLOUD_PASSWORD:-}"
+PASS_EXPLICITLY_PROVIDED=false
 TARGET_DIR="${HOME_CLOUD_DIR:-}"
 BRANCH="${HOME_CLOUD_BRANCH:-v1.0.1}"
 
@@ -29,7 +30,9 @@ show_help() {
         'Options:' \
         '  -h, --help                    Show this help message and exit' \
         '  -d, --domain <domain>         Cloudflare root domain for tunnel (e.g. example.com)' \
-        '  -p, --password <password>     Dashboard admin password, at least 8 characters (auto-generated into agent/.env if omitted; never printed)' \
+        '  --password-file <path>        Read admin password from a file (at least 8 chars; first line read)' \
+        '  --password-stdin              Read admin password from standard input (at least 8 chars)' \
+        '  -p, --password <password>     (Deprecated: visible in /proc) Dashboard admin password' \
         '  --tunnel <name>               Cloudflare tunnel name (default: home-cloud)' \
         '  --dir <path>                  Installation target directory (default: current repo or $HOME/home-cloud)' \
         '  --service-user <user>         Non-root account for the systemd unit when running as root' \
@@ -78,7 +81,33 @@ while [ $# -gt 0 ]; do
             CF_DOMAIN_INPUT="${1#*=}"
             shift
             ;;
+        --password-file)
+            PASS_EXPLICITLY_PROVIDED=true
+            if [ -z "${2:-}" ] || [ -d "$2" ] || [ ! -r "$2" ]; then
+                echo "❌ Error: --password-file requires a readable file." >&2
+                exit 1
+            fi
+            IFS= read -r ADMIN_PASS_INPUT < "$2" || true
+            shift 2
+            ;;
+        --password-file=*)
+            PASS_EXPLICITLY_PROVIDED=true
+            local_pw_file="${1#*=}"
+            if [ -z "$local_pw_file" ] || [ -d "$local_pw_file" ] || [ ! -r "$local_pw_file" ]; then
+                echo "❌ Error: --password-file requires a readable file." >&2
+                exit 1
+            fi
+            IFS= read -r ADMIN_PASS_INPUT < "$local_pw_file" || true
+            shift
+            ;;
+        --password-stdin)
+            PASS_EXPLICITLY_PROVIDED=true
+            IFS= read -r ADMIN_PASS_INPUT || true
+            shift
+            ;;
         -p|--password)
+            PASS_EXPLICITLY_PROVIDED=true
+            echo "⚠️  Warning: $1 is visible to other local users via /proc; prefer HOME_CLOUD_PASSWORD, --password-file, or --password-stdin." >&2
             if [ -z "${2:-}" ]; then
                 echo "❌ Error: $1 requires a password argument." >&2
                 exit 1
@@ -87,10 +116,14 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         --password=*)
+            PASS_EXPLICITLY_PROVIDED=true
+            echo "⚠️  Warning: --password is visible to other local users via /proc; prefer HOME_CLOUD_PASSWORD, --password-file, or --password-stdin." >&2
             ADMIN_PASS_INPUT="${1#*=}"
             shift
             ;;
         -p=*)
+            PASS_EXPLICITLY_PROVIDED=true
+            echo "⚠️  Warning: -p is visible to other local users via /proc; prefer HOME_CLOUD_PASSWORD, --password-file, or --password-stdin." >&2
             ADMIN_PASS_INPUT="${1#*=}"
             shift
             ;;
@@ -169,13 +202,13 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ -n "$ADMIN_PASS_INPUT" ]; then
+if [ -n "$ADMIN_PASS_INPUT" ] || [ "$PASS_EXPLICITLY_PROVIDED" = true ]; then
     if [[ "$ADMIN_PASS_INPUT" == *$'\r'* || "$ADMIN_PASS_INPUT" == *$'\n'* ]]; then
         echo "❌ Error: password must not contain CR or LF." >&2
         exit 1
     fi
     if [ "${#ADMIN_PASS_INPUT}" -lt 8 ]; then
-        echo "❌ Error: --password must be at least 8 characters." >&2
+        echo "❌ Error: password must be at least 8 characters." >&2
         exit 1
     fi
 fi
@@ -594,6 +627,28 @@ recover_service_unit_backup() {
     echo "⚠️ Could not restore the pre-existing systemd unit; its backup was kept at $backup." >&2
     RECOVERED_SERVICE_RESTORE_FAILED=yes
 }
+recover_sshd_dropin_backup() {
+    local touched="${SETUP_JOURNAL[sshd_dropin_touched]:-no}"
+    local backup="${SETUP_JOURNAL[sshd_dropin_backup]:-}"
+    local target="${SETUP_JOURNAL[sshd_dropin_target]:-}"
+    if [ "$touched" != "yes" ]; then
+        if [ -n "$backup" ] && [ -f "$backup" ]; then
+            rm -f -- "$backup" 2>/dev/null || run_privileged rm -f -- "$backup" 2>/dev/null || true
+        fi
+        return 0
+    fi
+    if [ "${SETUP_JOURNAL[sshd_dropin_preexisting]:-no}" != "yes" ]; then
+        if [ -n "$target" ] && [ -f "$target" ]; then
+            run_privileged rm -f -- "$target" 2>/dev/null || true
+        fi
+        return 0
+    fi
+    if [ -n "$backup" ] && [ -f "$backup" ] && [ -n "$target" ]; then
+        run_privileged cp -f "$backup" "$target" 2>/dev/null || true
+        rm -f -- "$backup" 2>/dev/null || run_privileged rm -f -- "$backup" 2>/dev/null || true
+    fi
+}
+
 recover_stale_transaction() {
     local prior_phase="${SETUP_JOURNAL[phase]:-unknown}"
     echo "♻️  Recovering interrupted Home Cloud setup transaction (last phase: $prior_phase)..."
@@ -611,6 +666,7 @@ recover_stale_transaction() {
         RECOVERED_TUNNEL_DELETE_ALLOWED=yes
     fi
     recover_service_unit_backup
+    recover_sshd_dropin_backup
     echo "✔ Stale transaction state identified; setup-owned temporary files will be reconciled."
 }
 
@@ -684,6 +740,10 @@ begin_transaction() {
     journal_put_critical install_dir_claim "$INSTALL_DIR_CLAIM"
     journal_put_critical install_dir_preexisting "$INSTALL_DIR_PREEXISTING"
     journal_put_critical install_dir_was_empty "$INSTALL_DIR_WAS_EMPTY"
+    journal_put_critical sshd_dropin_target ""
+    journal_put_critical sshd_dropin_backup ""
+    journal_put_critical sshd_dropin_preexisting no
+    journal_put_critical sshd_dropin_touched no
     journal_put_critical env_created_by_setup "$ENV_CREATED_BY_SETUP"
     journal_put_critical tunnel_created_by_setup "$TUNNEL_CREATED_BY_SETUP"
     journal_put_critical cf_config_created_by_setup "$CF_CONFIG_CREATED_BY_SETUP"
@@ -722,6 +782,9 @@ finish_transaction() {
     cleanup_current_temps
     if [ -n "${SERVICE_UNIT_BACKUP:-}" ]; then
         rm -f -- "$SERVICE_UNIT_BACKUP" 2>/dev/null || run_privileged rm -f -- "$SERVICE_UNIT_BACKUP" 2>/dev/null || true
+    fi
+    if [ -n "${SSHD_DROPIN_BACKUP:-}" ]; then
+        rm -f -- "$SSHD_DROPIN_BACKUP" 2>/dev/null || run_privileged rm -f -- "$SSHD_DROPIN_BACKUP" 2>/dev/null || true
     fi
     if [ -n "$SETUP_JOURNAL_FILE" ]; then
         rm -f -- "$SETUP_JOURNAL_FILE" 2>/dev/null || true
@@ -2052,6 +2115,102 @@ setup_cloudflare_tunnel() {
                             echo "ℹ Home Cloud will run in LAN-only mode (http://$ACTIVE_IP:3000)."
                             echo "  Remote access can be enabled later by running: cloudflared tunnel login && cloudflared tunnel create home-cloud"
                         else
+        configure_sshd_tunnel_hardening() {
+            if [ "$SKIP_SSH" = true ]; then
+                echo "ℹ Skipping SSH tunnel ingress configuration (--skip-ssh)."
+                return 1
+            fi
+
+            local auth_keys_file="$CURRENT_HOME/.ssh/authorized_keys"
+            if [ ! -f "$auth_keys_file" ] || [ ! -s "$auth_keys_file" ] || ! grep -qvE '^[[:space:]]*(#|$)' "$auth_keys_file" 2>/dev/null; then
+                echo "⚠️  No non-empty ~/.ssh/authorized_keys found for $CURRENT_USER ($auth_keys_file)."
+                echo "   To prevent accidental lockout, remote SSH tunnel ingress (ssh.$CF_DOMAIN_VAL) will NOT be published."
+                echo "   To enable remote SSH safely:"
+                echo "     1. Copy your SSH public key to this host from your PC: ssh-copy-id $CURRENT_USER@$ACTIVE_IP"
+                echo "     2. Re-run setup.sh to configure the hardened key-only SSH tunnel ingress."
+                return 1
+            fi
+
+            local sshd_config_file="${HOME_CLOUD_SSHD_CONFIG:-/etc/ssh/sshd_config}"
+            local sshd_config_d="${HOME_CLOUD_SSHD_CONFIG_DIR:-/etc/ssh/sshd_config.d}"
+            local sshd_dropin="$sshd_config_d/60-home-cloud-tunnel.conf"
+
+            if [ ! -f "$sshd_config_file" ] || ! grep -qiE '^[[:space:]]*Include[[:space:]]+.*sshd_config\.d' "$sshd_config_file" 2>/dev/null; then
+                echo "⚠️  $sshd_config_file does not include sshd_config.d/*.conf." >&2
+                echo "   Leaving sshd_config untouched and skipping SSH tunnel ingress publication." >&2
+                return 1
+            fi
+
+            if [ "$DRY_RUN" = true ]; then
+                echo "[DRY-RUN] Would install sshd drop-in at $sshd_dropin and validate with sshd -t"
+                return 0
+            fi
+
+            local dropin_preexisting="no"
+            local dropin_backup=""
+            if [ -f "$sshd_dropin" ]; then
+                dropin_preexisting="yes"
+                dropin_backup="$SETUP_STATE_DIR/sshd-dropin.${SETUP_STATE_KEY:-manual}.backup.$$"
+                SSHD_DROPIN_BACKUP="$dropin_backup"
+                journal_put sshd_dropin_preexisting yes || true
+                journal_put sshd_dropin_backup "$dropin_backup" || true
+                journal_put sshd_dropin_target "$sshd_dropin" || true
+                journal_put sshd_dropin_touched no || true
+                run_privileged cp -p "$sshd_dropin" "$dropin_backup" || {
+                    echo "❌ Could not back up the existing sshd drop-in." >&2
+                    return 1
+                }
+            else
+                journal_put sshd_dropin_preexisting no || true
+                journal_put sshd_dropin_backup "" || true
+                journal_put sshd_dropin_target "$sshd_dropin" || true
+                journal_put sshd_dropin_touched no || true
+            fi
+
+            local dropin_tmp
+            dropin_tmp="$(mktemp "${TMPDIR:-/tmp}/.60-home-cloud-tunnel.conf.tmp.XXXXXX")" || {
+                echo "❌ Could not create temporary file for sshd drop-in." >&2
+                return 1
+            }
+            register_temp_file "$dropin_tmp"
+
+            printf '%s\n' \
+                '# Restrict SSH connections arriving via local Cloudflare Tunnel loopback' \
+                'Match Address 127.0.0.1,::1' \
+                '    PasswordAuthentication no' \
+                '    KbdInteractiveAuthentication no' > "$dropin_tmp"
+            chmod 644 "$dropin_tmp" 2>/dev/null || true
+
+            run_privileged mkdir -p "$sshd_config_d"
+            run_privileged cp -f "$dropin_tmp" "$sshd_dropin"
+            run_privileged chmod 644 "$sshd_dropin" 2>/dev/null || true
+            journal_put sshd_dropin_touched yes || true
+
+            local sshd_test_cmd=(sshd -t)
+            if [ -n "${HOME_CLOUD_SSHD_CONFIG:-}" ]; then
+                sshd_test_cmd=(sshd -t -f "$HOME_CLOUD_SSHD_CONFIG")
+            fi
+
+            if run_privileged "${sshd_test_cmd[@]}"; then
+                echo "✔ Installed and validated OpenSSH tunnel hardening drop-in ($sshd_dropin)."
+                run_privileged systemctl reload ssh 2>/dev/null || run_privileged systemctl reload sshd 2>/dev/null || true
+                return 0
+            else
+                echo "❌ OpenSSH validation (sshd -t) failed with drop-in; removing drop-in and leaving sshd untouched." >&2
+                if [ "$dropin_preexisting" = "yes" ] && [ -n "$dropin_backup" ] && [ -f "$dropin_backup" ]; then
+                    run_privileged cp -f "$dropin_backup" "$sshd_dropin"
+                else
+                    run_privileged rm -f "$sshd_dropin"
+                fi
+                journal_put sshd_dropin_touched no || true
+                return 1
+            fi
+        }
+                            local publish_ssh_ingress=false
+                            if configure_sshd_tunnel_hardening; then
+                                publish_ssh_ingress=true
+                            fi
+
                             # e) Automatically generate config.yml atomically
                             echo "📝 Generating $CF_CONFIG_FILE..."
                             set_phase_critical tunnel_config
@@ -2060,16 +2219,27 @@ setup_cloudflare_tunnel() {
                                 exit 1
                             }
                             register_temp_file "$CF_CONFIG_TMP"
-                            printf '%s\n' \
-                                "tunnel: $TUNNEL_ID" \
-                                "credentials-file: $CF_DIR/$TUNNEL_ID.json" \
-                                '' \
-                                'ingress:' \
-                                "  - hostname: dash.$CF_DOMAIN_VAL" \
-                                '    service: http://localhost:3000' \
-                                "  - hostname: ssh.$CF_DOMAIN_VAL" \
-                                '    service: ssh://localhost:22' \
-                                '  - service: http_status:404' > "$CF_CONFIG_TMP"
+                            if [ "$publish_ssh_ingress" = true ]; then
+                                printf '%s\n' \
+                                    "tunnel: $TUNNEL_ID" \
+                                    "credentials-file: $CF_DIR/$TUNNEL_ID.json" \
+                                    '' \
+                                    'ingress:' \
+                                    "  - hostname: dash.$CF_DOMAIN_VAL" \
+                                    '    service: http://localhost:3000' \
+                                    "  - hostname: ssh.$CF_DOMAIN_VAL" \
+                                    '    service: ssh://localhost:22' \
+                                    '  - service: http_status:404' > "$CF_CONFIG_TMP"
+                            else
+                                printf '%s\n' \
+                                    "tunnel: $TUNNEL_ID" \
+                                    "credentials-file: $CF_DIR/$TUNNEL_ID.json" \
+                                    '' \
+                                    'ingress:' \
+                                    "  - hostname: dash.$CF_DOMAIN_VAL" \
+                                    '    service: http://localhost:3000' \
+                                    '  - service: http_status:404' > "$CF_CONFIG_TMP"
+                            fi
                             if ! cf_config_valid "$CF_CONFIG_TMP"; then
                                 echo "❌ Rendered Cloudflare config failed validation; refusing to install it." >&2
                                 exit 1
@@ -2099,13 +2269,16 @@ setup_cloudflare_tunnel() {
                                 echo "⚠️ DNS routing did not complete; setup is idempotent and a rerun will retry it."
                             fi
 
-                            echo "🌐 Routing DNS for ssh.$CF_DOMAIN_VAL..."
-                            if DNS_SSH_OUT="$(run_as_current_user cloudflared tunnel route dns --overwrite-dns "$TUNNEL_NAME" "ssh.$CF_DOMAIN_VAL" 2>&1)"; then
-                                echo "$DNS_SSH_OUT"
-                                echo "✔ DNS routing configured for ssh.$CF_DOMAIN_VAL"
-                            else
-                                echo "$DNS_SSH_OUT"
-                                echo "⚠️ DNS routing for ssh.$CF_DOMAIN_VAL did not complete; setup is idempotent and a rerun will retry it."
+                            if [ "$publish_ssh_ingress" = true ]; then
+                                echo "🌐 Routing DNS for ssh.$CF_DOMAIN_VAL..."
+                                if DNS_SSH_OUT="$(run_as_current_user cloudflared tunnel route dns --overwrite-dns "$TUNNEL_NAME" "ssh.$CF_DOMAIN_VAL" 2>&1)"; then
+                                    echo "$DNS_SSH_OUT"
+                                    echo "✔ DNS routing configured for ssh.$CF_DOMAIN_VAL"
+                                else
+                                    echo "$DNS_SSH_OUT"
+                                    echo "⚠️ DNS routing for ssh.$CF_DOMAIN_VAL did not complete; setup is idempotent and a rerun will retry it."
+                                fi
+                                echo "🔒 Recommendation: Put a Cloudflare Access policy on ssh.$CF_DOMAIN_VAL to require identity verification before SSH."
                             fi
 
                             # g) Update agent/.env atomically
@@ -2412,13 +2585,17 @@ if [ -f "$SCRIPT_DIR/agent/.env" ]; then
 fi
 if [ -n "$ACTIVE_CF_DOMAIN" ] && [ -f "$CURRENT_HOME/.cloudflared/config.yml" ]; then
     echo "  Access remotely at: https://dash.$ACTIVE_CF_DOMAIN"
-    echo "  Remote SSH:         ssh.$ACTIVE_CF_DOMAIN (requires cloudflared)"
-    echo ""
-    echo "  Remote SSH configuration (~/.ssh/config):"
-    echo "    Host home-cloud"
-    echo "        HostName ssh.$ACTIVE_CF_DOMAIN"
-    echo "        User $CURRENT_USER"
-    echo "        ProxyCommand cloudflared access ssh --hostname %h"
+    if grep -qE "hostname:[[:space:]]*ssh\.$ACTIVE_CF_DOMAIN" "$CURRENT_HOME/.cloudflared/config.yml" 2>/dev/null; then
+        echo "  Remote SSH:         ssh.$ACTIVE_CF_DOMAIN (key-only; requires cloudflared)"
+        echo ""
+        echo "  Remote SSH configuration (~/.ssh/config):"
+        echo "    Host home-cloud"
+        echo "        HostName ssh.$ACTIVE_CF_DOMAIN"
+        echo "        User $CURRENT_USER"
+        echo "        ProxyCommand cloudflared access ssh --hostname %h"
+        echo ""
+        echo "  🔒 Recommendation: Configure a Cloudflare Access policy for ssh.$ACTIVE_CF_DOMAIN in Zero Trust."
+    fi
 fi
 echo ""
 echo "Service management commands:"

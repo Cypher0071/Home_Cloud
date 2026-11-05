@@ -66,6 +66,41 @@ function validateSubdomain(subdomain) {
 	return clean;
 }
 
+/**
+ * Extracts all mapped host ports from Docker container info or list entry.
+ * Inspects NetworkSettings.Ports, HostConfig.PortBindings, and Ports array.
+ *
+ * @param {object} info - Container inspect or list object
+ * @returns {string[]} Array of unique host port strings
+ */
+function getHostPortsFromContainerInfo(info) {
+	const ports = new Set();
+	if (!info) return Array.from(ports);
+	const checkPorts = (portObj) => {
+		if (!portObj || typeof portObj !== "object") return;
+		for (const key in portObj) {
+			const bindings = portObj[key];
+			if (Array.isArray(bindings)) {
+				for (const b of bindings) {
+					if (b && b.HostPort) {
+						ports.add(String(b.HostPort));
+					}
+				}
+			}
+		}
+	};
+	checkPorts(info.NetworkSettings?.Ports);
+	checkPorts(info.HostConfig?.PortBindings);
+	if (Array.isArray(info.Ports)) {
+		for (const p of info.Ports) {
+			if (p && p.PublicPort) {
+				ports.add(String(p.PublicPort));
+			}
+		}
+	}
+	return Array.from(ports);
+}
+
 // ─── Asynchronous Mutex / FIFO Execution Queue ──────────────────────────────
 
 /**
@@ -321,7 +356,23 @@ function _removeIngressByPortInternal(localPort) {
 
 		const targetService = `http://localhost:${localPort}`;
 		const initialLen = config.ingress.length;
-		config.ingress = config.ingress.filter((r) => r.service !== targetService);
+		config.ingress = config.ingress.filter((r) => {
+			const portMatch = r.service ? r.service.match(/localhost:(\d+)/) : null;
+			const rPort = portMatch ? Number(portMatch[1]) : null;
+			if (r.service !== targetService && rPort !== portNum) return true;
+
+			// Never remove protected system rules ('dash', 'ssh' and other reserved subdomains)
+			if (r.hostname) {
+				const suffix = `.${CF_DOMAIN}`;
+				const sub = r.hostname.endsWith(suffix)
+					? r.hostname.slice(0, -suffix.length)
+					: r.hostname;
+				if (RESERVED_SUBDOMAINS.has(sub.toLowerCase())) {
+					return true;
+				}
+			}
+			return false;
+		});
 
 		if (config.ingress.length !== initialLen) {
 			safeWriteYamlConfig(config);
@@ -419,6 +470,7 @@ async function unexposeContainer(subdomain) {
 
 module.exports = {
 	validateSubdomain,
+	getHostPortsFromContainerInfo,
 	getIngressRules,
 	_getIngressRulesInternal,
 	removeIngressByPort,

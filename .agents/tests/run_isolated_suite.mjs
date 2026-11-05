@@ -22,6 +22,11 @@ const suites = {
 		"agent/tests/verify_update_manager.mjs",
 		"agent/tests/verify_personalization_settings.mjs",
 		"agent/tests/verify_ingress.mjs",
+		"agent/tests/verify_ws_session_hardening.mjs",
+		"agent/tests/verify_docker_csrf_ingress_cleanup.mjs",
+		"agent/tests/verify_installer_lan_framing.mjs",
+		"agent/tests/verify_compose_ingress_reconcile.mjs",
+		"agent/tests/verify_stream_revocation.mjs",
 	],
 	e2e: [
 		".agents/tests/terminal_e2e.test.mjs",

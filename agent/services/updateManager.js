@@ -309,7 +309,7 @@ function runCommand(cmd, args, opts = {}, onLog = null) {
  * 1. Pre-flight checks (git status, conflict detection, disk space > 500MB)
  * 2. Capture rollback commit
  * 3. Fetch tags & checkout target tag or pull main
- * 4. Install dependencies (pnpm install --frozen-lockfile, fallback to pnpm install)
+ * 4. Install dependencies (pnpm install --frozen-lockfile)
  * 5. Build dashboard & verify dist/index.html
  * 6. Finalize & schedule service restart
  */
@@ -440,22 +440,10 @@ async function applyUpdate(onProgress, options = {}) {
 			percent: 60,
 		});
 
-		try {
-			await runCommand("pnpm", ["install", "--frozen-lockfile"], {}, (chunk) => {
-				const line = chunk.trim().split("\n").pop();
-				if (line) emit({ stage: "install", message: line, percent: 65 });
-			});
-		} catch (_) {
-			emit({
-				stage: "install",
-				message: "Retrying dependency install with pnpm install...",
-				percent: 68,
-			});
-			await runCommand("pnpm", ["install"], {}, (chunk) => {
-				const line = chunk.trim().split("\n").pop();
-				if (line) emit({ stage: "install", message: line, percent: 70 });
-			});
-		}
+		await runCommand("pnpm", ["install", "--frozen-lockfile"], {}, (chunk) => {
+			const line = chunk.trim().split("\n").pop();
+			if (line) emit({ stage: "install", message: line, percent: 65 });
+		});
 
 		// Stage 5: Build
 		emit({
