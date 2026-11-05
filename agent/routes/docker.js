@@ -11,9 +11,11 @@ const {
 	exposeContainer,
 	unexposeContainer,
 	validateSubdomain,
+	getHostPortsFromContainerInfo,
 } = require("../services/ingress");
 const { CF_DOMAIN } = require("../config");
 const { BASE_DIR, jailPath } = require("../paths");
+const { bindStreamToSession } = require("../services/sessionStreams");
 
 router.get("/containers", async (req, res) => {
 	try {
@@ -92,20 +94,20 @@ router.delete("/containers/:id/delete", async (req, res) => {
 		const info = await container.inspect().catch(() => null);
 		await container.remove();
 
-		if (info && info.NetworkSettings && info.NetworkSettings.Ports) {
-			const ports = info.NetworkSettings.Ports;
+		// Clean up ingress rules that pointed at this container's host ports
+		try {
+			const hostPorts = getHostPortsFromContainerInfo(info);
 			let removedAny = false;
-			for (const key in ports) {
-				if (ports[key] && ports[key].length > 0) {
-					const hostPort = ports[key][0].HostPort;
-					if (hostPort && (await removeIngressByPort(hostPort))) {
-						removedAny = true;
-					}
+			for (const hostPort of hostPorts) {
+				if (await removeIngressByPort(hostPort)) {
+					removedAny = true;
 				}
 			}
 			if (removedAny) {
 				await reloadCloudflared();
 			}
+		} catch (cleanupErr) {
+			console.error("[docker] Ingress cleanup failed for container:", cleanupErr.message);
 		}
 
 		res.json({ success: true });
@@ -133,21 +135,35 @@ router.get("/containers/:id/stats", async (req, res) => {
 		const statsStream = await container.stats({ stream: true });
 
 		statsStream.on("data", (chunk) => {
-			res.write(`data: ${chunk.toString("utf8")}\n\n`);
+			if (!res.writableEnded) {
+				res.write(`data: ${chunk.toString("utf8")}\n\n`);
+			}
 		});
 
 		statsStream.on("end", () => {
-			res.end();
+			if (!res.writableEnded) {
+				res.end();
+			}
 		});
 
 		statsStream.on("error", (err) => {
 			console.error("[stats stream] error:", err.message);
-			res.end();
+			if (!res.writableEnded) {
+				res.end();
+			}
 		});
 
-		req.on("close", () => {
-			statsStream.destroy();
-		});
+		let cleaned = false;
+		const cleanup = () => {
+			if (cleaned) return;
+			cleaned = true;
+			if (statsStream && typeof statsStream.destroy === "function") {
+				statsStream.destroy();
+			}
+		};
+
+		bindStreamToSession(req, res, cleanup);
+		req.on("close", cleanup);
 	} catch (err) {
 		return res.status(500).json({ error: err.message });
 	}
@@ -191,14 +207,18 @@ router.get("/containers/:id/logs", async (req, res) => {
 		if (isTty) {
 			// Raw stream - direct forwarding
 			logsStream.on("data", (chunk) => {
-				res.write(`data: ${chunk.toString("utf8")}\n\n`);
+				if (!res.writableEnded) {
+					res.write(`data: ${chunk.toString("utf8")}\n\n`);
+				}
 			});
 		} else {
 			// Multiplexed stream - must demux
 			const { Writable } = require("stream");
 			const sseStream = new Writable({
 				write(chunk, encoding, callback) {
-					res.write(`data: ${chunk.toString("utf8")}\n\n`);
+					if (!res.writableEnded) {
+						res.write(`data: ${chunk.toString("utf8")}\n\n`);
+					}
 					callback();
 				},
 			});
@@ -206,17 +226,29 @@ router.get("/containers/:id/logs", async (req, res) => {
 		}
 
 		logsStream.on("end", () => {
-			res.end();
+			if (!res.writableEnded) {
+				res.end();
+			}
 		});
 
 		logsStream.on("error", (err) => {
 			console.error("[stats stream] error:", err.message);
-			res.end();
+			if (!res.writableEnded) {
+				res.end();
+			}
 		});
 
-		req.on("close", () => {
-			logsStream.destroy();
-		});
+		let cleaned = false;
+		const cleanup = () => {
+			if (cleaned) return;
+			cleaned = true;
+			if (logsStream && typeof logsStream.destroy === "function") {
+				logsStream.destroy();
+			}
+		};
+
+		bindStreamToSession(req, res, cleanup);
+		req.on("close", cleanup);
 	} catch (err) {
 		return res.status(500).json({ error: err.message });
 	}
@@ -298,11 +330,21 @@ router.post("/images/prune", async (req, res) => {
 	}
 });
 
-router.get("/images/pull", async (req, res) => {
-	const imageName = req.query.image;
+const IMAGE_REF_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_.\/:@-]*$/;
+
+router.get("/images/pull", (req, res) => {
+	return res.status(405).json({ error: "Method not allowed. Use POST /api/docker/images/pull" });
+});
+
+router.post("/images/pull", async (req, res) => {
+	const imageName = req.body && typeof req.body.image === "string" ? req.body.image.trim() : "";
 	if (!imageName) {
-		return res.status(400).json({ error: "Missing image query parameter" });
+		return res.status(400).json({ error: "Image name is required" });
 	}
+	if (imageName.length > 255 || !IMAGE_REF_REGEX.test(imageName)) {
+		return res.status(400).json({ error: "Invalid image reference format" });
+	}
+
 	try {
 		res.writeHead(200, {
 			"Content-Type": "text/event-stream",
@@ -316,30 +358,43 @@ router.get("/images/pull", async (req, res) => {
 		docker.modem.followProgress(
 			stream,
 			(err, output) => {
-				if (err) {
-					res.write(
-						`data: ${JSON.stringify({ error: err.message })}\n\n`,
-					);
-				} else {
-					res.write(
-						`data: ${JSON.stringify({ status: "success" })}\n\n`,
-					);
+				if (!res.writableEnded) {
+					if (err) {
+						res.write(
+							`data: ${JSON.stringify({ error: err.message })}\n\n`,
+						);
+					} else {
+						res.write(
+							`data: ${JSON.stringify({ status: "success" })}\n\n`,
+						);
+					}
+					res.end();
 				}
-				res.end();
 			},
 			(event) => {
-				res.write(`data: ${JSON.stringify(event)}\n\n`);
+				if (!res.writableEnded) {
+					res.write(`data: ${JSON.stringify(event)}\n\n`);
+				}
 			},
 		);
-		req.on("close", () => {
+
+		let cleaned = false;
+		const cleanup = () => {
+			if (cleaned) return;
+			cleaned = true;
 			if (stream && typeof stream.destroy === "function") {
 				stream.destroy();
 			}
-		});
+		};
+
+		bindStreamToSession(req, res, cleanup);
+		req.on("close", cleanup);
 	} catch (err) {
 		if (res.headersSent) {
-			res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-			res.end();
+			if (!res.writableEnded) {
+				res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+				res.end();
+			}
 		} else {
 			return res.status(500).json({ error: err.message });
 		}

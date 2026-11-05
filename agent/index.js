@@ -15,17 +15,36 @@ const cookieParser = require("cookie-parser");
 const auth = require("./routes/auth");
 const authMiddleware = require("./middleware/auth");
 const { originGuard, websocketOriginAllowed } = require("./middleware/origin");
+const securityHeaders = require("./middleware/securityHeaders");
 const { handleSystemTerminal, closeAllSessions } = require("./sockets/terminal");
 const { handleContainerExec } = require("./sockets/containerExec");
 
 const server = http.createServer(app);
 const WebSocketServer = ws.WebSocketServer;
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+	server,
+	maxPayload: 1024 * 1024,
+});
+
+wss.on("wsClientError", (err, socket) => {
+	console.warn("[ws] handshake error:", err?.message || err);
+	try {
+		socket.destroy();
+	} catch (_) {}
+});
 
 let isShuttingDown = false;
 
 // Master WebSocket Router: isolates host terminal and container exec connections deterministically
 wss.on("connection", (socket, request) => {
+	// Attach error listener to every accepted WebSocket immediately
+	socket.on("error", (err) => {
+		console.warn("[ws] client socket error:", err?.message || err);
+		try {
+			socket.terminate();
+		} catch (_) {}
+	});
+
 	if (isShuttingDown) {
 		socket.close(1001, "Server is shutting down");
 		return;
@@ -59,12 +78,15 @@ app.use((req, res, next) => {
 	next();
 });
 
+app.use(securityHeaders);
 app.use(express.json());
 app.use(cookieParser());
 app.use(originGuard);
 
 // Public endpoints (no auth required)
 app.use("/api/auth", auth);
+// LAN identity: /proof is public (direct LAN only), /verify enforces authMiddleware itself
+app.use("/api/lan-identity", require("./routes/lanIdentity"));
 
 // Public Ping endpoint for Local LAN micro-ping detection with CORS & Private Network Access support
 app.all("/api/ping", (req, res) => {

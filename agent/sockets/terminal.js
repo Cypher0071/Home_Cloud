@@ -10,6 +10,10 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 const sessions = new Map();
 
+preferences.epochEvents.on("revoked", () => {
+	closeAllSessions();
+});
+
 const SHELL_ENV_KEYS = [
 	"PATH",
 	"HOME",
@@ -107,7 +111,7 @@ class TerminalBuffer {
 }
 
 class TerminalSession {
-	constructor(idOrWs) {
+	constructor(idOrWs, authEpoch) {
 		if (typeof idOrWs === "string") {
 			this.id = idOrWs;
 			this.clients = new Set();
@@ -120,6 +124,7 @@ class TerminalSession {
 			this.clients = new Set();
 		}
 
+		this.authEpoch = authEpoch;
 		this.terminal = null;
 		this.buffer = new TerminalBuffer();
 		this.cols = 100;
@@ -162,6 +167,12 @@ class TerminalSession {
 		}
 
 		this.terminal = ptyInstance;
+
+		if (typeof ptyInstance.on === "function") {
+			ptyInstance.on("error", (err) => {
+				console.error(`[Terminal] PTY error for session ${this.id}:`, err?.message || err);
+			});
+		}
 
 		ptyInstance.onData((data) => {
 			if (this.terminal !== ptyInstance) return;
@@ -262,10 +273,16 @@ class TerminalSession {
 				term.kill();
 			} catch {}
 		}
+		if (this.timer) {
+			try { clearTimeout(this.timer); } catch {}
+			this.timer = null;
+		}
 		for (const client of this.clients) {
 			try {
-				client.close();
-			} catch {}
+				client.close(4401, "Session revoked");
+			} catch {
+				try { client.close(); } catch {}
+			}
 		}
 		this.clients.clear();
 	}
@@ -341,19 +358,30 @@ function evictDetachedSession() {
 }
 
 function handleSystemTerminal(ws, request) {
-	const cookies = cookie.parse(request.headers.cookie || "");
+	if (typeof ws.on === "function") {
+		ws.on("error", (err) => {
+			console.warn("[ws/terminal] socket error:", err?.message || err);
+			try {
+				ws.terminate();
+			} catch (_) {}
+		});
+	}
+
+	const cookies = cookie.parse(request.headers?.cookie || "");
 	const token = cookies.token;
 	if (!token) {
 		ws.close();
 		return;
 	}
 
+	let authEpoch;
 	try {
 		const decoded = jwt.verify(token, process.env.JWT_SECRET);
 		if (!decoded || decoded.epoch !== preferences.getSessionEpoch()) {
 			ws.close();
 			return;
 		}
+		authEpoch = decoded.epoch;
 	} catch {
 		ws.close();
 		return;
@@ -367,43 +395,79 @@ function handleSystemTerminal(ws, request) {
 	}
 
 	let session = sessions.get(sessionId);
+	if (session && session.authEpoch !== authEpoch) {
+		session.destroy();
+		session = null;
+	}
+
 	if (!session) {
 		if (sessions.size >= MAX_SESSIONS && !evictDetachedSession()) {
 			ws.close();
 			return;
 		}
-		session = new TerminalSession(sessionId);
+		session = new TerminalSession(sessionId, authEpoch);
 	}
 
 	session.attach(ws);
 
-	ws.on("message", (data) => {
-		const msgStr = data.toString();
-		try {
-			const parsed = JSON.parse(msgStr);
-			if (parsed && parsed.type === "resize") {
-				const cols = Math.floor(Number(parsed.cols));
-				const rows = Math.floor(Number(parsed.rows));
-				if (cols > 0 && rows > 0) {
-					session.ensurePTY(cols, rows);
-				}
-				return;
+	const onRevoked = (newEpoch) => {
+		if (newEpoch !== authEpoch) {
+			try {
+				session.detach(ws);
+				session.destroy();
+			} catch {
+				try { session.kill(); } catch {}
 			}
-			if (parsed && parsed.type === "kill") {
-				session.kill();
-				return;
-			}
-		} catch {}
-		session.ensurePTY();
-		session.write(msgStr);
-	});
-
-	ws.on("close", () => {
-		session.detach(ws);
-		if (!session.terminal && sessions.get(sessionId) === session) {
-			sessions.delete(sessionId);
+			try {
+				ws.close(4401, "Session revoked");
+			} catch {}
 		}
-	});
+	};
+
+	preferences.epochEvents.on("revoked", onRevoked);
+
+	if (typeof ws.on === "function") {
+		ws.on("message", (data) => {
+			if (preferences.getSessionEpoch() !== authEpoch) {
+				try {
+					session.detach(ws);
+					session.destroy();
+				} catch {
+					try { session.kill(); } catch {}
+				}
+				try {
+					ws.close(4401, "Session revoked");
+				} catch {}
+				return;
+			}
+			const msgStr = data.toString();
+			try {
+				const parsed = JSON.parse(msgStr);
+				if (parsed && parsed.type === "resize") {
+					const cols = Math.floor(Number(parsed.cols));
+					const rows = Math.floor(Number(parsed.rows));
+					if (cols > 0 && rows > 0) {
+						session.ensurePTY(cols, rows);
+					}
+					return;
+				}
+				if (parsed && parsed.type === "kill") {
+					session.kill();
+					return;
+				}
+			} catch {}
+			session.ensurePTY();
+			session.write(msgStr);
+		});
+
+		ws.on("close", () => {
+			preferences.epochEvents.off("revoked", onRevoked);
+			session.detach(ws);
+			if (!session.terminal && sessions.get(sessionId) === session) {
+				sessions.delete(sessionId);
+			}
+		});
+	}
 }
 
 /**
@@ -428,6 +492,7 @@ function closeAllSessions() {
 
 module.exports = {
 	handleSystemTerminal,
+	closeAllSessions,
 	shellEnvironment,
 	TerminalBuffer,
 	BUFFER_BYTES,
@@ -435,6 +500,8 @@ module.exports = {
 	PTY: TerminalSession, // alias for backwards/test compatibility
 	activeSessions: sessions,
 	getActiveSessionsCount: () => sessions.size,
-	closeAllSessions,
 	sessions,
+	_resetTerminalForTesting: () => {
+		closeAllSessions();
+	},
 };

@@ -11,6 +11,7 @@ const CONFIG_PATH = CF_CONFIG;
 
 const RESERVED_SUBDOMAINS = new Set([
 	"dash",
+	"ssh",
 	"api",
 	"admin",
 	"administrator",
@@ -65,6 +66,41 @@ function validateSubdomain(subdomain) {
 	return clean;
 }
 
+/**
+ * Extracts all mapped host ports from Docker container info or list entry.
+ * Inspects NetworkSettings.Ports, HostConfig.PortBindings, and Ports array.
+ *
+ * @param {object} info - Container inspect or list object
+ * @returns {string[]} Array of unique host port strings
+ */
+function getHostPortsFromContainerInfo(info) {
+	const ports = new Set();
+	if (!info) return Array.from(ports);
+	const checkPorts = (portObj) => {
+		if (!portObj || typeof portObj !== "object") return;
+		for (const key in portObj) {
+			const bindings = portObj[key];
+			if (Array.isArray(bindings)) {
+				for (const b of bindings) {
+					if (b && b.HostPort) {
+						ports.add(String(b.HostPort));
+					}
+				}
+			}
+		}
+	};
+	checkPorts(info.NetworkSettings?.Ports);
+	checkPorts(info.HostConfig?.PortBindings);
+	if (Array.isArray(info.Ports)) {
+		for (const p of info.Ports) {
+			if (p && p.PublicPort) {
+				ports.add(String(p.PublicPort));
+			}
+		}
+	}
+	return Array.from(ports);
+}
+
 // ─── Asynchronous Mutex / FIFO Execution Queue ──────────────────────────────
 
 /**
@@ -110,6 +146,9 @@ function validateWithCloudflared(filePath) {
 		});
 		return true;
 	} catch (err) {
+		if (err.code === "ENOENT") {
+			return false;
+		}
 		const detail = err.stderr || err.stdout || err.message;
 		throw new Error(`Cloudflare ingress validation failed: ${detail.trim()}`);
 	}
@@ -205,7 +244,7 @@ function restoreBackupConfig() {
 	return false;
 }
 
-// ─── Internal Unlocked Operations ────────────────────────────────────────────
+// ─── Internal Unlocked Operations ───────────────────────────────────────────
 
 function _getIngressRulesInternal() {
 	try {
@@ -214,7 +253,7 @@ function _getIngressRulesInternal() {
 		const config = yaml.load(file);
 		const baseDomain = CF_DOMAIN;
 		return (config.ingress || [])
-			.filter((r) => r.hostname && r.hostname !== `dash.${baseDomain}`)
+			.filter((r) => r.hostname && r.hostname !== `dash.${baseDomain}` && r.hostname !== `ssh.${baseDomain}`)
 			.map((r) => {
 				const suffix = `.${baseDomain}`;
 				const subdomain = r.hostname.endsWith(suffix)
@@ -284,6 +323,10 @@ function _removeIngressRuleInternal(subdomain) {
 	const clean = String(subdomain || "").trim().toLowerCase();
 	if (!clean) throw new Error("Subdomain is required");
 
+	if (RESERVED_SUBDOMAINS.has(clean)) {
+		throw new Error(`Cannot remove protected system ingress rule for '${clean}'`);
+	}
+
 	if (!fs.existsSync(CONFIG_PATH)) return false;
 
 	const file = fs.readFileSync(CONFIG_PATH, "utf8");
@@ -304,6 +347,8 @@ function _removeIngressRuleInternal(subdomain) {
 function _removeIngressByPortInternal(localPort) {
 	try {
 		if (!CF_DOMAIN) return false;
+		const portNum = Number(localPort);
+		if (portNum === 22 || portNum === 3001) return false; // Protected system services
 		if (!fs.existsSync(CONFIG_PATH)) return false;
 		const file = fs.readFileSync(CONFIG_PATH, "utf8");
 		const config = yaml.load(file);
@@ -311,7 +356,23 @@ function _removeIngressByPortInternal(localPort) {
 
 		const targetService = `http://localhost:${localPort}`;
 		const initialLen = config.ingress.length;
-		config.ingress = config.ingress.filter((r) => r.service !== targetService);
+		config.ingress = config.ingress.filter((r) => {
+			const portMatch = r.service ? r.service.match(/localhost:(\d+)/) : null;
+			const rPort = portMatch ? Number(portMatch[1]) : null;
+			if (r.service !== targetService && rPort !== portNum) return true;
+
+			// Never remove protected system rules ('dash', 'ssh' and other reserved subdomains)
+			if (r.hostname) {
+				const suffix = `.${CF_DOMAIN}`;
+				const sub = r.hostname.endsWith(suffix)
+					? r.hostname.slice(0, -suffix.length)
+					: r.hostname;
+				if (RESERVED_SUBDOMAINS.has(sub.toLowerCase())) {
+					return true;
+				}
+			}
+			return false;
+		});
 
 		if (config.ingress.length !== initialLen) {
 			safeWriteYamlConfig(config);
@@ -409,7 +470,9 @@ async function unexposeContainer(subdomain) {
 
 module.exports = {
 	validateSubdomain,
+	getHostPortsFromContainerInfo,
 	getIngressRules,
+	_getIngressRulesInternal,
 	removeIngressByPort,
 	addIngressRule,
 	removeIngressRule,

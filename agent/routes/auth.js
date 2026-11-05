@@ -24,20 +24,21 @@ const authMiddleware = require('../middleware/auth');
 
 // Rate limiting configuration
 const MAX_ATTEMPTS = 5;
+const PEER_MAX_ATTEMPTS = 30;
 const WINDOW_MS = 60 * 1000; // 1 minute
 const LOCKOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-// In-memory rate limiting store: IP -> { count, firstAttempt, lockedUntil }
+// In-memory rate limiting store: key -> { count, firstAttempt, lockedUntil }
 const loginAttempts = new Map();
 
 // Periodic cleanup of expired records every 5 minutes to prevent memory leaks
 const cleanupTimer = setInterval(() => {
     const now = Date.now();
-    for (const [ip, record] of loginAttempts.entries()) {
+    for (const [key, record] of loginAttempts.entries()) {
         const isLockExpired = !record.lockedUntil || record.lockedUntil <= now;
         const isWindowExpired = now - record.firstAttempt > WINDOW_MS;
         if (isLockExpired && isWindowExpired) {
-            loginAttempts.delete(ip);
+            loginAttempts.delete(key);
         }
     }
 }, 5 * 60 * 1000);
@@ -58,6 +59,11 @@ function isLoopbackAddress(address) {
     return normalized === '127.0.0.1' || normalized === '::1';
 }
 
+function peerKey(req) {
+    const peer = req.socket?.remoteAddress || req.ip || '';
+    return 'peer:' + (normalizePeerAddress(peer) || 'unknown');
+}
+
 function getClientIp(req) {
     const peer = req.socket?.remoteAddress || req.ip || '';
     if (isLoopbackAddress(peer)) {
@@ -71,12 +77,12 @@ function getClientIp(req) {
 
 const MAX_TRACKED_IPS = 10000;
 
-function rememberAttempt(ip, record) {
-    if (!loginAttempts.has(ip) && loginAttempts.size >= MAX_TRACKED_IPS) {
+function rememberAttempt(key, record) {
+    if (!loginAttempts.has(key) && loginAttempts.size >= MAX_TRACKED_IPS) {
         const oldest = loginAttempts.keys().next().value;
         if (oldest !== undefined) loginAttempts.delete(oldest);
     }
-    loginAttempts.set(ip, record);
+    loginAttempts.set(key, record);
 }
 
 /**
@@ -94,11 +100,11 @@ function constantTimeCompare(expected, actual) {
 }
 
 /**
- * Checks whether an IP is currently blocked by rate limiting.
+ * Checks whether an IP or peer key is currently blocked by rate limiting.
  */
-function checkLoginRateLimit(ip) {
+function checkLoginRateLimit(key) {
     const now = Date.now();
-    const record = loginAttempts.get(ip);
+    const record = loginAttempts.get(key);
     if (!record) {
         return { allowed: true };
     }
@@ -112,7 +118,7 @@ function checkLoginRateLimit(ip) {
     }
 
     if (now - record.firstAttempt > WINDOW_MS) {
-        loginAttempts.delete(ip);
+        loginAttempts.delete(key);
         return { allowed: true };
     }
 
@@ -122,25 +128,27 @@ function checkLoginRateLimit(ip) {
 /**
  * Records a failed login attempt and applies temporary lockout if threshold exceeded.
  */
-function recordFailedLogin(ip) {
+function recordFailedLogin(key, maxAttempts = MAX_ATTEMPTS, lockoutMs = LOCKOUT_MS) {
     const now = Date.now();
-    let record = loginAttempts.get(ip);
+    let record = loginAttempts.get(key);
 
     if (!record || (now - record.firstAttempt > WINDOW_MS && !record.lockedUntil)) {
         record = { count: 1, firstAttempt: now, lockedUntil: 0 };
-        rememberAttempt(ip, record);
+        rememberAttempt(key, record);
     } else {
         record.count += 1;
     }
 
-    if (record.count >= MAX_ATTEMPTS) {
-        record.lockedUntil = now + LOCKOUT_MS;
+    if (record.count >= maxAttempts) {
+        // The aggregate peer budget (all tunnel traffic shares the loopback peer) only blocks until
+        // the current window ends. A long lockout there would let anyone lock the owner out remotely.
+        record.lockedUntil = lockoutMs === null ? record.firstAttempt + WINDOW_MS : now + lockoutMs;
     }
 
     const retryAfterSeconds = record.lockedUntil ? Math.ceil((record.lockedUntil - now) / 1000) : 0;
     return {
-        locked: record.count >= MAX_ATTEMPTS,
-        remainingAttempts: Math.max(0, MAX_ATTEMPTS - record.count),
+        locked: record.count >= maxAttempts,
+        remainingAttempts: Math.max(0, maxAttempts - record.count),
         retryAfterSeconds,
     };
 }
@@ -148,20 +156,23 @@ function recordFailedLogin(ip) {
 /**
  * Clears failed attempts for an IP upon successful authentication.
  */
-function recordSuccessfulLogin(ip) {
-    loginAttempts.delete(ip);
+function recordSuccessfulLogin(key) {
+    loginAttempts.delete(key);
 }
 
 router.post('/login', (req, res) => {
     const clientIp = getClientIp(req);
-    const rateCheck = checkLoginRateLimit(clientIp);
+    const peer = peerKey(req);
 
-    if (!rateCheck.allowed) {
-        res.set('Retry-After', String(rateCheck.retryAfterSeconds));
-        return res.status(429).json({
-            error: `Too many failed login attempts. Please try again in ${rateCheck.retryAfterSeconds} seconds.`,
-            retryAfter: rateCheck.retryAfterSeconds,
-        });
+    for (const key of [clientIp, peer]) {
+        const rateCheck = checkLoginRateLimit(key);
+        if (!rateCheck.allowed) {
+            res.set('Retry-After', String(rateCheck.retryAfterSeconds));
+            return res.status(429).json({
+                error: `Too many failed login attempts. Please try again in ${rateCheck.retryAfterSeconds} seconds.`,
+                retryAfter: rateCheck.retryAfterSeconds,
+            });
+        }
     }
 
     const suppliedPassword = req.body && typeof req.body.password === 'string' ? req.body.password : '';
@@ -171,6 +182,7 @@ router.post('/login', (req, res) => {
 
     if (isMatch) {
         recordSuccessfulLogin(clientIp);
+        // Note: Do not clear peer key to ensure header rotation cannot reset the aggregate budget
         const token = jwt.sign(
             { authorized: true, epoch: preferences.getSessionEpoch() },
             process.env.JWT_SECRET,
@@ -179,12 +191,14 @@ router.post('/login', (req, res) => {
         res.cookie('token', token, buildCookieOptions(req));
         return res.json({ success: true });
     } else {
-        const failStatus = recordFailedLogin(clientIp);
-        if (failStatus.locked) {
-            res.set('Retry-After', String(failStatus.retryAfterSeconds));
+        const failStatus = recordFailedLogin(clientIp, MAX_ATTEMPTS);
+        const peerFailStatus = recordFailedLogin(peer, PEER_MAX_ATTEMPTS, null);
+        if (failStatus.locked || peerFailStatus.locked) {
+            const retryAfter = Math.max(failStatus.retryAfterSeconds || 0, peerFailStatus.retryAfterSeconds || 0);
+            res.set('Retry-After', String(retryAfter));
             return res.status(429).json({
-                error: `Too many failed login attempts. Account temporarily locked for ${Math.ceil(LOCKOUT_MS / 60000)} minutes.`,
-                retryAfter: failStatus.retryAfterSeconds,
+                error: `Too many failed login attempts. Please try again in ${retryAfter} seconds.`,
+                retryAfter,
             });
         }
         return res.status(401).json({ error: 'Invalid password' });
@@ -232,9 +246,13 @@ router.checkLoginRateLimit = checkLoginRateLimit;
 router.recordFailedLogin = recordFailedLogin;
 router.recordSuccessfulLogin = recordSuccessfulLogin;
 router.getClientIp = getClientIp;
+router.peerKey = peerKey;
+router.normalizePeerAddress = normalizePeerAddress;
 router.isLoopbackAddress = isLoopbackAddress;
 router.buildCookieOptions = buildCookieOptions;
 router.clearAuthCookie = clearAuthCookie;
+router.MAX_ATTEMPTS = MAX_ATTEMPTS;
+router.PEER_MAX_ATTEMPTS = PEER_MAX_ATTEMPTS;
 router._resetRateLimiter = () => loginAttempts.clear();
 router._getAttemptsMap = () => loginAttempts;
 

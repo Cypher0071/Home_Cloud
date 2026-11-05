@@ -18,6 +18,9 @@ import {
   Loader2,
   ArrowRight,
   ExternalLink,
+  Copy,
+  Check,
+  Terminal,
 } from 'lucide-react';
 import axios from 'axios';
 import { useWallpaper } from '../../hooks/useWallpaper';
@@ -31,6 +34,14 @@ interface StorageDrive {
   used: number;
   mount: string;
   use?: number;
+}
+
+interface NetworkInfo {
+  serverLocalIp: string | null;
+  serverLocalPort?: number;
+  cfDomain?: string;
+  baseDir?: string | null;
+  user?: string;
 }
 
 interface StorageSettings {
@@ -125,6 +136,30 @@ export default function SettingsApp() {
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageSaving, setStorageSaving] = useState(false);
   const [storageFeedback, setStorageFeedback] = useState<string | null>(null);
+
+  // Remote SSH state
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
+  const [sshCopied, setSshCopied] = useState(false);
+
+  const fetchNetworkInfo = () => {
+    axios.get<NetworkInfo>('/api/network/info')
+      .then(res => {
+        setNetworkInfo(res.data);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    let active = true;
+    axios.get<NetworkInfo>('/api/network/info')
+      .then(res => {
+        if (active) setNetworkInfo(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Security session revocation state
   const [isRevoking, setIsRevoking] = useState(false);
@@ -586,6 +621,25 @@ export default function SettingsApp() {
     }
   })();
 
+  const detectedUser = networkInfo?.user || (networkInfo?.baseDir ? networkInfo.baseDir.split('/').filter(Boolean).pop() : 'user') || 'user';
+  const cfDomain = networkInfo?.cfDomain?.trim() || '';
+  const localIp = networkInfo?.serverLocalIp || '127.0.0.1';
+
+  const sshConfigSnippet = `Host home-cloud
+    HostName ssh.${cfDomain}
+    User ${detectedUser}
+    ProxyCommand cloudflared access ssh --hostname %h`;
+
+  const handleCopySshConfig = async () => {
+    try {
+      await navigator.clipboard.writeText(sshConfigSnippet);
+      setSshCopied(true);
+      setTimeout(() => setSshCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className={styles.shell}>
       <nav className={styles.nav} aria-label="Settings">
@@ -613,7 +667,10 @@ export default function SettingsApp() {
         <button
           type="button"
           className={`${styles.navItem} ${activeTab === 'security' ? styles.navItemActive : ''}`}
-          onClick={() => setActiveTab('security')}
+          onClick={() => {
+            setActiveTab('security');
+            void fetchNetworkInfo();
+          }}
           aria-current={activeTab === 'security' ? 'page' : undefined}
         >
           <Shield size={15} />
@@ -990,6 +1047,79 @@ export default function SettingsApp() {
                 <div className={styles.statusToast} role="status">
                   <CheckCircle2 size={13} style={{ display: 'inline', marginRight: 6, verticalAlign: -2 }} />
                   {securityFeedback}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <h2 className={styles.cardTitle}>Remote SSH Access</h2>
+                  {cfDomain ? (
+                    <span className={`${styles.badge} ${styles.badgeSafe}`}>
+                      <ShieldCheck size={12} />
+                      Cloudflare Tunnel Active
+                    </span>
+                  ) : (
+                    <span className={`${styles.badge} ${styles.badgeRoot}`}>
+                      LAN-Only Mode
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <p className={styles.cardDesc}>
+                Connect securely to your server&apos;s command line from anywhere in the world over an encrypted Cloudflare Tunnel, without opening firewall ports.
+              </p>
+
+              {cfDomain ? (
+                <>
+                  <div className={styles.settingRow}>
+                    <div className={styles.settingInfo}>
+                      <div className={styles.settingName}>Remote Host</div>
+                      <div className={styles.settingHint}>Tunnel hostname mapped to local SSH (port 22)</div>
+                    </div>
+                    <code className={styles.sshHostCode}>ssh.{cfDomain}</code>
+                  </div>
+
+                  <div className={styles.sshSnippetContainer}>
+                    <div className={styles.sshSnippetHeader}>
+                      <div className={styles.sshSnippetLabel}>
+                        <Terminal size={13} />
+                        <span>~/.ssh/config</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.secondaryButton}
+                        onClick={() => void handleCopySshConfig()}
+                        aria-label={sshCopied ? 'SSH Config Copied' : 'Copy SSH Config'}
+                      >
+                        {sshCopied ? (
+                          <>
+                            <Check size={13} style={{ color: '#4ade80' }} />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} />
+                            <span>Copy SSH Config</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <pre className={styles.sshSnippetPre}><code>{sshConfigSnippet}</code></pre>
+                  </div>
+
+                  <p className={styles.sshClientNote}>
+                    Requires cloudflared on client: brew install cloudflared (Mac), winget install Cloudflare.cloudflared (Windows), or apt install cloudflared (Linux).
+                  </p>
+                </>
+              ) : (
+                <div className={styles.sshLanFallback}>
+                  <p className={styles.sshLanText}>
+                    Remote SSH is available when Cloudflare Tunnel is configured. Local SSH is active at:{' '}
+                    <code className={styles.inlineCode}>ssh {detectedUser}@{localIp}</code>
+                  </p>
                 </div>
               )}
             </div>

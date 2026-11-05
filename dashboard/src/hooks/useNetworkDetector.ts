@@ -23,6 +23,20 @@ function notifyListeners(state: NetworkDetectorResult) {
   listeners.forEach(fn => fn(state));
 }
 
+function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 16; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export function resetNetworkDetectorCache(): Promise<NetworkDetectorResult> {
   cachedResult = null;
   inFlightPromise = null;
@@ -58,7 +72,7 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
   }
 
   // 2. Fallback to localStorage if the authenticated network call did not return an address.
-  // Public /api/ping only returns { status: "ok" } and must not be asked for a LAN address.
+  // Public unauthenticated ping endpoints must not be trusted for server identity.
   if (!localIp) {
     try {
       const storedIp = localStorage.getItem(LOCAL_STORAGE_IP_KEY);
@@ -123,49 +137,60 @@ async function runDetectionOnce(): Promise<NetworkDetectorResult> {
     return baseResult;
   }
 
-  // Micro-ping check if on remote hostname, proxy, or dev port
+  // Cryptographic challenge-response check if on remote hostname, proxy, or dev port
   const stayRemote =
     new URLSearchParams(window.location.search).has('stay_remote') ||
     new URLSearchParams(window.location.search).has('stay_dev');
   if (localIp && !stayRemote) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 1500);
+    const timer = setTimeout(() => controller.abort(), 2000);
 
     try {
-      // Primary: ping /api/ping with PNA header; Fallback: /api/health
-      const pingUrl = `http://${localIp}:${localPort}/api/ping`;
-      const fallbackUrl = `http://${localIp}:${localPort}/api/health`;
+      const nonce = generateNonce();
+      const proofUrl = `http://${localIp}:${localPort}/api/lan-identity/proof?nonce=${encodeURIComponent(nonce)}`;
 
-      let pingRes = await fetch(pingUrl, {
+      const proofRes = await fetch(proofUrl, {
         signal: controller.signal,
         mode: 'cors',
         // @ts-expect-error - Chromium Private Network Access specification
         targetAddressSpace: 'private',
       }).catch(() => null);
 
-      if (!pingRes || !pingRes.ok) {
-        pingRes = await fetch(fallbackUrl, {
-          signal: controller.signal,
-          mode: 'cors',
-        }).catch(() => null);
-      }
+      if (proofRes && proofRes.ok) {
+        const proofData = await proofRes.json().catch(() => null);
+        if (proofData && typeof proofData.proof === 'string') {
+          // Verify proof through current trusted origin
+          const verifyRes = await fetch('/api/lan-identity/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ nonce, proof: proofData.proof }),
+            signal: controller.signal,
+          }).catch(() => null);
 
-      clearTimeout(timer);
+          if (verifyRes && verifyRes.ok) {
+            const verifyData = await verifyRes.json().catch(() => null);
+            if (verifyData && verifyData.valid === true) {
+              clearTimeout(timer);
+              const lanResult: NetworkDetectorResult = {
+                ...baseResult,
+                isLocalLAN: true,
+                isDirectLocal: false,
+              };
+              cachedResult = lanResult;
 
-      if (pingRes && pingRes.ok) {
-        const lanResult: NetworkDetectorResult = {
-          ...baseResult,
-          isLocalLAN: true,
-          isDirectLocal: false,
-        };
-        cachedResult = lanResult;
-
-        // Auto-redirect to local IP
-        window.location.href = `http://${localIp}:${localPort}${window.location.pathname}${window.location.search}`;
-        return lanResult;
+              // Auto-redirect to local IP only after cryptographic verification
+              window.location.href = `http://${localIp}:${localPort}${window.location.pathname}${window.location.search}`;
+              return lanResult;
+            }
+          }
+        }
       }
     } catch {
-      /* ping failed -> remote mode */
+      /* proof/verify failed -> remote mode */
+    } finally {
+      clearTimeout(timer);
     }
   }
 

@@ -27,6 +27,7 @@ const {
 	isUpdating,
 	updateEmitter,
 } = require("../services/updateManager");
+const { bindStreamToSession } = require("../services/sessionStreams");
 
 const MIME_TO_EXT = {
 	"image/jpeg": "jpg",
@@ -337,10 +338,27 @@ router.post("/password", (req, res) => {
 		}
 
 		const envPath = process.env.AGENT_ENV_FILE || path.resolve(__dirname, "../.env");
-		updateEnvPassword(envPath, trimmedNewPassword);
+
+		// 1. Revoke first: if this cannot be persisted, nothing else happens.
+		let newEpoch;
+		try {
+			newEpoch = incrementSessionEpoch();
+		} catch (revokeErr) {
+			return res.status(503).json({
+				error: `Refusing to change the password because session revocation could not be persisted (${revokeErr.message}). Nothing was changed.`,
+			});
+		}
+
+		// 2. Only now rewrite the credential. A failure here leaves every session revoked, which is fail-closed.
+		try {
+			updateEnvPassword(envPath, trimmedNewPassword);
+		} catch (writeErr) {
+			return res.status(500).json({
+				error: `Session revocation was applied but the password was NOT changed: ${writeErr.message}`,
+			});
+		}
 
 		process.env.PASSWORD = trimmedNewPassword;
-		const newEpoch = incrementSessionEpoch();
 		clearAuthCookie(res, req);
 
 		return res.json({
@@ -433,9 +451,15 @@ router.get("/update/progress", (req, res) => {
 
 	updateEmitter.on("progress", onProgress);
 
-	req.on("close", () => {
+	let cleaned = false;
+	const cleanup = () => {
+		if (cleaned) return;
+		cleaned = true;
 		updateEmitter.off("progress", onProgress);
-	});
+	};
+
+	bindStreamToSession(req, res, cleanup);
+	req.on("close", cleanup);
 });
 
 router.updateEnvPassword = updateEnvPassword;

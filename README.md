@@ -1,7 +1,7 @@
 # Home Cloud
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13-brightgreen.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.23.4-brightgreen.svg)](https://nodejs.org)
 [![Docker](https://img.shields.io/badge/Docker-24%2B-2496ED.svg)](https://www.docker.com)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20x86__64-orange.svg)](#requirements--compatibility)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
@@ -113,7 +113,7 @@ flowchart TD
 ### 🛡️ Hardened Single-User Security
 - **Constant-Time Authentication**: Mitigates side-channel timing attacks using pre-hashed SHA-256 buffers via `crypto.timingSafeEqual`.
 - **Fixed-window rate limiting**: 5 failures within 60 seconds, then a 5 minute lockout with `Retry-After`. This is not exponential backoff. The window uses the TCP peer address. `CF-Connecting-IP` is honored only when that peer is loopback (the local `cloudflared`). Clients cannot rotate `X-Forwarded-For` to reset the window.
-- **Session revocation (token epoch)**: Logout and "log out everywhere" both increment `sessionEpoch` and reject old JWTs on HTTP and WebSocket.
+- **Session revocation (token epoch)**: Logout, "log out everywhere", and password change increment `sessionEpoch`. Old JWTs are rejected, and open terminal/exec WebSockets, live HTTP streams and detached terminal sessions are closed.
 - **Host-only cookie**: `HttpOnly`, `SameSite=Lax`, no `Domain` attribute, and `Secure` on HTTPS. It is not sent to sibling hostnames such as `grafana.example.com`.
 - **Credential Autofill & Biometrics**: Standard `<form>` credentials semantics paired with hidden identity bindings allow Google Password Manager, Chrome Autofill, Samsung Pass, and Apple Keychain to save credentials and unlock the dashboard using biometrics (Windows Hello, Fingerprint, Face Unlock).
 - **Dynamic Passcode Management**: Change master server passcodes directly from the dashboard with atomic `.env` rewrites.
@@ -136,7 +136,7 @@ The raw installer URL tracks the repository default branch (`main`):
 curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash
 ```
 
-Node.js `>= 22.13` and Docker must already be installed. The installer does not pipe NodeSource, `get.pnpm.io`, `get.docker.com`, or `cloudflared` `releases/latest`. It installs pnpm through corepack at the pinned version (`11.28.8`). `cloudflared` is optional and is downloaded only at a pinned release after sha256 verification. The installer then configures the tunnel when you ask it to, writes `agent/.env`, and installs a systemd service.
+Node.js `>= 22.23.4` and Docker must already be installed. The installer does not pipe NodeSource, `get.pnpm.io`, `get.docker.com`, or `cloudflared` `releases/latest`. It installs pnpm through corepack at the pinned version (`12.15.0`). `cloudflared` is optional and is downloaded only at a pinned release after sha256 verification. The installer then configures the tunnel when you ask it to, writes `agent/.env`, and installs a systemd service.
 
 The systemd unit runs as the install user, not root. The installer refuses `User=root` when there is no `SUDO_USER` and no `HOME_CLOUD_SERVICE_USER`.
 
@@ -145,20 +145,23 @@ The systemd unit runs as the install user, not root. The installer refuses `User
 For automated deployments or cloud-init scripts, pass CLI flags:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | HOME_CLOUD_PASSWORD="YourStrongPassword123" bash -s -- \
   --domain "example.com" \
   --tunnel "my-tunnel" \
-  --password "YourStrongPassword123" \
   --dir "/opt/home-cloud" \
   --yes
 ```
+
+Pass the password through `HOME_CLOUD_PASSWORD`, `--password-file <path>`, `--password-stdin`, or the interactive prompt. Never pass passwords via `-p` / `--password` because command-line arguments are visible to other local users in `/proc` while the installer runs.
 
 Available flags:
 - `--help`: Print usage and exit.
 - `--branch <name>`: Git branch to clone.
 - `--check-only`, `--dry-run`: Validate prerequisites, flags, and configuration without changing the system.
 - `-d, --domain <domain>`: Cloudflare root domain for tunnel routing. This sets `CF_DOMAIN`. It does not default to any domain.
-- `-p, --password <pass>`: Dashboard master password (at least 8 characters).
+- `--password-file <path>`: Read dashboard admin password from a file (refuses unreadable files; reads first line).
+- `--password-stdin`: Read dashboard admin password from standard input.
+- `-p, --password <pass>`: Deprecated. Dashboard master password (at least 8 characters). Prints a stderr warning because the argument is visible to other local users in `/proc`. Prefer `HOME_CLOUD_PASSWORD`, `--password-file`, or `--password-stdin`.
 - `--tunnel <name>`: Cloudflare tunnel name (default: `home-cloud`).
 - `--dir <path>`: Target installation directory (default: `$HOME/home-cloud`).
 - `-y, --yes`, `--non-interactive`: Accept defaults and skip interactive prompts.
@@ -255,8 +258,8 @@ Runtime settings are persisted dynamically by the agent:
 | :--- | :--- | :--- |
 | **OS** | Linux | Ubuntu and Debian (apt), Fedora (dnf), yum-based distros, Arch Linux (pacman) |
 | **Architecture** | x86_64 / amd64 | ARM64 / Raspberry Pi is untested. |
-| **Node.js** | `>= 22.13` | Node.js 20 is not supported. |
-| **Package Manager**| pnpm `11.28.8` | Pinned version, installed with corepack. Not `pnpm >= 9`. |
+| **Node.js** | `>= 22.23.4` | Node.js 20 is not supported. |
+| **Package Manager**| pnpm `12.15.0` | Pinned version, installed with corepack. Not `pnpm >= 9`. |
 | **Docker** | `24.0.0+` | Must already be installed. The user running the agent must be in the `docker` group. |
 | **Cloudflare** | Free Account | Domain managed on Cloudflare DNS with a Named Tunnel configured |
 
