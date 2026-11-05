@@ -1,0 +1,369 @@
+---
+// landing/src/components/Compare.astro
+// Honest comparison against the tools people usually weigh Home Cloud
+// against. Facts come from each project's own docs/repo (checked Nov 2026).
+// Keep every cell verifiable; when in doubt, leave the row out.
+import { links } from '../data/site';
+
+type Mark = 'yes' | 'no' | 'part';
+type Cell = [Mark, string];
+
+const products = ['Home Cloud', 'CasaOS', 'umbrelOS', 'Portainer CE', 'Cockpit'];
+
+const rows: { label: string; cells: Cell[] }[] = [
+  {
+    label: 'Installs on the Linux you already run',
+    cells: [['yes', 'Yes'], ['yes', 'Yes'], ['no', 'No, own OS'], ['yes', 'As a container'], ['yes', 'Yes']],
+  },
+  {
+    label: 'Remote access with no port forwarding, built in',
+    cells: [['yes', 'Set up by the installer'], ['no', 'Not built in'], ['part', 'Tailscale app'], ['no', 'Not built in'], ['no', 'Not built in']],
+  },
+  {
+    label: 'Host terminal in the browser',
+    cells: [['yes', 'Yes'], ['part', 'Over SSH'], ['yes', 'Yes'], ['part', 'Containers only'], ['yes', 'Yes']],
+  },
+  {
+    label: 'Host file manager',
+    cells: [['yes', 'Yes'], ['yes', 'Yes'], ['yes', 'Yes'], ['no', 'No'], ['part', 'Plugin']],
+  },
+  {
+    label: 'Docker and Compose management',
+    cells: [['yes', 'Yes'], ['yes', 'Yes, with Compose import'], ['part', 'Portainer app'], ['yes', 'Yes, plus Swarm and Kubernetes'], ['part', 'Podman; Docker via plugin']],
+  },
+  {
+    label: 'One-click app store',
+    cells: [['no', 'No'], ['yes', 'Yes'], ['yes', '300+ apps'], ['part', 'Templates'], ['no', 'No']],
+  },
+  {
+    label: 'ARM / Raspberry Pi',
+    cells: [['no', 'Untested'], ['yes', 'Yes'], ['yes', 'Pi 4 and 5'], ['yes', 'Yes'], ['yes', 'Yes']],
+  },
+  {
+    label: 'License',
+    cells: [['yes', 'Apache-2.0'], ['yes', 'Apache-2.0'], ['part', 'PolyForm Noncommercial'], ['yes', 'zlib'], ['yes', 'LGPL-2.1+']],
+  },
+];
+
+const different = [
+  {
+    title: 'Remote access is part of install',
+    body: 'Answer one prompt and the installer creates the Cloudflare Tunnel, HTTPS and DNS. No VPS, VPN client or router changes, and it works behind CGNAT. At home it switches to your local network automatically.',
+  },
+  {
+    title: 'Host and containers in one place',
+    body: 'A real host shell, host files, Docker and Compose, and live system stats in a single dashboard, on the distro you already run.',
+  },
+  {
+    title: 'Plainly open source',
+    body: 'Apache-2.0, with no paid tier and no account with us. Read every line, fork it, ship it.',
+  },
+];
+
+const ahead = [
+  'App stores: CasaOS, umbrelOS and others install apps in one click. Home Cloud has none.',
+  'Multiple users: umbrelOS, Cockpit and Portainer Business support more than one account. Home Cloud is single-owner.',
+  'ARM: CasaOS, umbrelOS, Portainer and Cockpit run on ARM. Home Cloud is tested on x86_64 only.',
+  'Remote access without a domain: Tailscale-style options need no domain or Cloudflare account. Home Cloud needs both, and remote traffic passes through Cloudflare.',
+  'Setup: umbrelOS flashes and boots. Home Cloud expects Node.js and Docker to be installed first.',
+  'Maturity: These projects have years of history and much larger communities.',
+];
+
+const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported', part: 'Partly or via add-on' };
+---
+
+<section id="compare" class="band compare" aria-labelledby="compare-title">
+  <div class="container">
+    <div class="band-frame">
+      <header class="band-header reveal">
+        <div>
+          <p class="band-eyebrow">COMPARE</p>
+          <h2 id="compare-title" class="band-title">How it stacks up.</h2>
+        </div>
+        <p class="band-lede">
+          Home Cloud is not an app store or a NAS OS. It is a control panel for one Linux machine, with remote access that sets itself up. Here is where that helps and where others do more.
+        </p>
+      </header>
+
+      <div class="compare-scroll reveal" data-reveal-delay="1" tabindex="0" role="region" aria-label="Comparison table, scrolls horizontally">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th scope="col" class="compare-corner"><span class="sr-only">Capability</span></th>
+              {products.map((p, i) => (
+                <th scope="col" class:list={['compare-product', { 'is-us': i === 0 }]}>{p}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <th scope="row" class="compare-label">{row.label}</th>
+                {row.cells.map(([mark, text], i) => (
+                  <td class:list={['compare-cell', `is-${mark}`, { 'is-us': i === 0 }]}>
+                    <span class="compare-mark" aria-hidden="true">
+                      {mark === 'yes' && <svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg>}
+                      {mark === 'part' && <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5v9" /></svg>}
+                      {mark === 'no' && <svg viewBox="0 0 16 16"><path d="M4.5 8h7" /></svg>}
+                    </span>
+                    <span class="sr-only">{markLabel[mark]}: </span>
+                    {text}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="compare-notes">
+        <div class="compare-col">
+          <h3 class="compare-col-title">Where Home Cloud is different</h3>
+          <ul class="compare-diff">
+            {different.map((d) => (
+              <li>
+                <span class="compare-diff-title">{d.title}</span>
+                <p>{d.body}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div class="compare-col">
+          <h3 class="compare-col-title">Where others are ahead</h3>
+          <ul class="compare-ahead">
+            {ahead.map((a) => {
+              const [head, ...rest] = a.split(': ');
+              return (
+                <li><span>{head}.</span> {rest.join(': ')}</li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+
+      <div class="band-foot">
+        <p>Checked against each project's own docs in November 2026. Spotted something out of date?</p>
+        <a href={links.issues} target="_blank" rel="noopener noreferrer">Open an issue <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+      </div>
+    </div>
+    <div class="band-hatch" aria-hidden="true"></div>
+  </div>
+</section>
+
+<style>
+  .compare-scroll {
+    overflow-x: auto;
+    border-top: 1px solid var(--hc-border-strong);
+    scrollbar-width: thin;
+    scrollbar-color: var(--hc-border-strong) transparent;
+  }
+
+  .compare-scroll:focus-visible {
+    outline: 2px solid var(--hc-accent);
+    outline-offset: -2px;
+  }
+
+  .compare-table {
+    width: 100%;
+    min-width: 880px;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--hc-border-default);
+    border-right: 1px solid var(--hc-border-default);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .compare-table tr > :last-child {
+    border-right: none;
+  }
+
+  .compare-table tbody tr:last-child > * {
+    border-bottom: none;
+  }
+
+  .compare-corner,
+  .compare-label {
+    width: 24%;
+    padding-left: clamp(24px, 4vw, 48px) !important;
+  }
+
+  .compare-product {
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--hc-text-tertiary);
+  }
+
+  .compare-product.is-us {
+    color: var(--hc-text-primary);
+  }
+
+  .compare-label {
+    font-family: var(--hc-font-sans);
+    font-size: var(--hc-text-small);
+    font-weight: 500;
+    line-height: 1.45;
+    color: var(--hc-text-primary);
+  }
+
+  .compare-cell {
+    font-size: var(--hc-text-small);
+    line-height: 1.45;
+    color: var(--hc-text-secondary);
+  }
+
+  /* Our column: a quiet tint, not a coloured highlight. */
+  .compare-table .is-us {
+    background: var(--hc-surface-1);
+  }
+
+  .compare-cell.is-us {
+    color: var(--hc-text-primary);
+  }
+
+  .compare-cell.is-no {
+    color: var(--hc-text-tertiary);
+  }
+
+  .compare-mark {
+    display: inline-flex;
+    vertical-align: -3px;
+    margin-right: 8px;
+  }
+
+  .compare-mark svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .is-yes .compare-mark svg {
+    stroke: var(--hc-text-primary);
+  }
+
+  .is-part .compare-mark svg {
+    stroke: var(--hc-text-tertiary);
+  }
+
+  .is-no .compare-mark svg {
+    stroke: var(--hc-text-muted);
+  }
+
+  .compare-notes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--hc-border-strong);
+  }
+
+  .compare-col {
+    min-width: 0;
+    padding: var(--hc-space-6) clamp(24px, 4vw, 48px) var(--hc-space-7);
+  }
+
+  .compare-col + .compare-col {
+    border-left: 1px solid var(--hc-border-strong);
+  }
+
+  .compare-col-title {
+    margin-bottom: var(--hc-space-5);
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--hc-text-tertiary);
+  }
+
+  .compare-diff,
+  .compare-ahead {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .compare-diff li + li {
+    margin-top: var(--hc-space-5);
+  }
+
+  .compare-diff-title {
+    display: block;
+    margin-bottom: 4px;
+    font-family: var(--hc-font-display);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--hc-text-primary);
+  }
+
+  .compare-diff p {
+    max-width: 52ch;
+    font-size: var(--hc-text-small);
+    line-height: 1.6;
+    color: var(--hc-text-secondary);
+  }
+
+  .compare-ahead li {
+    max-width: 58ch;
+    padding-block: 10px;
+    border-bottom: 1px solid var(--hc-border-default);
+    font-size: var(--hc-text-small);
+    line-height: 1.6;
+    color: var(--hc-text-secondary);
+  }
+
+  .compare-ahead li:first-child {
+    padding-top: 0;
+  }
+
+  .compare-ahead li:last-child {
+    border-bottom: none;
+  }
+
+  .compare-ahead span {
+    font-weight: 500;
+    color: var(--hc-text-primary);
+  }
+
+  @media (max-width: 960px) {
+    .compare-notes {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .compare-col + .compare-col {
+      border-left: none;
+      border-top: 1px solid var(--hc-border-strong);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .compare-corner,
+    .compare-label {
+      padding-left: var(--hc-space-4) !important;
+      width: 180px;
+    }
+
+    /* Keep the capability column visible while the table scrolls. */
+    .compare-label,
+    .compare-corner {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--hc-canvas);
+    }
+
+    .compare-col {
+      padding-inline: var(--hc-space-4);
+    }
+  }
+</style>

@@ -71,6 +71,10 @@
   --hc-space-11: 160px;
   --hc-section-pad: clamp(5rem, 3rem + 8vw, 9rem);
 
+  /* ---- Hatch separators ---- */
+  --hc-hatch-height: 28px;
+  --hc-hatch-height-sm: 22px;
+
   /* ---- Layout ---- */
   --hc-container: clamp(1200px, 600px + 50vw, 1720px);
   --hc-gutter: clamp(10px, 2vw, 28px);
@@ -187,4 +191,10 @@
   --shadow-paper: var(--hc-shadow-none);
   --shadow-card: var(--hc-shadow-none);
   --shadow-led: none;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --hc-hatch-height: var(--hc-hatch-height-sm, 22px);
+  }
 }
