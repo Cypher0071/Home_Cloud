@@ -1,15 +1,19 @@
-name: Deploy landing on release
+name: Deploy landing
 
-# Rebuilds home-cloud.live whenever a GitHub release is published, so the
-# version, install command and Node.js minimum on the page follow the
-# latest tag automatically (they are read from GitHub at build time in
-# landing/src/data/site.ts).
+# Rebuilds and deploys home-cloud.live:
+# - on every push to main (each merged PR), so site and docs changes go live;
+# - whenever a GitHub release is published, so the version, install command,
+#   Node.js minimum and changelog follow the latest tag (they are read from
+#   GitHub at build time in landing/src/data/site.ts);
+# - on demand from the Actions tab.
 #
 # Required repository secrets:
 #   CLOUDFLARE_API_TOKEN   token with "Workers Scripts: Edit" permission
 #   CLOUDFLARE_ACCOUNT_ID  the Cloudflare account that owns the "home-cloud" worker
 
 'on':
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
@@ -27,16 +31,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Deploy the current site, not the landing code as it was at the tag.
           ref: main
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: pnpm
