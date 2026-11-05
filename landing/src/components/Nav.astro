@@ -14,7 +14,7 @@ const pageLinks = [
   { href: '#compare', label: 'Compare' },
   { href: '#faq', label: 'FAQ' },
 ];
-const externalLinks = [
+const docLinks = [
   { href: links.docs, label: 'Docs' },
   { href: links.changelog, label: 'Changelog' },
 ];
@@ -61,11 +61,7 @@ const externalLinks = [
       <nav class="nav-links" aria-label="Main Navigation">
         {pageLinks.map((l) => <a href={l.href} class="nav-link">{l.label}</a>)}
         <span class="nav-sep" aria-hidden="true"></span>
-        {externalLinks.map((l) => (
-          <a href={l.href} class="nav-link" target="_blank" rel="noopener noreferrer">
-            {l.label}<span class="nav-ext" aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span>
-          </a>
-        ))}
+        {docLinks.map((l) => <a href={l.href} class="nav-link">{l.label}</a>)}
       </nav>
 
       <!-- RIGHT: Actions -->
@@ -118,11 +114,7 @@ const externalLinks = [
       <nav class="mobile-nav-links">
         {pageLinks.map((l) => <a href={l.href} class="mobile-link">{l.label}</a>)}
         <a href="#setup" class="mobile-link">Setup</a>
-        {externalLinks.map((l) => (
-          <a href={l.href} class="mobile-link" target="_blank" rel="noopener noreferrer">
-            {l.label} <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span>
-          </a>
-        ))}
+        {docLinks.map((l) => <a href={l.href} class="mobile-link">{l.label}</a>)}
       </nav>
       <div class="mobile-actions">
         <a
@@ -218,17 +210,6 @@ const externalLinks = [
     width: 1px;
     height: 14px;
     background: var(--hc-border-strong);
-  }
-
-  .nav-ext {
-    margin-left: 3px;
-    font-size: 0.75em;
-    color: var(--hc-text-muted);
-    transition: color 150ms var(--hc-ease-out);
-  }
-
-  .nav-link:hover .nav-ext {
-    color: var(--hc-text-secondary);
   }
 
   .nav-link {

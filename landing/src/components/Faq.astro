@@ -31,7 +31,7 @@ const faqs = [
   {
     q: 'Does my data leave my machine?',
     a: [
-      'Your files, settings and dashboard live on your machine, and Home Cloud sends no telemetry. The only call it makes on its own is the update check against GitHub releases.',
+      'Your files, settings and dashboard live on your machine, and Home Cloud sends no telemetry. It contacts GitHub only when you check for or apply an update.',
       'With remote access on, traffic between your browser and the server passes through Cloudflare, which terminates HTTPS at its edge. At home, the dashboard switches to your LAN address automatically, so local traffic stays local.',
     ],
   },
@@ -44,7 +44,7 @@ const faqs = [
   {
     q: 'How do updates work?',
     a: [
-      'Settings checks GitHub for new release tags. One click fetches the release, rebuilds and restarts the service, with live progress. The previous version is recorded so you can roll back.',
+      'In Settings, Check for Updates asks GitHub for new release tags. One click then fetches the release, installs dependencies, rebuilds and restarts the service, with live progress. If a step fails, it switches the code back to the version you were on.',
     ],
   },
   {
@@ -57,7 +57,7 @@ const faqs = [
     q: 'How do I uninstall it?',
     a: [
       'There is no uninstaller yet. Run `sudo systemctl disable --now home-cloud`, delete `/etc/systemd/system/home-cloud.service`, then remove the install folder (`~/home-cloud` by default) and `~/.config/home-cloud`.',
-      'If you set up remote access, delete the tunnel with `cloudflared tunnel delete home-cloud` and remove its DNS record in Cloudflare.',
+      'If you set up remote access, delete the tunnel with `cloudflared tunnel delete home-cloud` and remove its DNS record in Cloudflare. The uninstall guide in the docs lists every step.',
     ],
   },
   {

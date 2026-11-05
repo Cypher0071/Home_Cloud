@@ -1,0 +1,278 @@
+/* Starlight theme for /docs, mapped onto the landing site's tokens.
+   Same warm near-black ramp, ivory text, hairline borders, and orange used
+   only as a signal (current page, links on hover, focus). */
+@import './tokens.css';
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --sl-font: var(--hc-font-sans);
+  --sl-font-mono: var(--hc-font-mono);
+
+  /* Gray ramp: Starlight's 1 is brightest, black is the canvas. */
+  --sl-color-white: var(--hc-text-emphasis);
+  --sl-color-gray-1: var(--hc-text-primary);
+  --sl-color-gray-2: var(--hc-text-secondary);
+  --sl-color-gray-3: var(--hc-text-tertiary);
+  --sl-color-gray-4: var(--hc-text-muted);
+  --sl-color-gray-5: var(--hc-border-strong);
+  --sl-color-gray-6: var(--hc-surface-2);
+  --sl-color-gray-7: var(--hc-surface-1);
+  --sl-color-black: var(--hc-canvas);
+
+  --sl-color-accent-low: #3a1a10;
+  --sl-color-accent: var(--hc-accent);
+  --sl-color-accent-high: #ffc2ad;
+
+  --sl-color-text: var(--hc-text-secondary);
+  --sl-color-text-accent: var(--hc-text-primary);
+  --sl-color-text-invert: var(--hc-canvas);
+  --sl-color-bg: var(--hc-canvas);
+  --sl-color-bg-nav: var(--hc-canvas);
+  --sl-color-bg-sidebar: var(--hc-canvas);
+  --sl-color-bg-inline-code: var(--hc-surface-2);
+  --sl-color-bg-accent: var(--hc-accent);
+  --sl-color-hairline-light: var(--hc-border-strong);
+  --sl-color-hairline: var(--hc-border-default);
+  --sl-color-hairline-shade: var(--hc-canvas);
+  --sl-color-backdrop-overlay: rgba(12, 12, 11, 0.72);
+
+  --sl-shadow-sm: none;
+  --sl-shadow-md: none;
+  --sl-shadow-lg: var(--hc-shadow-float);
+
+  --sl-text-h1: clamp(2rem, 1.7rem + 1.2vw, 2.5rem);
+  --sl-text-h2: 1.625rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.0625rem;
+  --sl-line-height-headings: 1.2;
+
+  --sl-content-width: 46rem;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Header: hairline, no fill change. */
+header.header {
+  border-bottom: 1px solid var(--hc-border-strong);
+}
+
+/* Headings in the display face, tight tracking like the landing bands. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5),
+h1#_top {
+  font-family: var(--hc-font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--hc-text-primary);
+}
+
+/* Ruled section breaks, full width like the landing bands. */
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--hc-border-default);
+}
+
+/* No theme switch, so no divider after the social icons. */
+header .social-icons::after {
+  display: none;
+}
+
+/* Links: ivory with a quiet underline, orange on hover. */
+.sl-markdown-content a:not(:where(.not-content *, .sl-link-card *)) {
+  color: var(--hc-text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--hc-border-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--hc-duration-micro) var(--hc-ease-out);
+}
+
+.sl-markdown-content a:not(:where(.not-content *, .sl-link-card *)):hover {
+  text-decoration-color: var(--hc-accent);
+}
+
+.sl-markdown-content :not(pre) > code {
+  padding: 1px 5px;
+  border: 1px solid var(--hc-border-default);
+  border-radius: var(--hc-radius-sm);
+  font-size: 0.875em;
+  color: var(--hc-text-primary);
+}
+
+/* Sidebar: mono group labels like the landing eyebrows. */
+.sidebar-content .group-label .large {
+  font-family: var(--hc-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hc-text-tertiary);
+}
+
+.sidebar-content a {
+  color: var(--hc-text-secondary);
+}
+
+.sidebar-content a:hover {
+  color: var(--hc-text-primary);
+}
+
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover {
+  background: var(--hc-surface-1);
+  color: var(--hc-text-primary);
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 var(--hc-accent);
+}
+
+/* Right-hand table of contents. */
+starlight-toc h2,
+mobile-starlight-toc .toggle {
+  font-family: var(--hc-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hc-text-tertiary);
+}
+
+starlight-toc a[aria-current='true'] {
+  color: var(--hc-accent);
+}
+
+/* Asides: neutral panels, colour only on the rail. */
+.starlight-aside {
+  border-inline-start-width: 2px;
+  border-radius: 0 var(--hc-radius-md) var(--hc-radius-md) 0;
+  background: var(--hc-surface-1);
+}
+
+.starlight-aside--note { border-color: var(--hc-text-tertiary); }
+.starlight-aside--tip { border-color: var(--hc-success); }
+.starlight-aside--caution { border-color: var(--hc-warn); }
+.starlight-aside--danger { border-color: var(--hc-accent); }
+
+.starlight-aside__title {
+  font-family: var(--hc-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.starlight-aside--note .starlight-aside__title { color: var(--hc-text-secondary); }
+.starlight-aside--tip .starlight-aside__title { color: var(--hc-success); }
+.starlight-aside--caution .starlight-aside__title { color: var(--hc-warn); }
+.starlight-aside--danger .starlight-aside__title { color: var(--hc-accent); }
+
+/* Tables: ruled, no zebra fill. */
+.sl-markdown-content table {
+  border-collapse: collapse;
+}
+
+.sl-markdown-content :is(th, td) {
+  border: none;
+  border-bottom: 1px solid var(--hc-border-default);
+  padding: 10px 14px;
+}
+
+.sl-markdown-content th {
+  font-family: var(--hc-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--hc-text-tertiary);
+  background: transparent;
+  border-bottom-color: var(--hc-border-strong);
+}
+
+.sl-markdown-content tr:nth-child(2n) {
+  background: transparent;
+}
+
+/* Prev/next and footer meta. */
+.pagination-links a {
+  border-color: var(--hc-border-strong);
+  border-radius: var(--hc-radius-md);
+  box-shadow: none;
+}
+
+.pagination-links a:hover {
+  border-color: var(--hc-text-tertiary);
+}
+
+.pagination-links .link-title {
+  font-family: var(--hc-font-display);
+  color: var(--hc-text-primary);
+}
+
+/* Search trigger. */
+site-search button[data-open-modal] {
+  border-color: var(--hc-border-strong);
+  border-radius: var(--hc-radius-md);
+  background: var(--hc-surface-1);
+}
+
+:focus-visible {
+  outline-color: var(--hc-accent);
+}
+
+::selection {
+  background: var(--hc-accent-soft);
+  color: var(--hc-text-emphasis);
+}
+
+/* Slim, quiet scrollbars: no arrows, thin warm-gray thumb, transparent track. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hc-border-strong) transparent;
+}
+
+*:hover {
+  scrollbar-color: var(--hc-text-muted) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--hc-border-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hc-text-muted);
+}
+
+/* Header: search centred in the window, title left, icons right. */
+@media (min-width: 50rem) {
+  header.header > div.header {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem) minmax(0, 1fr);
+  }
+
+  header.header > div.header > :nth-child(2) {
+    justify-content: center;
+  }
+
+  header.header > div.header > :nth-child(2) site-search {
+    width: 100%;
+  }
+
+  header.header > div.header > .right-group {
+    justify-self: end;
+  }
+}
