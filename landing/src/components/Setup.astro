@@ -1,357 +1,292 @@
 ---
-// A local-first deployment path, with the pinned installer as the focal action.
-const installCommand = `curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/v1.0.1/setup.sh -o setup.sh && \\
-less setup.sh && \\
-bash setup.sh`;
+// landing/src/components/Setup.astro
+// Install section in the ruled-band language: header, three step cells,
+// then the pinned installer command. Version, Node.js minimum and links
+// come from the latest GitHub release at build time (src/data/site.ts).
+import { links, getRelease, installCommand, installerSource } from '../data/site';
+
+const release = await getRelease();
+const command = installCommand(release.tag);
+
+const steps = [
+  {
+    num: '01',
+    title: 'Prepare a Linux host',
+    body: 'Any spare PC, mini PC or laptop running a systemd distribution such as Ubuntu or Debian. Install Node.js and Docker first; the installer checks for both.',
+    facts: [
+      ['OS', 'Linux with systemd'],
+      ['CPU', 'x86_64 (ARM untested)'],
+      ['Node.js', `${release.nodeMin} or newer`],
+      ['Docker', 'Engine 24+'],
+    ],
+  },
+  {
+    num: '02',
+    title: 'Run the installer',
+    body: 'It handles the rest: pnpm, a SHA-256 verified cloudflared, the dashboard build, your password and a systemd service.',
+    facts: [
+      ['Release', release.tag],
+      ['Service', 'home-cloud.service'],
+    ],
+  },
+  {
+    num: '03',
+    title: 'Say yes to remote access',
+    body: 'Sign in to Cloudflare in your browser and enter your domain. The installer creates the tunnel and the DNS record. No router settings, works behind CGNAT.',
+    facts: [
+      ['Local', 'http://<server-ip>:3000'],
+      ['Remote', 'https://dash.<your-domain>'],
+      ['Needs', 'Cloudflare account + domain'],
+    ],
+  },
+];
 ---
 
-<section id="setup" class="setup-section" aria-labelledby="setup-title">
+<section id="setup" class="band setup" aria-labelledby="setup-title">
   <div class="container">
-    <div class="setup-shell">
-      <header class="setup-header reveal">
-        <div class="setup-heading-group">
-          <p class="setup-eyebrow"><span aria-hidden="true">03</span> / DEPLOYMENT</p>
-          <h2 id="setup-title" class="setup-title">Your hardware.<br /><em>Your control plane.</em></h2>
+    <div class="band-frame">
+      <header class="band-header reveal">
+        <div>
+          <p class="band-eyebrow">SETUP</p>
+          <h2 id="setup-title" class="band-title">Running in three steps.</h2>
         </div>
-        <div class="setup-intro">
-          <p>Turn a Linux machine into a private cloud in three deliberate steps. Start on your local network; add remote access when you need it.</p>
-          <div class="setup-route">
-            <span>LINUX HOST</span>
-            <svg viewBox="0 0 42 10" aria-hidden="true"><path d="M1 5h37m-4-4 4 4-4 4" /></svg>
-            <span>DASHBOARD</span>
-            <span class="route-optional">+ TUNNEL (OPTIONAL)</span>
-          </div>
-        </div>
+        <p class="band-lede">
+          One script installs the dashboard and, if you want it, puts it on your own domain over HTTPS. Remote access is a yes at one prompt, not a weekend of router settings.
+        </p>
       </header>
 
-      <ol class="setup-sequence" aria-label="Home Cloud installation steps">
-        <li class="setup-step reveal" data-reveal-delay="1">
-          <div class="step-index"><span>01</span></div>
-          <div class="step-content step-prereq">
-            <div class="step-copy">
-              <p class="step-kicker">CHECK THE HOST</p>
-              <h3>Prepare a Linux machine</h3>
-              <p>Use a systemd-based Linux host with sudo access. Have Node.js 22.13 or newer and Docker installed before you begin.</p>
-            </div>
-            <ul class="prereq-readout" aria-label="Required host prerequisites">
-              <li><b>01</b> systemd</li>
-              <li><b>02</b> Node.js ≥ 22.13</li>
-              <li><b>03</b> Docker + sudo</li>
-            </ul>
-          </div>
-        </li>
-
-        <li class="setup-step setup-step-install reveal" data-reveal-delay="2">
-          <div class="step-index"><span>02</span></div>
-          <div class="step-content">
-            <div class="step-copy">
-              <p class="step-kicker">FETCH · REVIEW · RUN</p>
-              <h3>Install from a pinned release</h3>
-              <p>Download the v1.0.1 installer, review it locally, then run it. The setup flow builds the dashboard and registers the system service.</p>
-            </div>
-
-            <div class="command-panel">
-              <div class="command-toolbar">
-                <div class="command-file"><span class="terminal-mark" aria-hidden="true">$</span><span>setup.sh</span><span class="command-mode">bash</span></div>
-                <button type="button" class="copy-command" id="setup-copy" aria-label="Copy installer commands" data-copy={installCommand}>
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1" /><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" /></svg>
-                  <span id="setup-copy-label">Copy commands</span>
-                </button>
-              </div>
-              <pre class="command-code"><code id="setup-command">{installCommand}</code></pre>
-              <span id="setup-copy-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></span>
-            </div>
-          </div>
-        </li>
-
-        <li class="setup-step reveal" data-reveal-delay="3">
-          <div class="step-index"><span>03</span></div>
-          <div class="step-content step-access">
-            <div class="step-copy">
-              <p class="step-kicker">CONNECT</p>
-              <h3>Open your dashboard</h3>
-              <p>Use the host’s LAN address right away. Configure Cloudflare Tunnel during setup or later for remote HTTPS access.</p>
-            </div>
-            <div class="endpoints">
-              <div class="endpoint endpoint-local">
-                <span class="endpoint-label"><i aria-hidden="true"></i> LOCAL NETWORK</span>
-                <code>http://&lt;server-ip&gt;:3000</code>
-              </div>
-              <div class="endpoint endpoint-remote">
-                <span class="endpoint-label"><i aria-hidden="true"></i> REMOTE · OPTIONAL</span>
-                <code>https://dash.&lt;your-domain&gt;</code>
-              </div>
-            </div>
-          </div>
-        </li>
+      <ol class="setup-steps reveal" data-reveal-delay="1" aria-label="Installation steps">
+        {steps.map((step) => (
+          <li class="setup-step">
+            <span class="step-num">{step.num}</span>
+            <h3 class="step-title">{step.title}</h3>
+            <p class="step-body">{step.body}</p>
+            <dl class="step-facts">
+              {step.facts.map(([key, value]) => (
+                <div class="step-fact">
+                  <dt>{key}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
       </ol>
 
-      <footer class="setup-footer">
-        <span>INSTALL TARGET <b>HOME-CLOUD.SERVICE</b></span>
-        <span>DEFAULT ACCESS <b>LAN · PORT 3000</b></span>
-        <a href="https://github.com/Cypher0071/Home_Cloud/blob/v1.0.1/setup.sh" target="_blank" rel="noreferrer">READ INSTALLER SOURCE <span aria-hidden="true">↗</span></a>
-      </footer>
+      <div class="setup-command band-pad reveal" data-reveal-delay="2">
+        <div class="command-panel">
+          <div class="command-toolbar">
+            <span class="command-file">
+              <span class="command-prompt" aria-hidden="true">$</span>
+              setup.sh
+              <span class="command-tag">{release.tag}</span>
+            </span>
+            <button type="button" class="command-copy" id="setup-copy" data-copy={command} aria-label="Copy installer commands">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1.5" /><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" /></svg>
+              <span id="setup-copy-label">Copy</span>
+            </button>
+          </div>
+          <pre class="command-code"><code id="setup-command">{command.split('\n').map((line) => (<span class="command-line">{line}</span>))}</code></pre>
+          <span id="setup-copy-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></span>
+        </div>
+      </div>
+
+      <div class="band-foot">
+        <p>The installer is a plain bash script, pinned to a release. Read it before you run it.</p>
+        <span class="setup-foot-links">
+          <a href={links.docsQuickstart} target="_blank" rel="noopener noreferrer">Full install guide <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+          <a href={installerSource(release.tag)} target="_blank" rel="noopener noreferrer">Read installer source <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+        </span>
+      </div>
     </div>
-    <div class="hatch setup-hatch" aria-hidden="true"></div>
+    <div class="band-hatch" aria-hidden="true"></div>
   </div>
 </section>
 
 <style>
-  .setup-section {
-    position: relative;
-    padding-block: 0;
-    background: var(--hc-canvas);
-  }
-
-  .setup-shell {
-    border: 1px solid var(--hc-border-default);
-    margin-top: -1px;
-    border-top-color: var(--hc-border-strong);
-    background: var(--hc-surface-1);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .setup-shell::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 2px;
-    background: var(--hc-accent);
-    opacity: 0.82;
-  }
-
-  .setup-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
-    align-items: end;
-    gap: clamp(2rem, 6vw, 6rem);
-    padding: clamp(2rem, 5.4vw, 5rem) clamp(1.5rem, 5vw, 5rem) clamp(2rem, 4vw, 3.5rem);
-    border-bottom: 1px solid var(--hc-border-default);
-  }
-
-  .setup-eyebrow,
-  .step-kicker,
-  .setup-route,
-  .step-index,
-  .command-file,
-  .command-mode,
-  .endpoint-label,
-  .setup-footer {
-    font-family: var(--hc-font-mono);
-    font-size: var(--hc-text-mono);
-    letter-spacing: 0.025em;
-  }
-
-  .setup-eyebrow {
-    color: var(--hc-text-tertiary);
-    margin-bottom: 1.25rem;
-  }
-
-  .setup-eyebrow span {
-    color: var(--hc-accent);
-  }
-
-  .setup-title {
-    font-size: clamp(2.5rem, 5vw, 4.75rem);
-    line-height: 0.98;
-    letter-spacing: -0.055em;
-    font-weight: 520;
-  }
-
-  .setup-title em {
-    color: var(--hc-text-secondary);
-    font-style: normal;
-    font-weight: 420;
-  }
-
-  .setup-intro {
-    max-width: 35rem;
-    justify-self: end;
-  }
-
-  .setup-intro > p {
-    color: var(--hc-text-secondary);
-    font-size: clamp(1rem, 1.3vw, 1.125rem);
-    line-height: 1.65;
-    max-width: 40ch;
-    margin-bottom: 1.5rem;
-  }
-
-  .setup-route {
-    display: flex;
-    align-items: center;
+  .setup-foot-links {
+    display: inline-flex;
     flex-wrap: wrap;
-    gap: 0.55rem;
-    color: var(--hc-text-tertiary);
-    font-size: 0.67rem;
+    gap: var(--hc-space-3) var(--hc-space-6);
   }
 
-  .setup-route svg {
-    width: 2rem;
-    fill: none;
-    stroke: var(--hc-accent);
-    stroke-width: 1.2;
-  }
 
-  .route-optional {
-    color: var(--hc-text-muted);
-  }
 
-  .setup-sequence {
-    list-style: none;
+
+
+
+
+  /* Steps: three hairline cells, like the footer link table. */
+  .setup-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: 0;
-    padding: 0 clamp(1.5rem, 5vw, 5rem);
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--hc-border-strong);
   }
 
   .setup-step {
-    display: grid;
-    grid-template-columns: 4.5rem minmax(0, 1fr);
-    position: relative;
-    border-bottom: 1px solid var(--hc-border-default);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: var(--hc-space-6) clamp(24px, 4vw, 48px);
+    border-right: 1px solid var(--hc-border-strong);
   }
 
-  .step-index {
-    position: relative;
-    display: flex;
-    justify-content: flex-start;
-    padding-top: clamp(1.65rem, 3vw, 2.4rem);
+  .setup-step:last-child {
+    border-right: none;
+  }
+
+  .step-num {
+    margin-bottom: var(--hc-space-5);
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
     color: var(--hc-accent);
   }
 
-  .step-index::after {
-    content: '';
-    position: absolute;
-    left: 0.4rem;
-    top: 3.4rem;
-    bottom: -1px;
-    border-left: 1px dashed var(--hc-border-strong);
+  .step-title {
+    margin-bottom: var(--hc-space-2);
+    font-family: var(--hc-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--hc-text-primary);
   }
 
-  .setup-step:last-child .step-index::after {
-    display: none;
+  .step-body {
+    max-width: 42ch;
+    margin-bottom: var(--hc-space-6);
+    font-size: var(--hc-text-small);
+    line-height: 1.6;
+    color: var(--hc-text-secondary);
   }
 
-  .step-content {
+  .step-facts {
+    margin: auto 0 0;
+    border-top: 1px solid var(--hc-border-default);
+  }
+
+  .step-fact {
     display: grid;
-    grid-template-columns: minmax(12rem, 0.75fr) minmax(18rem, 1.25fr);
-    align-items: start;
-    gap: clamp(1.5rem, 5vw, 5rem);
-    padding: clamp(1.65rem, 3vw, 2.4rem) 0;
-    min-width: 0;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: var(--hc-space-3);
+    align-items: baseline;
+    padding-block: 10px;
+    border-bottom: 1px solid var(--hc-border-default);
   }
 
-  .step-copy h3 {
-    margin: 0 0 0.65rem;
-    font-size: clamp(1.1rem, 1.5vw, 1.35rem);
-    letter-spacing: -0.025em;
-    font-weight: 560;
+  .setup-step {
+    container-type: inline-size;
   }
 
-  .step-kicker {
-    color: var(--hc-text-tertiary);
-    font-size: 0.67rem;
-    margin-bottom: 0.7rem;
+  /* Narrow cells: stack label above value instead of breaking URLs mid-word. */
+  @container (max-width: 330px) {
+    .step-fact {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
+    }
   }
 
-  .step-copy > p:last-child {
-    max-width: 43ch;
-    color: var(--hc-text-secondary);
-    font-size: 0.9rem;
-    line-height: 1.65;
-  }
-
-  .prereq-readout {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    align-self: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    min-width: 0;
-  }
-
-  .prereq-readout li {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.65rem 0.8rem;
-    border: 1px solid var(--hc-border-default);
-    background: var(--hc-canvas);
-    color: var(--hc-text-secondary);
+  .step-fact dt {
     font-family: var(--hc-font-mono);
-    font-size: 0.72rem;
-    line-height: 1.4;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--hc-text-tertiary);
   }
 
-  .prereq-readout b {
-    color: var(--hc-text-muted);
-    font-size: 0.64rem;
-    font-weight: 450;
+  .step-fact dd a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--hc-border-strong);
+    text-underline-offset: 3px;
   }
 
-  .setup-step-install .step-content {
-    align-items: start;
+  .step-fact dd a:hover {
+    text-decoration-color: var(--hc-accent);
+  }
+
+  .step-fact dd {
+    min-width: 0;
+    margin: 0;
+    font-family: var(--hc-font-mono);
+    font-size: 13px;
+    color: var(--hc-text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  /* Command: the focal action, full width under the steps. */
+  .setup-command {
+    padding-block: var(--hc-space-6);
+    border-top: 1px solid var(--hc-border-strong);
   }
 
   .command-panel {
-    min-width: 0;
-    border: 1px solid var(--hc-border-strong);
-    background: var(--hc-canvas);
+    border: 1px solid var(--hc-border-default);
+    border-radius: var(--hc-radius-md);
+    background: var(--hc-surface-1);
+    overflow: hidden;
   }
 
   .command-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    min-height: 2.8rem;
-    padding: 0.45rem 0.65rem 0.45rem 1rem;
+    gap: var(--hc-space-4);
+    padding: var(--hc-space-2) var(--hc-space-2) var(--hc-space-2) var(--hc-space-4);
     border-bottom: 1px solid var(--hc-border-default);
   }
 
   .command-file {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: var(--hc-space-2);
+    font-family: var(--hc-font-mono);
+    font-size: 13px;
     color: var(--hc-text-primary);
-    font-size: 0.72rem;
   }
 
-  .terminal-mark {
+  .command-prompt {
     color: var(--hc-accent);
   }
 
-  .command-mode {
-    padding: 0.15rem 0.35rem;
+  .command-tag {
+    padding: 2px 6px;
     border: 1px solid var(--hc-border-default);
+    border-radius: var(--hc-radius-sm);
+    font-size: 12px;
     color: var(--hc-text-tertiary);
-    font-size: 0.6rem;
   }
 
-  .copy-command {
+  .command-copy {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    min-height: 2.25rem;
-    padding: 0.4rem 0.65rem;
+    gap: var(--hc-space-2);
+    min-height: 32px;
+    padding-inline: var(--hc-space-3);
     border: 1px solid var(--hc-border-strong);
+    border-radius: var(--hc-radius-sm);
+    font-family: var(--hc-font-sans);
+    font-size: 0.8125rem;
+    font-weight: 500;
     color: var(--hc-text-primary);
-    font-size: 0.72rem;
-    line-height: 1;
-    transition: border-color var(--hc-duration-micro), background-color var(--hc-duration-micro);
+    transition:
+      border-color var(--hc-duration-micro) var(--hc-ease-out),
+      background-color var(--hc-duration-micro) var(--hc-ease-out);
   }
 
-  .copy-command:hover {
-    border-color: var(--hc-accent);
-    background: var(--hc-accent-faint);
+  @media (hover: hover) and (pointer: fine) {
+    .command-copy:hover {
+      border-color: var(--hc-text-tertiary);
+      background: var(--hc-surface-2);
+    }
   }
 
-  .copy-command svg {
-    width: 0.9rem;
-    height: 0.9rem;
+  .command-copy svg {
+    width: 14px;
+    height: 14px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.25;
@@ -359,221 +294,104 @@ bash setup.sh`;
 
   .command-code {
     margin: 0;
-    padding: 1.2rem 1rem 1.35rem;
+    padding: var(--hc-space-4) 0;
     overflow-x: auto;
-    color: var(--hc-text-primary);
     font-family: var(--hc-font-mono);
-    font-size: clamp(0.68rem, 1vw, 0.78rem);
-    line-height: 1.95;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    tab-size: 2;
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--hc-text-primary);
   }
 
   .command-code code {
-    font: inherit;
-  }
-
-  .step-access {
-    align-items: center;
-  }
-
-  .endpoints {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.65rem;
-    min-width: 0;
-  }
-
-  .endpoint {
-    min-width: 0;
-    padding: 0.85rem 0.9rem 0.95rem;
-    background: var(--hc-canvas);
-    border: 1px solid var(--hc-border-default);
-  }
-
-  .endpoint-label {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    margin-bottom: 0.7rem;
-    font-size: 0.61rem;
-    color: var(--hc-text-tertiary);
-  }
-
-  .endpoint-label i {
-    width: 0.38rem;
-    height: 0.38rem;
-    border: 1px solid var(--hc-text-tertiary);
-    border-radius: 50%;
-  }
-
-  .endpoint-local .endpoint-label i {
-    border-color: var(--hc-success);
-    background: var(--hc-success);
-  }
-
-  .endpoint-remote .endpoint-label i {
-    border-color: var(--hc-accent);
-  }
-
-  .endpoint code {
     display: block;
-    color: var(--hc-text-primary);
-    font-size: clamp(0.66rem, 0.95vw, 0.76rem);
-    line-height: 1.6;
-    overflow-wrap: anywhere;
+    width: max-content;
+    min-width: 100%;
+    font: inherit;
+    counter-reset: line;
   }
 
-  .setup-footer {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem 2rem;
-    padding: 1rem clamp(1.5rem, 5vw, 5rem);
-    background: var(--hc-canvas);
-    color: var(--hc-text-tertiary);
-    font-size: 0.62rem;
+  .command-line {
+    display: block;
+    padding-inline: var(--hc-space-4);
+    white-space: pre;
   }
 
-  .setup-footer b {
-    color: var(--hc-text-secondary);
-    font-weight: 500;
+  .command-line::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 1.5rem;
+    margin-right: var(--hc-space-3);
+    color: var(--hc-text-muted);
+    user-select: none;
   }
 
-  .setup-footer a {
-    margin-left: auto;
-    color: var(--hc-text-primary);
-    transition: color var(--hc-duration-micro);
-  }
 
-  .setup-footer a:hover {
-    color: var(--hc-accent);
-  }
 
-  .setup-hatch {
-    height: var(--hc-hatch-height, 28px);
-    margin-top: -1px;
-    border: 1px solid var(--hc-border-subtle);
-    background-color: var(--hc-canvas);
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent 0 6px,
-      var(--hc-border-default) 6px 7px
-    );
-    box-sizing: border-box;
-  }
 
-  @media (max-width: 900px) {
-    .setup-header {
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-    }
 
-    .setup-intro {
-      justify-self: start;
-    }
-
-    .step-content {
+  @media (max-width: 960px) {
+    .setup-steps {
       grid-template-columns: minmax(0, 1fr);
-      gap: 1.25rem;
     }
 
-    .step-copy > p:last-child {
+    .setup-step {
+      border-right: none;
+      border-bottom: 1px solid var(--hc-border-strong);
+    }
+
+    .setup-step:last-child {
+      border-bottom: none;
+    }
+
+    .step-body {
       max-width: 60ch;
     }
   }
 
-  @media (max-width: 600px) {
-    .setup-header {
-      padding-inline: 1.25rem;
-    }
-
-    .setup-title {
-      font-size: clamp(2.35rem, 11vw, 3.4rem);
-    }
-
-    .setup-route {
-      gap: 0.4rem;
-      font-size: 0.6rem;
-    }
-
-    .setup-route svg {
-      width: 1.4rem;
-    }
-
-    .setup-sequence {
-      padding-inline: 1.25rem;
-    }
-
+  @media (max-width: 640px) {
     .setup-step {
-      grid-template-columns: 2.3rem minmax(0, 1fr);
+      padding-inline: var(--hc-space-4);
     }
 
-    .step-index::after {
-      left: 0.3rem;
+    .step-fact {
+      grid-template-columns: 5.5rem minmax(0, 1fr);
     }
 
-    .prereq-readout li {
-      padding: 0.55rem 0.6rem;
-      font-size: 0.67rem;
-    }
-
-    .command-toolbar {
-      padding-left: 0.7rem;
-    }
-
-    .copy-command {
-      padding-inline: 0.5rem;
-      font-size: 0.68rem;
-    }
-
-    .endpoints {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .setup-footer {
-      padding-inline: 1.25rem;
-    }
-
-    .setup-footer a {
-      margin-left: 0;
-      flex-basis: 100%;
+    .command-code {
+      font-size: 12px;
     }
   }
 </style>
 
 <script>
   const copyButton = document.getElementById('setup-copy');
-  const commandCode = document.getElementById('setup-command');
   const copyLabel = document.getElementById('setup-copy-label');
   const copyStatus = document.getElementById('setup-copy-status');
 
-  if (copyButton && commandCode) {
-    copyButton.addEventListener('click', async () => {
-      const text = copyButton.getAttribute('data-copy') || commandCode.textContent || '';
-      let copied = false;
+  copyButton?.addEventListener('click', async () => {
+    const text = copyButton.getAttribute('data-copy') || '';
+    let copied = false;
 
-      try {
-        await navigator.clipboard.writeText(text);
-        copied = true;
-      } catch {
-        const field = document.createElement('textarea');
-        field.value = text;
-        field.setAttribute('readonly', '');
-        field.style.position = 'fixed';
-        field.style.opacity = '0';
-        document.body.appendChild(field);
-        field.select();
-        copied = document.execCommand('copy');
-        field.remove();
-      }
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch {
+      const field = document.createElement('textarea');
+      field.value = text;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.appendChild(field);
+      field.select();
+      copied = document.execCommand('copy');
+      field.remove();
+    }
 
-      if (copyLabel) copyLabel.textContent = copied ? 'Copied' : 'Copy failed';
-      if (copyStatus) copyStatus.textContent = copied ? 'Installer commands copied to clipboard.' : 'Could not copy commands. Select and copy them manually.';
-      window.setTimeout(() => {
-        if (copyLabel) copyLabel.textContent = 'Copy commands';
-      }, 2200);
-    });
-  }
+    if (copyLabel) copyLabel.textContent = copied ? 'Copied' : 'Copy failed';
+    if (copyStatus) copyStatus.textContent = copied ? 'Installer commands copied to clipboard.' : 'Could not copy. Select the commands and copy them manually.';
+    window.setTimeout(() => {
+      if (copyLabel) copyLabel.textContent = 'Copy';
+    }, 2000);
+  });
 </script>

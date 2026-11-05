@@ -6,7 +6,6 @@
 // Active stage follows page scroll via IntersectionObserver; the rail fill
 // tracks section scroll. No animation libraries, no elaborate scenes:
 // typography and restrained geometry carry the visuals.
-import ProductDemo from './ProductDemo.astro';
 ---
 
 <section id="how-it-works" class="hiw">
@@ -34,7 +33,7 @@ import ProductDemo from './ProductDemo.astro';
             <span class="stage-num" aria-hidden="true">02</span>
             <span class="stage-text">
               <span class="stage-heading">Connect outward</span>
-              <span class="stage-desc"><code>cloudflared</code> establishes an outbound tunnel to Cloudflare. No inbound router ports need to be opened.</span>
+              <span class="stage-desc">Say yes during install and the installer sets up a Cloudflare Tunnel, HTTPS and DNS for you. It connects outward, so there are no router ports to open.</span>
             </span>
           </a>
         </li>
@@ -43,7 +42,7 @@ import ProductDemo from './ProductDemo.astro';
             <span class="stage-num" aria-hidden="true">03</span>
             <span class="stage-text">
               <span class="stage-heading">Access it anywhere</span>
-              <span class="stage-desc">Open your configured domain, authenticate with your passcode, and access your Home Cloud desktop from anywhere.</span>
+              <span class="stage-desc">Open your domain from any browser and sign in. At home it switches to your local network automatically.</span>
             </span>
           </a>
         </li>
@@ -75,8 +74,13 @@ import ProductDemo from './ProductDemo.astro';
 
       <div class="hiw-panel" id="hiw-stage-3">
         <p class="viz-caption" aria-hidden="true"><span>03</span>Access it anywhere</p>
-        <div class="hiw-static-dashboard" aria-label="Home Cloud desktop dashboard preview">
-          <ProductDemo mode="preview" />
+        <div class="hiw-desktop-slot" id="hiw-stage3-slot" role="region" aria-label="Home Cloud desktop dashboard preview">
+          <noscript>
+            <div class="hiw-slot-noscript">
+              <span class="viz-kicker">HOME CLOUD DESKTOP</span>
+              <p class="viz-giant" style="font-size: clamp(32px, 5vw, 48px); margin-top: 8px;">:3000</p>
+            </div>
+          </noscript>
         </div>
       </div>
     </div>
@@ -270,16 +274,38 @@ import ProductDemo from './ProductDemo.astro';
     display: none;
   }
 
-  .hiw-static-dashboard {
+  .hiw-desktop-slot {
     width: 100%;
     max-width: 760px;
     margin-inline: auto;
+    position: relative;
+    border-radius: 12px;
+    border: 1px solid var(--hc-border-subtle);
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-sizing: border-box;
+    aspect-ratio: var(--desktop-aspect-ratio, 1147 / 625);
     pointer-events: none;
+    transition:
+      border-color 300ms var(--hc-ease-out),
+      background-color 300ms var(--hc-ease-out),
+      box-shadow 300ms var(--hc-ease-out);
   }
 
-  .hiw-static-dashboard :global(.hc-desktop-preview) {
-    transform: none;
-    animation: none;
+  .hiw-desktop-slot[data-transitioning='true'] {
+    border-color: transparent;
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  .hiw-slot-noscript {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 220px;
+    text-align: center;
   }
 
   .viz-kicker {
@@ -445,6 +471,7 @@ import ProductDemo from './ProductDemo.astro';
         panel.removeAttribute('data-active');
       }
     });
+    window.dispatchEvent(new CustomEvent('hiw-stage-change', { detail: { activeIndex: index } }));
   }
 
   function updateFill() {

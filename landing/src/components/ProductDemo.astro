@@ -3,44 +3,19 @@
 // 100% faithful 1:1 replica of the Home Cloud Desktop and OSWindow
 // Derived directly from dashboard/src (desktop.tsx, OSWindow.tsx, files.tsx, DockerApp.tsx, SystemMonitorApp.tsx, TerminalApp.tsx, SettingsApp.tsx)
 const { mode = 'interactive' } = Astro.props;
-const preview = mode === 'preview';
 import wpNight from '../../../dashboard/src/assets/wallpaper_night.jpg';
 import wpWaves from '../../../dashboard/src/assets/desktop_wallpaper.jpg';
 import wpMist from '../../../dashboard/src/assets/wallpaper_mist.jpg';
 import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
 ---
 
-{preview ? (
-  <div class="hc-desktop hc-desktop-preview" aria-label="Home Cloud desktop preview" style={`--wallpaper: url("${wpNight.src}")`}>
-    <div class="hc-wallpaper"></div>
-    <div class="hc-workspace">
-      <div class="os-window active" style="left: 90px; top: 36px; width: 780px; height: 440px; z-index: 11;">
-        <div class="window-titlebar">
-          <div class="window-title-area">
-            <span class="window-icon">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path>
-              </svg>
-            </span>
-            <span class="window-title">File Explorer</span>
-          </div>
-          <div class="window-controls">
-            <span class="win-ctrl win-minimize" title="Minimize"><svg width="10" height="1" viewBox="0 0 10 1" fill="none"><line x1="0.75" y1="0.5" x2="9.25" y2="0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line></svg></span>
-            <span class="win-ctrl win-maximize" title="Maximize"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.75" y="0.75" width="8.5" height="8.5" rx="0.75" stroke="currentColor" stroke-width="1.5"></rect></svg></span>
-            <span class="win-ctrl win-close" title="Close"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></line></svg></span>
-          </div>
-        </div>
-        <div style="flex:1; background:#000000; padding:16px; color:#a1a1aa; font-size:12px;">File Explorer preview mode</div>
-      </div>
-    </div>
-  </div>
-) : (
-  <section id="features" class="product-demo" aria-label="Interactive Home Cloud desktop demo">
-    <div class="container demo-container">
-      <div class="demo-frame">
-        <div class="demo-device reveal">
-        <div
-          class="hc-desktop hc-desktop-live"
+<section id="demo" class="product-demo" aria-label="Interactive Home Cloud desktop demo">
+  <div class="container demo-container">
+    <div class="demo-frame">
+      <div class="demo-device">
+        <div class="demo-desktop-stage" id="demo-desktop-stage">
+          <div
+            class="hc-desktop hc-desktop-live"
           data-demo-desktop
           data-wallpapers={JSON.stringify({
             night: wpNight.src,
@@ -744,10 +719,11 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
           
         </div>
       </div>
+    </div>
 
         <footer class="demo-caption">
           <span class="demo-caption-tag">INTERACTIVE SANDBOX</span>
-          <p class="demo-caption-text">A full Linux desktop delivered over single-port WebSockets. Inspect system metrics, navigate storage, manage Docker workloads, or configure host preferences directly in your browser.</p>
+          <p class="demo-caption-text">A client-side preview of the Home Cloud desktop. Many features in this demo are simulated or limited, but are fully functional in the real product on your own hardware.</p>
           <a class="demo-caption-link" href="#setup">Installation guide <span aria-hidden="true">→</span></a>
         </footer>
       </div>
@@ -755,7 +731,6 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
       <div class="hatch demo-hatch" aria-hidden="true"></div>
     </div>
   </section>
-)}
 
 <style is:global>
   /* ── Product Demo Section Architecture & Margins ── */
@@ -763,6 +738,14 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     position: relative;
     padding-block: 0;
     background: transparent;
+    z-index: 10;
+  }
+
+  .demo-desktop-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1147 / 625;
+    box-sizing: border-box;
   }
 
   .demo-container {
@@ -851,9 +834,6 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
       flex-direction: column;
       align-items: flex-start;
     }
-    .hc-desktop {
-      height: 516px;
-    }
   }
 
   /* ── Desktop Shell & Vercel Design System Tokens ── */
@@ -873,11 +853,13 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     --d-warn: #fbbf24;
     --d-error: #f87171;
 
-    position: relative;
+    position: absolute;
+    top: 0;
+    left: 0;
     isolation: isolate;
     overflow: hidden;
     width: 100%;
-    height: 625px;
+    height: 100%;
     border: 1px solid var(--d-border-subtle);
     border-top: 1px solid var(--d-border-default);
     border-radius: 12px;
@@ -886,6 +868,15 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     font-family: var(--hc-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
     user-select: none;
     box-shadow: 0 28px 72px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transform-origin: 0 0;
+    transition: opacity 300ms var(--hc-ease-out);
+  }
+
+  @media (max-width: 768px) {
+    .hc-desktop {
+      width: 1147px;
+      height: 625px;
+    }
   }
 
   .hc-desktop .hc-wallpaper {
@@ -964,6 +955,7 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     cursor: grab;
     flex-shrink: 0;
     user-select: none;
+    touch-action: none;
     transition: background 150ms ease;
   }
 
@@ -1047,6 +1039,14 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     height: 16px;
     cursor: se-resize;
     z-index: 100;
+    touch-action: none;
+  }
+
+  .hc-desktop.is-dragging {
+    user-select: none;
+  }
+  .hc-desktop.is-dragging .window-titlebar {
+    cursor: grabbing;
   }
 
   .hc-desktop .window-body {
@@ -2721,6 +2721,188 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
 </style>
 
 <script>
+  // ── Scroll-Linked Interactive Desktop Transition Engine ──
+  // Smoothly morphs the desktop between Stage 3 slot in HowItWorks
+  // and full-size interactive sandbox in Features using requestAnimationFrame
+  // and IntersectionObserver.
+  (() => {
+    const desktopEl = document.querySelector('[data-demo-desktop]');
+    const slotEl = document.getElementById('hiw-stage3-slot');
+    const targetEl = document.getElementById('demo-desktop-stage');
+    const hiwSection = document.getElementById('how-it-works');
+    const featuresSection = document.getElementById('demo');
+    const stage3Panel = document.getElementById('hiw-stage-3');
+
+    if (!desktopEl || !slotEl || !targetEl || !hiwSection || !featuresSection) return;
+
+    let isIntersecting = false;
+    let ticking = false;
+    let metrics = null;
+    let currentScale = 1;
+
+    const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduceMotion = reduceMotionQuery.matches;
+    reduceMotionQuery.addEventListener?.('change', (e) => {
+      reduceMotion = e.matches;
+      updateMetrics();
+      render();
+    });
+
+    function updateMetrics() {
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+
+      const slotRect = slotEl.getBoundingClientRect();
+      const targetRect = targetEl.getBoundingClientRect();
+
+      const slotPageTop = slotRect.top + scrollY;
+      const slotPageLeft = slotRect.left + scrollX;
+      const targetPageTop = targetRect.top + scrollY;
+      const targetPageLeft = targetRect.left + scrollX;
+
+      const targetW = targetRect.width || targetEl.offsetWidth;
+      const targetH = targetRect.height || targetEl.offsetHeight;
+      const slotW = slotRect.width || slotEl.offsetWidth;
+      const desktopW = desktopEl.offsetWidth || targetW;
+
+      if (targetW <= 0 || targetH <= 0 || slotW <= 0 || desktopW <= 0) return;
+
+      const baseScale = targetW / desktopW;
+      const s0 = slotW / targetW;
+      const slotH = targetH * s0;
+
+      // Sync slot aspect ratio to target aspect ratio
+      const aspectVal = `${targetW} / ${targetH}`;
+      slotEl.style.aspectRatio = aspectVal;
+      slotEl.style.setProperty('--desktop-aspect-ratio', aspectVal);
+
+      const tx0 = slotPageLeft - targetPageLeft;
+      const ty0 = slotPageTop - targetPageTop;
+
+      const navHeight = document.querySelector('#nav')?.getBoundingClientRect().height || 0;
+      const viewportMid = (window.innerHeight + navHeight) / 2;
+      const slotCenterY = slotPageTop + slotH / 2;
+      const targetCenterY = targetPageTop + targetH / 2;
+
+      const ySlotCenter = slotCenterY - viewportMid;
+      const yTargetCenter = targetCenterY - viewportMid;
+
+      const totalSpan = Math.max(1, yTargetCenter - ySlotCenter);
+      const buffer = Math.min(48, totalSpan * 0.08);
+
+      const yStart = ySlotCenter + buffer;
+      const yEnd = yTargetCenter - buffer;
+      const activeSpan = Math.max(1, yEnd - yStart);
+
+      metrics = {
+        tx0,
+        ty0,
+        s0,
+        yStart,
+        yEnd,
+        activeSpan,
+        targetW,
+        targetH,
+        baseScale,
+      };
+    }
+
+    function render() {
+      if (!metrics) updateMetrics();
+      if (!metrics) return;
+
+      const scrollY = window.scrollY;
+      let rawP = 0;
+      if (scrollY <= metrics.yStart) {
+        rawP = 0;
+      } else if (scrollY >= metrics.yEnd) {
+        rawP = 1;
+      } else {
+        rawP = (scrollY - metrics.yStart) / metrics.activeSpan;
+      }
+
+      const p = Math.max(0, Math.min(1, rawP));
+      slotEl.dataset.transitioning = String(p > 0.001);
+      // Smoothstep easing for calm, natural acceleration and deceleration
+      const t = reduceMotion ? (p < 0.5 ? 0 : 1) : (p * p * (3 - 2 * p));
+
+      currentScale = metrics.baseScale * (metrics.s0 + (1 - metrics.s0) * t);
+      const currentTx = metrics.tx0 * (1 - t);
+      const currentTy = metrics.ty0 * (1 - t);
+
+      if (t >= 0.999) {
+        desktopEl.style.transform = metrics.baseScale === 1 ? '' : `scale(${metrics.baseScale.toFixed(4)})`;
+        desktopEl.style.transformOrigin = '0 0';
+        desktopEl.style.willChange = 'auto';
+        desktopEl.style.pointerEvents = 'auto';
+        desktopEl.style.opacity = '1';
+      } else {
+        desktopEl.style.transformOrigin = '0 0';
+        desktopEl.style.transform = `translate3d(${currentTx.toFixed(2)}px, ${currentTy.toFixed(2)}px, 0) scale(${currentScale.toFixed(4)})`;
+        desktopEl.style.willChange = 'transform';
+        desktopEl.style.pointerEvents = t >= 0.95 ? 'auto' : 'none';
+
+        // Synchronize dimming with Stage 3 active status when parked at Stage 3
+        if (p <= 0) {
+          const isStage3Active = stage3Panel ? stage3Panel.getAttribute('data-active') === 'true' : true;
+          desktopEl.style.opacity = isStage3Active ? '1' : '0.45';
+        } else {
+          desktopEl.style.opacity = '1';
+        }
+      }
+    }
+
+    function onScroll() {
+      if (!isIntersecting) return;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        render();
+      });
+    }
+
+    function onResize() {
+      updateMetrics();
+      render();
+    }
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(
+        () => {
+          const rectHIW = hiwSection.getBoundingClientRect();
+          const rectFeat = featuresSection.getBoundingClientRect();
+          const inRange = rectHIW.bottom > -150 && rectFeat.top < window.innerHeight + 150;
+          isIntersecting = inRange;
+          if (isIntersecting) {
+            updateMetrics();
+            render();
+          }
+        },
+        { rootMargin: '150px 0px 150px 0px', threshold: 0 }
+      );
+      observer.observe(hiwSection);
+      observer.observe(featuresSection);
+    } else {
+      isIntersecting = true;
+    }
+
+    updateMetrics();
+    render();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+
+    window.__hc_demo_scale = () => currentScale || 1;
+    window.__hc_update_desktop = () => {
+      render();
+    };
+
+    window.addEventListener('hiw-stage-change', () => {
+      render();
+    });
+  })();
+
   // ── Home Cloud Desktop Interactive Engine ──
   const desktop = document.querySelector('[data-demo-desktop]');
   if (desktop) {
@@ -2890,15 +3072,20 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     }
 
     // Initialize Window Behavior (Click to focus, drag, resize, min/max/close)
+    let activeGestureCleanup = null;
+    let isPointerInteracting = false;
+
     windows.forEach(win => {
       if (!win.el) return;
 
-      // Bring to top on mousedown anywhere inside window
-      win.el.addEventListener('mousedown', () => {
+      // Bring to top on pointerdown/mousedown anywhere inside window
+      const onWindowFocus = () => {
         if (activeWinId !== win.id) {
           focusWindow(win.id);
         }
-      });
+      };
+      win.el.addEventListener('pointerdown', onWindowFocus);
+      win.el.addEventListener('mousedown', onWindowFocus);
 
       // Controls
       const minBtn = win.el.querySelector('[data-act="min"]');
@@ -2947,12 +3134,21 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
         });
 
         // Draggable via Titlebar
-        titlebar.addEventListener('mousedown', (e) => {
+        const startDrag = (e) => {
+          if (e.type === 'mousedown' && ('PointerEvent' in window || isPointerInteracting)) return;
+          if (e.button !== 0 && e.button !== undefined) return;
           if (win.el.classList.contains('maximized')) return;
           if (e.target.closest('.win-ctrl')) return;
+          if (e.type === 'pointerdown' && isPointerInteracting) return;
 
           focusWindow(win.id);
 
+          if (typeof activeGestureCleanup === 'function') {
+            activeGestureCleanup();
+          }
+          isPointerInteracting = true;
+
+          const pointerId = e.pointerId;
           const startMouseX = e.clientX;
           const startMouseY = e.clientY;
           const startWinX = win.el.offsetLeft;
@@ -2960,9 +3156,21 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
 
           desktop.classList.add('is-dragging');
 
-          const onMouseMove = (moveEvent) => {
-            const deltaX = moveEvent.clientX - startMouseX;
-            const deltaY = moveEvent.clientY - startMouseY;
+          if (pointerId !== undefined && typeof titlebar.setPointerCapture === 'function') {
+            try {
+              titlebar.setPointerCapture(pointerId);
+            } catch (_) {}
+          }
+
+          const onPointerMove = (moveEvent) => {
+            if (typeof moveEvent.buttons === 'number' && moveEvent.buttons === 0) {
+              endDrag();
+              return;
+            }
+
+            const scale = (typeof window.__hc_demo_scale === 'function' ? window.__hc_demo_scale() : 1) || 1;
+            const deltaX = (moveEvent.clientX - startMouseX) / scale;
+            const deltaY = (moveEvent.clientY - startMouseY) / scale;
 
             const minX = -(win.el.offsetWidth - 80);
             const maxX = workspace.clientWidth - 80;
@@ -2978,31 +3186,98 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
             win.y = nextY;
           };
 
-          const onMouseUp = () => {
+          let isCleanedUp = false;
+          const endDrag = () => {
+            if (isCleanedUp) return;
+            isCleanedUp = true;
+            isPointerInteracting = false;
+
+            if (activeGestureCleanup === endDrag) {
+              activeGestureCleanup = null;
+            }
+
             desktop.classList.remove('is-dragging');
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+
+            if (pointerId !== undefined && typeof titlebar.releasePointerCapture === 'function') {
+              try {
+                if (titlebar.hasPointerCapture(pointerId)) {
+                  titlebar.releasePointerCapture(pointerId);
+                }
+              } catch (_) {}
+            }
+
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', endDrag);
+            window.removeEventListener('pointercancel', endDrag);
+            window.removeEventListener('mousemove', onPointerMove);
+            window.removeEventListener('mouseup', endDrag);
+            window.removeEventListener('blur', endDrag);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            titlebar.removeEventListener('lostpointercapture', endDrag);
           };
 
-          document.addEventListener('mousemove', onMouseMove);
-          document.addEventListener('mouseup', onMouseUp);
-        });
+          const onVisibilityChange = () => {
+            if (document.hidden) {
+              endDrag();
+            }
+          };
+
+          activeGestureCleanup = endDrag;
+
+          window.addEventListener('pointermove', onPointerMove);
+          window.addEventListener('pointerup', endDrag);
+          window.addEventListener('pointercancel', endDrag);
+          window.addEventListener('mousemove', onPointerMove);
+          window.addEventListener('mouseup', endDrag);
+          window.addEventListener('blur', endDrag);
+          document.addEventListener('visibilitychange', onVisibilityChange);
+          titlebar.addEventListener('lostpointercapture', endDrag);
+        };
+
+        titlebar.addEventListener('pointerdown', startDrag);
+        titlebar.addEventListener('mousedown', startDrag);
       }
 
       if (resizeHandle) {
-        resizeHandle.addEventListener('mousedown', (e) => {
+        const startResize = (e) => {
+          if (e.type === 'mousedown' && ('PointerEvent' in window || isPointerInteracting)) return;
+          if (e.button !== 0 && e.button !== undefined) return;
+          if (win.el.classList.contains('maximized')) return;
           e.stopPropagation();
           e.preventDefault();
+
+          if (e.type === 'pointerdown' && isPointerInteracting) return;
+
           focusWindow(win.id);
 
+          if (typeof activeGestureCleanup === 'function') {
+            activeGestureCleanup();
+          }
+          isPointerInteracting = true;
+
+          const pointerId = e.pointerId;
           const startMouseX = e.clientX;
           const startMouseY = e.clientY;
           const startWidth = win.el.offsetWidth;
           const startHeight = win.el.offsetHeight;
 
-          const onMouseMove = (moveEvent) => {
-            const deltaX = moveEvent.clientX - startMouseX;
-            const deltaY = moveEvent.clientY - startMouseY;
+          desktop.classList.add('is-dragging');
+
+          if (pointerId !== undefined && typeof resizeHandle.setPointerCapture === 'function') {
+            try {
+              resizeHandle.setPointerCapture(pointerId);
+            } catch (_) {}
+          }
+
+          const onPointerMove = (moveEvent) => {
+            if (typeof moveEvent.buttons === 'number' && moveEvent.buttons === 0) {
+              endResize();
+              return;
+            }
+
+            const scale = (typeof window.__hc_demo_scale === 'function' ? window.__hc_demo_scale() : 1) || 1;
+            const deltaX = (moveEvent.clientX - startMouseX) / scale;
+            const deltaY = (moveEvent.clientY - startMouseY) / scale;
 
             const maxW = workspace.clientWidth - win.el.offsetLeft;
             const maxH = workspace.clientHeight - win.el.offsetTop;
@@ -3015,14 +3290,56 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
             win.h = newH;
           };
 
-          const onMouseUp = () => {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+          let isCleanedUp = false;
+          const endResize = () => {
+            if (isCleanedUp) return;
+            isCleanedUp = true;
+            isPointerInteracting = false;
+
+            if (activeGestureCleanup === endResize) {
+              activeGestureCleanup = null;
+            }
+
+            desktop.classList.remove('is-dragging');
+
+            if (pointerId !== undefined && typeof resizeHandle.releasePointerCapture === 'function') {
+              try {
+                if (resizeHandle.hasPointerCapture(pointerId)) {
+                  resizeHandle.releasePointerCapture(pointerId);
+                }
+              } catch (_) {}
+            }
+
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', endResize);
+            window.removeEventListener('pointercancel', endResize);
+            window.removeEventListener('mousemove', onPointerMove);
+            window.removeEventListener('mouseup', endResize);
+            window.removeEventListener('blur', endResize);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            resizeHandle.removeEventListener('lostpointercapture', endResize);
           };
 
-          document.addEventListener('mousemove', onMouseMove);
-          document.addEventListener('mouseup', onMouseUp);
-        });
+          const onVisibilityChange = () => {
+            if (document.hidden) {
+              endResize();
+            }
+          };
+
+          activeGestureCleanup = endResize;
+
+          window.addEventListener('pointermove', onPointerMove);
+          window.addEventListener('pointerup', endResize);
+          window.addEventListener('pointercancel', endResize);
+          window.addEventListener('mousemove', onPointerMove);
+          window.addEventListener('mouseup', endResize);
+          window.addEventListener('blur', endResize);
+          document.addEventListener('visibilitychange', onVisibilityChange);
+          resizeHandle.addEventListener('lostpointercapture', endResize);
+        };
+
+        resizeHandle.addEventListener('pointerdown', startResize);
+        resizeHandle.addEventListener('mousedown', startResize);
       }
     });
 

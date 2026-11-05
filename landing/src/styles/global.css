@@ -356,3 +356,111 @@ html.js .reveal[data-reveal-delay='3'].is-visible {
     transform: none;
   }
 }
+
+/* ── Ruled band: shared frame for content sections ───────────────────────
+   Same language as the footer table: continuous side rails, hairline
+   cells, mono labels, one header pattern, hatch strip as separator. */
+.band {
+  position: relative;
+  background: var(--hc-canvas);
+}
+
+.band-frame {
+  border-left: 1px solid var(--hc-border-subtle);
+  border-right: 1px solid var(--hc-border-subtle);
+  box-sizing: border-box;
+}
+
+.band-pad {
+  padding-inline: clamp(24px, 4vw, 48px);
+}
+
+.band-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: var(--hc-space-6) var(--hc-space-8);
+  padding: var(--hc-space-9) clamp(24px, 4vw, 48px) var(--hc-space-7);
+}
+
+.band-eyebrow {
+  margin-bottom: var(--hc-space-4);
+  font-family: var(--hc-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--hc-text-tertiary);
+}
+
+.band-title {
+  font-family: var(--hc-font-display);
+  font-size: clamp(2rem, 1.6rem + 2vw, 3rem);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  color: var(--hc-text-primary);
+  text-wrap: balance;
+}
+
+.band-lede {
+  justify-self: end;
+  max-width: 46ch;
+  font-size: var(--hc-text-body);
+  line-height: 1.6;
+  color: var(--hc-text-secondary);
+}
+
+.band-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--hc-space-3) var(--hc-space-6);
+  padding: var(--hc-space-4) clamp(24px, 4vw, 48px);
+  border-top: 1px solid var(--hc-border-strong);
+  font-size: var(--hc-text-small);
+  line-height: 1.5;
+  color: var(--hc-text-tertiary);
+}
+
+.band-foot a {
+  font-weight: 500;
+  color: var(--hc-text-primary);
+  white-space: nowrap;
+  transition: color var(--hc-duration-micro) var(--hc-ease-out);
+}
+
+.band-foot a:hover {
+  color: var(--hc-accent);
+}
+
+.band-hatch {
+  height: var(--hc-hatch-height, 28px);
+  background-color: var(--hc-canvas);
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    var(--hc-border-default) 6px 7px
+  );
+  border: 1px solid var(--hc-border-subtle);
+  box-sizing: border-box;
+}
+
+@media (max-width: 960px) {
+  .band-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--hc-space-4);
+    padding-top: var(--hc-space-8);
+  }
+
+  .band-lede {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .band-pad,
+  .band-header,
+  .band-foot {
+    padding-inline: var(--hc-space-4);
+  }
+}

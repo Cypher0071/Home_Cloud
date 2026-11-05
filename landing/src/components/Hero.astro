@@ -1,9 +1,12 @@
 ---
 // landing/src/components/Hero.astro
 // Editorial engineering hero section:
-// Left: Eyebrow, Display headline, Supporting copy, Terminal command box, CTAs, Meta specs.
+// Left: Eyebrow, Display headline, Supporting copy, two CTAs, release meta line.
 // Right: Hairline isometric illustration (desktop PC, cloud gateway, laptop, live signal telemetry).
 // Bottom: Structural diagonal-hatch separator transitioning into How It Works.
+import { links, getRelease } from '../data/site';
+
+const release = await getRelease();
 ---
 
 <section id="hero" class="hero">
@@ -30,26 +33,27 @@
         </h1>
 
         <p class="hero-sub">
-          Turn a spare PC, mini PC, or laptop into a private server you can reach from anywhere.
+          Turn a spare PC, mini PC, or laptop into a private server. The installer sets up secure remote access for you, with no port forwarding or static IP.
         </p>
 
-        <div class="hero-cmd" id="hero-install-pill">
-          <span class="cmd-prompt" aria-hidden="true">$</span>
-          <code class="cmd-code" id="hero-install-cmd">curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash</code>
-          <button
-            type="button"
-            class="cmd-copy"
-            id="hero-copy-btn"
-            aria-label="Copy install command to clipboard"
-            data-copy="curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash"
-          >
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="5" y="5" width="8" height="8" rx="1.5"></rect>
-              <path d="M3 11V3a1.5 1.5 0 0 1 1.5-1.5H11"></path>
-            </svg>
-            <span id="hero-copy-label">Copy</span>
-          </button>
+        <div class="hero-actions">
+          <a class="btn btn-primary hero-btn" href="#setup">
+            Get started
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          </a>
+          <a class="btn btn-ghost hero-btn" href={links.docs} target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3h4A1.5 1.5 0 0 1 8 4.5V13a1 1 0 0 0-1-1H2.5V3ZM13.5 3h-4A1.5 1.5 0 0 0 8 4.5V13a1 1 0 0 1 1-1h4.5V3Z"></path></svg>
+            Read the docs<span class="sr-only"> (opens in a new tab)</span>
+          </a>
         </div>
+
+        <p class="hero-meta">
+          <a href={links.releases} target="_blank" rel="noopener noreferrer">{release.tag}<span class="sr-only"> release notes (opens in a new tab)</span></a>
+          <span class="meta-dot" aria-hidden="true">·</span>
+          <span>Apache-2.0</span>
+          <span class="meta-dot" aria-hidden="true">·</span>
+          <span>Free, no account needed</span>
+        </p>
       </div>
 
       <!-- Right Column: Hairline isometric illustration -->
@@ -153,7 +157,7 @@
     gap: 10px;
     margin-bottom: 12px;
     font-family: var(--hc-font-mono);
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.08em;
     color: var(--hc-text-tertiary);
   }
@@ -191,71 +195,49 @@
     color: var(--hc-text-secondary);
   }
 
-  /* Install command — developer tool, not a CTA card */
-  .hero-cmd {
+  /* Actions: one primary, one secondary, same buttons as the closing band. */
+  .hero-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 0;
-    padding: 7px 7px 7px 16px;
-    background: var(--hc-surface-1);
-    border: 1px solid var(--hc-border-default);
-    border-radius: 3px;
-    max-width: 540px;
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
   }
 
-  .cmd-prompt {
-    font-family: var(--hc-font-mono);
-    font-size: 0.85rem;
-    color: var(--hc-text-tertiary);
-    user-select: none;
+  .hero-btn svg {
     flex-shrink: 0;
   }
 
-  .cmd-code {
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    font-family: var(--hc-font-mono);
-    font-size: 0.82rem;
-    color: var(--hc-text-primary);
-    white-space: nowrap;
-    padding-right: 14px;
-    -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent 100%);
-    mask-image: linear-gradient(to right, black calc(100% - 32px), transparent 100%);
+  .hero-actions .btn-ghost {
+    border-color: var(--hc-border-strong);
   }
 
-  .cmd-code::-webkit-scrollbar {
-    display: none;
-  }
-
-  .cmd-copy {
-    display: inline-flex;
+  .hero-meta {
+    display: flex;
     align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    padding: 8px 14px;
-    border-radius: 3px;
-    background: var(--hc-surface-2);
-    border: 1px solid var(--hc-border-default);
+    flex-wrap: wrap;
+    gap: 8px;
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--hc-text-tertiary);
+  }
+
+  .hero-meta a {
+    color: var(--hc-text-secondary);
+    text-decoration: underline;
+    text-decoration-color: var(--hc-border-strong);
+    text-underline-offset: 3px;
+    transition: color var(--hc-duration-micro) var(--hc-ease-out), text-decoration-color var(--hc-duration-micro) var(--hc-ease-out);
+  }
+
+  .hero-meta a:hover {
     color: var(--hc-text-primary);
-    font-size: 0.78rem;
-    font-weight: 550;
-    cursor: pointer;
-    transition: background-color var(--hc-duration-micro) var(--hc-ease-out);
+    text-decoration-color: var(--hc-accent);
   }
 
-  .cmd-copy:hover {
-    background: var(--hc-surface-3);
-  }
-
-  .cmd-copy.is-copied {
-    color: var(--hc-success);
-    border-color: var(--hc-success-soft);
+  .meta-dot {
+    color: var(--hc-text-muted);
   }
 
   /* Illustration panel — unframed, art sits directly on the canvas */
@@ -550,17 +532,9 @@
       font-size: clamp(2.48rem, 1.93rem + 2.6vw, 3.3rem);
       line-height: 1.05;
     }
-    .hero-cmd {
-      gap: 8px;
-      padding-left: 12px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .cmd-code {
-      font-size: 0.76rem;
-    }
-    .cmd-copy {
-      padding: 8px 12px;
+    .hero-actions .btn {
+      flex: 1 1 0;
+      justify-content: center;
     }
     .hero-visual {
       max-width: 100%;
@@ -757,36 +731,4 @@
     }
   }
 
-  // Install command copy (preserved behavior + ids)
-  const copyBtn = document.getElementById('hero-copy-btn');
-  const copyLabel = document.getElementById('hero-copy-label');
-  const installCmd = document.getElementById('hero-install-cmd');
-
-  if (copyBtn && installCmd) {
-    copyBtn.addEventListener('click', async () => {
-      const textToCopy = copyBtn.getAttribute('data-copy') || installCmd.textContent || '';
-      const markCopied = () => {
-        copyBtn.classList.add('is-copied');
-        if (copyLabel) copyLabel.textContent = 'Copied!';
-        setTimeout(() => {
-          copyBtn.classList.remove('is-copied');
-          if (copyLabel) copyLabel.textContent = 'Copy';
-        }, 2200);
-      };
-      try {
-        await navigator.clipboard.writeText(textToCopy);
-        markCopied();
-      } catch (err) {
-        const textarea = document.createElement('textarea');
-        textarea.value = textToCopy;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        markCopied();
-      }
-    });
-  }
 </script>
