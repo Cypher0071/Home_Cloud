@@ -11,9 +11,9 @@ import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
 
 // Generated per run so no password-like literals live in the source.
-const FILE_PW = `pw-${crypto.randomUUID()}`;
-const STDIN_PW = `pw-${crypto.randomUUID()}`;
-const ARGV_PW = `pw-${crypto.randomUUID()}`;
+const FILE_PW = crypto.randomUUID();
+const STDIN_PW = crypto.randomUUID();
+const ARGV_PW = crypto.randomUUID();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../..");

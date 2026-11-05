@@ -21,7 +21,7 @@ process.env.CF_CONFIG = path.join(testTmpDir, ".cloudflared", "config.yml");
 process.env.BASE_DIR = testTmpDir;
 
 const JWT_SECRET = "hardening-test-jwt-secret-32-chars-min";
-const INITIAL_PASSWORD = `pw-${crypto.randomUUID()}`;
+const INITIAL_PASSWORD = crypto.randomUUID();
 process.env.JWT_SECRET = JWT_SECRET;
 process.env.PASSWORD = INITIAL_PASSWORD;
 
@@ -161,7 +161,7 @@ try {
 		ws2Closed = true;
 	});
 
-	const PWD_V2 = `pw-${crypto.randomUUID()}`;
+	const PWD_V2 = crypto.randomUUID();
 	const changeRes = await fetch(`${baseUrl}/api/settings/password`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json", Cookie: `token=${token2}`, Origin: baseUrl },
@@ -189,7 +189,7 @@ try {
 	// Make preferences directory non-writable
 	fs.chmodSync(configDir, 0o500);
 
-	const PWD_V3 = `pw-${crypto.randomUUID()}`;
+	const PWD_V3 = crypto.randomUUID();
 	let rotationFailed = false;
 	try {
 		const failedRotationRes = await fetch(`${baseUrl}/api/settings/password`, {
