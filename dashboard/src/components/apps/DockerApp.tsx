@@ -2137,7 +2137,7 @@ export default function DockerApp() {
 
   /* ─── Image Pull & Prune Handlers ─── */
 
-  const handlePullImage = (e: React.FormEvent) => {
+  const handlePullImage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!imageInput.trim()) return;
 
@@ -2148,61 +2148,108 @@ export default function DockerApp() {
     setPullSuccess(false);
     setImageInput('');
 
-    const es = new EventSource(`/api/docker/images/pull?image=${encodeURIComponent(imageName)}`);
+    try {
+      const resp = await fetch('/api/docker/images/pull', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: imageName }),
+      });
 
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.error) {
-          setPullError(data.error);
-          es.close();
-          setTimeout(() => {
-            setPullingImage(null);
-            setPullError(null);
-          }, 5000);
-          return;
-        }
-
-        if (data.status === 'success') {
-          setPullSuccess(true);
-          es.close();
-          fetchImages(true);
-          setTimeout(() => {
-            setPullingImage(null);
-            setPullSuccess(false);
-          }, 3000);
-          return;
-        }
-
-        if (data.id) {
-          setPullLayers((prev) => {
-            const currentLayer = prev[data.id] || { id: data.id, status: '', progress: '', current: 0, total: 0 };
-            return {
-              ...prev,
-              [data.id]: {
-                ...currentLayer,
-                status: data.status,
-                progress: data.progress || '',
-                current: data.progressDetail?.current || 0,
-                total: data.progressDetail?.total || 0,
-              },
-            };
-          });
-        }
-      } catch (err) {
-        console.error('[pull] Parse error', err);
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        setPullError(errData.error || 'Image pull failed or repository does not exist');
+        setTimeout(() => {
+          setPullingImage(null);
+          setPullError(null);
+        }, 5000);
+        return;
       }
-    };
 
-    es.onerror = () => {
+      if (!resp.body) {
+        throw new Error('ReadableStream not supported');
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const processLine = (line: string) => {
+        if (!line.startsWith('data:')) return;
+        const jsonStr = line.slice(5).trim();
+        if (!jsonStr) return;
+
+        try {
+          const data = JSON.parse(jsonStr);
+
+          if (data.error) {
+            setPullError(data.error);
+            reader.cancel().catch(() => {});
+            setTimeout(() => {
+              setPullingImage(null);
+              setPullError(null);
+            }, 5000);
+            return;
+          }
+
+          if (data.status === 'success') {
+            setPullSuccess(true);
+            reader.cancel().catch(() => {});
+            fetchImages(true);
+            setTimeout(() => {
+              setPullingImage(null);
+              setPullSuccess(false);
+            }, 3000);
+            return;
+          }
+
+          if (data.id) {
+            setPullLayers((prev) => {
+              const currentLayer = prev[data.id] || { id: data.id, status: '', progress: '', current: 0, total: 0 };
+              return {
+                ...prev,
+                [data.id]: {
+                  ...currentLayer,
+                  status: data.status,
+                  progress: data.progress || '',
+                  current: data.progressDetail?.current || 0,
+                  total: data.progressDetail?.total || 0,
+                },
+              };
+            });
+          }
+        } catch (err) {
+          console.error('[pull] Parse error', err);
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+        for (const part of parts) {
+          for (const line of part.trim().split('\n')) {
+            processLine(line);
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        for (const line of buffer.trim().split('\n')) {
+          processLine(line);
+        }
+      }
+    } catch (err) {
+      console.error('[pull] Stream error', err);
       setPullError('Image pull failed or repository does not exist');
-      es.close();
       setTimeout(() => {
         setPullingImage(null);
         setPullError(null);
       }, 5000);
-    };
+    }
   };
 
   const deleteImage = async (imageId: string) => {

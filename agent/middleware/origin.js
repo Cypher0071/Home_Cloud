@@ -55,6 +55,19 @@ function stateChangingOriginAllowed(req) {
 }
 
 function originGuard(req, res, next) {
+	// Defense-in-depth: Reject cookie-authenticated /api requests with Sec-Fetch-Site: cross-site for ANY method (including GET)
+	const pathname = req.path || (req.url ? new URL(req.url, "http://localhost").pathname : "");
+	const isApi = pathname.startsWith("/api/") || pathname === "/api";
+	const hasAuthCookie = Boolean(
+		(req.cookies && req.cookies.token) ||
+		(req.headers && typeof req.headers.cookie === "string" && /(?:^|;\s*)token=/.test(req.headers.cookie))
+	);
+	const secFetchSite = req.headers && req.headers["sec-fetch-site"];
+
+	if (isApi && hasAuthCookie && typeof secFetchSite === "string" && secFetchSite.trim().toLowerCase() === "cross-site") {
+		return res.status(403).json({ error: "Cross-site request rejected" });
+	}
+
 	if (!stateChangingOriginAllowed(req)) {
 		return res.status(403).json({ error: "Cross-origin request rejected" });
 	}

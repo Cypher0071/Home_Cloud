@@ -5,7 +5,16 @@ const jwt = require("jsonwebtoken");
 const preferences = require("../services/preferences");
 
 function handleContainerExec(ws, request) {
-	const cookies = cookie.parse(request.headers.cookie || "");
+	if (typeof ws.on === "function") {
+		ws.on("error", (err) => {
+			console.warn("[ws/containerExec] socket error:", err?.message || err);
+			try {
+				ws.terminate();
+			} catch (_) {}
+		});
+	}
+
+	const cookies = cookie.parse(request.headers?.cookie || "");
 	const token = cookies.token;
 	if (!token) {
 		ws.close();
@@ -18,12 +27,16 @@ function handleContainerExec(ws, request) {
 			return;
 		}
 
+		const authEpoch = decodedtoken.epoch;
+
 		try {
 			const url = new URL(request.url, "http://localhost");
 			const containerId = url.searchParams.get("containerId");
 
 			if (!containerId) {
-				ws.send("\r\nError: Missing containerId parameter\r\n");
+				try {
+					ws.send("\r\nError: Missing containerId parameter\r\n");
+				} catch (_) {}
 				ws.close();
 				return;
 			}
@@ -47,51 +60,100 @@ function handleContainerExec(ws, request) {
 			});
 
 			if (!stream) {
-				ws.send("\r\nError: Failed to create exec stream\r\n");
+				try {
+					ws.send("\r\nError: Failed to create exec stream\r\n");
+				} catch (_) {}
 				ws.close();
 				return;
 			}
 
+			let isRevoked = false;
+			const terminateExec = () => {
+				if (isRevoked) return;
+				isRevoked = true;
+				try {
+					stream.destroy();
+				} catch (_) {
+					try {
+						stream.end();
+					} catch (_) {}
+				}
+				try {
+					ws.close(4401, "Session revoked");
+				} catch (_) {}
+			};
+
+			const onRevoked = (newEpoch) => {
+				if (newEpoch !== authEpoch) {
+					preferences.epochEvents.off("revoked", onRevoked);
+					terminateExec();
+				}
+			};
+
+			preferences.epochEvents.on("revoked", onRevoked);
+
 			// Forward stdout/stderr from container stream to WebSocket
 			stream.on("data", (chunk) => {
 				if (ws.readyState === 1) { // WebSocket.OPEN
-					ws.send(chunk.toString("utf-8"));
+					try {
+						ws.send(chunk.toString("utf-8"));
+					} catch (_) {}
 				}
 			});
 
 			stream.on("end", () => {
-				ws.close();
+				preferences.epochEvents.off("revoked", onRevoked);
+				try {
+					ws.close();
+				} catch (_) {}
 			});
 
 			stream.on("error", (err) => {
 				console.error("Container exec stream error:", err);
-				ws.close();
+				preferences.epochEvents.off("revoked", onRevoked);
+				try {
+					ws.close();
+				} catch (_) {}
 			});
 
 			// Forward client keystrokes and resize events to container exec
-			ws.on("message", (message) => {
-				const str = message.toString();
-				try {
-					const parsed = JSON.parse(str);
-					if (parsed.type === "resize" && parsed.cols && parsed.rows) {
-						exec.resize({ w: parsed.cols, h: parsed.rows }).catch(() => {});
+			if (typeof ws.on === "function") {
+				ws.on("message", (message) => {
+					if (preferences.getSessionEpoch() !== authEpoch) {
+						preferences.epochEvents.off("revoked", onRevoked);
+						terminateExec();
 						return;
 					}
-				} catch (e) {
-					// Not JSON, treat as standard stdin input
-				}
-				stream.write(str);
-			});
+					const str = message.toString();
+					try {
+						const parsed = JSON.parse(str);
+						if (parsed.type === "resize" && parsed.cols && parsed.rows) {
+							exec.resize({ w: parsed.cols, h: parsed.rows }).catch(() => {});
+							return;
+						}
+					} catch (e) {
+						// Not JSON, treat as standard stdin input
+					}
+					try {
+						stream.write(str);
+					} catch (_) {}
+				});
 
-			ws.on("close", () => {
-				try {
-					stream.end();
-				} catch (e) {}
-			});
+				ws.on("close", () => {
+					preferences.epochEvents.off("revoked", onRevoked);
+					try {
+						stream.end();
+					} catch (e) {}
+				});
+			}
 		} catch (globalErr) {
 			console.error("Exec connection error:", globalErr);
-			ws.send(`\r\nError starting container console: ${globalErr.message}\r\n`);
-			ws.close();
+			try {
+				ws.send(`\r\nError starting container console: ${globalErr.message}\r\n`);
+			} catch (_) {}
+			try {
+				ws.close();
+			} catch (_) {}
 		}
 	});
 }

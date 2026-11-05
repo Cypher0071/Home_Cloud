@@ -4,8 +4,15 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { spawn } = require("child_process");
+const jsYaml = require("js-yaml");
 const Docker = require("dockerode");
 const docker = new Docker();
+const {
+	removeIngressByPort,
+	reloadCloudflared,
+	getHostPortsFromContainerInfo,
+} = require("../services/ingress");
+const { bindStreamToSession } = require("../services/sessionStreams");
 
 function runCompose(args, cwd) {
 	return new Promise((resolve, reject) => {
@@ -47,6 +54,34 @@ function runCompose(args, cwd) {
 function isNoContainerToStartError(error) {
 	const message = error instanceof Error ? error.message : String(error || "");
 	return /\bno container to start\b/i.test(message) || /\bno container found for project\b/i.test(message);
+}
+
+async function getProjectHostPorts(projectName) {
+	const hostPorts = new Set();
+	try {
+		const containers = await docker.listContainers({ all: true });
+		for (const c of containers) {
+			const project = c.Labels ? c.Labels["com.docker.compose.project"] : null;
+			if (project === projectName) {
+				if (Array.isArray(c.Ports)) {
+					for (const p of c.Ports) {
+						if (p && p.PublicPort) {
+							hostPorts.add(String(p.PublicPort));
+						}
+					}
+				}
+				try {
+					const cInfo = await docker.getContainer(c.Id).inspect();
+					for (const p of getHostPortsFromContainerInfo(cInfo)) {
+						hostPorts.add(String(p));
+					}
+				} catch (_) {}
+			}
+		}
+	} catch (listErr) {
+		console.error(`[compose] Failed to query containers for project '${projectName}':`, listErr.message);
+	}
+	return hostPorts;
 }
 
 const COMPOSE_DIR = path.resolve(path.join(os.homedir(), ".home-cloud", "compose"));
@@ -267,6 +302,9 @@ router.post(["/deploy", "/:name/deploy"], async (req, res) => {
 		}
 		fs.writeFileSync(filePath, yaml, "utf8");
 
+		// Collect host ports currently published by this project's containers before up
+		const portsBefore = await getProjectHostPorts(name);
+
 		res.writeHead(200, {
 			"Content-Type": "text/event-stream",
 			"Cache-Control": "no-cache",
@@ -274,30 +312,76 @@ router.post(["/deploy", "/:name/deploy"], async (req, res) => {
 		});
 		res.flushHeaders();
 
+		let sessionRevoked = false;
+		bindStreamToSession(req, res, () => {
+			sessionRevoked = true;
+		});
+
 		const child = spawn("docker", ["compose", "-f", filePath, "-p", name, "up", "-d", "--remove-orphans"]);
 
-		child.stdout.on("data", (chunk) => {
-			res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
-		});
+		if (child.stdout) {
+			child.stdout.on("data", (chunk) => {
+				if (!res.writableEnded) {
+					try {
+						res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
+					} catch (_) {}
+				}
+			});
+		}
 
-		child.stderr.on("data", (chunk) => {
-			res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
-		});
+		if (child.stderr) {
+			child.stderr.on("data", (chunk) => {
+				if (!res.writableEnded) {
+					try {
+						res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
+					} catch (_) {}
+				}
+			});
+		}
 
 		let settled = false;
 		const finish = (payload) => {
 			if (settled || res.writableEnded) return;
 			settled = true;
-			res.write(`data: ${JSON.stringify(payload)}\n\n`);
-			res.end();
+			try {
+				res.write(`data: ${JSON.stringify(payload)}\n\n`);
+				res.end();
+			} catch (_) {}
 		};
 
+		let spawnError = false;
 		child.on("error", (err) => {
+			spawnError = true;
 			console.error(`[compose] Failed to start docker compose for '${name}':`, err.message);
 			finish({ status: "failed", error: `Failed to start docker compose: ${err.message}` });
 		});
 
-		child.on("close", (code, signal) => {
+		let reconciled = false;
+		const reconcile = async () => {
+			if (reconciled) return;
+			reconciled = true;
+			try {
+				const portsAfter = await getProjectHostPorts(name);
+				let removedAny = false;
+				for (const port of portsBefore) {
+					if (!portsAfter.has(port)) {
+						if (await removeIngressByPort(port)) {
+							removedAny = true;
+						}
+					}
+				}
+				if (removedAny) {
+					await reloadCloudflared();
+				}
+			} catch (cleanupErr) {
+				console.error(`[compose] Ingress reconcile failed for project '${name}':`, cleanupErr.message);
+			}
+		};
+
+		child.on("close", async (code, signal) => {
+			if (!spawnError) {
+				await reconcile();
+			}
 			if (code === 0) {
 				finish({ status: "success" });
 			} else {
@@ -307,7 +391,7 @@ router.post(["/deploy", "/:name/deploy"], async (req, res) => {
 		});
 
 		res.on("close", () => {
-			if (!res.writableEnded && !child.killed) {
+			if (!sessionRevoked && !res.writableEnded && !child.killed) {
 				child.kill();
 			}
 		});
@@ -315,9 +399,11 @@ router.post(["/deploy", "/:name/deploy"], async (req, res) => {
 		console.error(`[compose] Unexpected deployment error for '${name}':`, err.message);
 		if (!res.headersSent) {
 			res.status(500).json({ error: err.message });
-		} else {
-			res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-			res.end();
+		} else if (!res.writableEnded) {
+			try {
+				res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+				res.end();
+			} catch (_) {}
 		}
 	}
 });
@@ -340,8 +426,8 @@ router.post("/:name/start", async (req, res) => {
 				throw err;
 			});
 		} else {
-				await runCompose(["-p", name, "start"]).catch(async (err) => {
-					if (isNoContainerToStartError(err)) {
+			await runCompose(["-p", name, "start"]).catch(async (err) => {
+				if (isNoContainerToStartError(err)) {
 					return runCompose(["-p", name, "up", "-d"]);
 				}
 				throw err;
@@ -385,6 +471,34 @@ router.delete("/:name", async (req, res) => {
 	}
 	const composePath = findComposeFile(projectFolder);
 
+	// Collect host ports of all containers in the compose project before down
+	const hostPorts = await getProjectHostPorts(name);
+
+	if (composePath && fs.existsSync(composePath)) {
+		try {
+			const content = fs.readFileSync(composePath, "utf8");
+			const parsed = jsYaml.load(content);
+			if (parsed && parsed.services && typeof parsed.services === "object") {
+				for (const svcName in parsed.services) {
+					const svc = parsed.services[svcName];
+					if (svc && Array.isArray(svc.ports)) {
+						for (const p of svc.ports) {
+							if (typeof p === "string") {
+								const parts = p.split(":");
+								if (parts.length >= 2) {
+									const hostPort = parts[parts.length - 2];
+									if (/^\d+$/.test(hostPort)) hostPorts.add(hostPort);
+								}
+							} else if (typeof p === "object" && p && p.published) {
+								hostPorts.add(String(p.published));
+							}
+						}
+					}
+				}
+			}
+		} catch (_) {}
+	}
+
 	try {
 		if (composePath && fs.existsSync(composePath)) {
 			try {
@@ -398,6 +512,21 @@ router.delete("/:name", async (req, res) => {
 
 		if (fs.existsSync(projectFolder)) {
 			fs.rmSync(projectFolder, { recursive: true, force: true });
+		}
+
+		// Clean up ingress rules for this compose stack
+		try {
+			let removedAny = false;
+			for (const hostPort of hostPorts) {
+				if (await removeIngressByPort(hostPort)) {
+					removedAny = true;
+				}
+			}
+			if (removedAny) {
+				await reloadCloudflared();
+			}
+		} catch (ingressErr) {
+			console.error(`[compose] Failed to clean up ingress rules for project '${name}':`, ingressErr.message);
 		}
 
 		res.json({ success: true });
@@ -430,23 +559,41 @@ router.get("/:name/logs", async (req, res) => {
 
 		const child = spawn("docker", spawnArgs);
 
-		child.stdout.on("data", (chunk) => {
-			res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
-		});
+		let cleanedUp = false;
+		const cleanup = () => {
+			if (cleanedUp) return;
+			cleanedUp = true;
+			if (!child.killed) {
+				try {
+					child.kill();
+				} catch (_) {}
+			}
+		};
 
-		child.stderr.on("data", (chunk) => {
-			res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
-		});
+		bindStreamToSession(req, res, cleanup);
+
+		if (child.stdout) {
+			child.stdout.on("data", (chunk) => {
+				res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
+			});
+		}
+
+		if (child.stderr) {
+			child.stderr.on("data", (chunk) => {
+				res.write(`data: ${JSON.stringify({ text: chunk.toString("utf8") })}\n\n`);
+			});
+		}
 
 		child.on("error", (err) => {
 			console.error(`[compose] Error streaming logs for '${name}':`, err.message);
-			res.end();
+			cleanup();
+			if (!res.writableEnded) {
+				res.end();
+			}
 		});
 
 		res.on("close", () => {
-			if (!res.writableEnded && !child.killed) {
-				child.kill();
-			}
+			cleanup();
 		});
 	} catch (err) {
 		console.error(`[compose] Failed to open logs stream for '${name}':`, err.message);
@@ -462,5 +609,6 @@ router.COMPOSE_DIR = COMPOSE_DIR;
 router.LEGACY_STACKS_DIR = LEGACY_STACKS_DIR;
 router.runCompose = runCompose;
 router.isNoContainerToStartError = isNoContainerToStartError;
+router.getProjectHostPorts = getProjectHostPorts;
 
 module.exports = router;

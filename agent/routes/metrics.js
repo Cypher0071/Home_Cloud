@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const si = require("systeminformation");
+const { bindStreamToSession } = require("../services/sessionStreams");
 
 async function getMetrics() {
 	const cpu = await si.currentLoad();
@@ -41,11 +42,15 @@ router.get("/", (req, res) => {
 		} catch (_) {}
 	}, 15000);
 
-	req.on("close", () => {
+	const cleanup = () => {
+		if (closed) return;
 		closed = true;
 		clearInterval(metricsInterval);
 		clearInterval(heartbeatInterval);
-	});
+	};
+
+	bindStreamToSession(req, res, cleanup);
+	req.on("close", cleanup);
 });
 
 module.exports = router;

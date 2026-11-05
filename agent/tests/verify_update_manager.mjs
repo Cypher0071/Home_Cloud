@@ -250,6 +250,43 @@ const rollbackStage = rollbackEvents.find((e) => e.stage === "rollback");
 assert.ok(rollbackStage, "Rollback event should be emitted to onProgress");
 console.log("  ✔ Pipeline auto-rollback triggers on build failure and restores commit state");
 
+// 5d. Frozen lockfile install failure triggers rollback and NEVER runs non-frozen install
+updateManager._resetForTesting();
+const frozenInstallEvents = [];
+const frozenInstallCommands = [];
+
+updateManager._setMockRunCommand(async (cmd, args) => {
+	frozenInstallCommands.push(`${cmd} ${args.join(" ")}`);
+	if (cmd === "git" && args[0] === "ls-remote") {
+		return { stdout: `deadbeef\t${args[args.length - 1]}\n`, stderr: "" };
+	}
+	if (cmd === "git" && args[0] === "status") return { stdout: "", stderr: "" };
+	if (cmd === "git" && args[0] === "rev-parse" && args[1] === "HEAD") {
+		return { stdout: "safe-frozen-sha-1111\n", stderr: "" };
+	}
+	if (cmd === "pnpm" && args.includes("--frozen-lockfile")) {
+		throw new Error("ERR_PNPM_LOCKFILE_CONFIG_MISMATCH: Cannot install with \"frozen-lockfile\"");
+	}
+	return { stdout: "ok", stderr: "" };
+});
+
+await assert.rejects(
+	async () => updateManager.applyUpdate((p) => frozenInstallEvents.push(p), { targetTag: "v1.2.0", skipRestart: true }),
+	/ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/,
+	"applyUpdate must abort when frozen-lockfile fails"
+);
+
+assert.equal(updateManager.isUpdating(), false, "isUpdating must be reset on failure");
+assert.ok(
+	frozenInstallCommands.some((c) => c === "git checkout safe-frozen-sha-1111"),
+	"Git rollback to initial commit must be triggered on frozen install failure"
+);
+assert.ok(
+	!frozenInstallCommands.some((c) => c === "pnpm install"),
+	"Must NEVER fall back to non-frozen pnpm install"
+);
+console.log("  ✔ Frozen-lockfile failure aborts, triggers rollback, and never executes non-frozen install");
+
 // -------------------------------------------------------------
 // [Test Suite 6] Settings API Endpoints Integration
 // -------------------------------------------------------------
