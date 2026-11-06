@@ -5,8 +5,8 @@ const fs = require("fs/promises");
 const mime = require("mime-types");
 const multer = require("multer");
 const si = require("systeminformation");
-const { spawn } = require("child_process");
-const { resolveUnderBase, isInsideAllowedScope } = require("../paths");
+const { resolveUnderBase, isInsideAllowedScope, canonicalize } = require("../paths");
+const { searchFiles } = require("../services/fileSearch");
 const { isSystemRootAllowed } = require("../services/preferences");
 
 const resolvePath = resolveUnderBase;
@@ -309,128 +309,54 @@ router.post("/copy", async (req, res) => {
 });
 
 router.get("/search", async (req, res) => {
-	const query = String(req.query.search || "");
+	const query = String(req.query.search || "").slice(0, 200);
 	const currentDir = resolvePath(req.query.path);
 
 	if (!isInsideBase(currentDir)) {
 		return res.status(403).json({ error: "Access denied" });
 	}
 
-	if (!query) {
+	if (!query.trim()) {
 		return res.json([]);
 	}
-	let settled = false;
-	const safeRespond = (status, data) => {
-		if (settled || res.headersSent) return;
-		settled = true;
-		res.status(status).json(data);
-	};
 
-	// Spawn fd to recursively list all file paths (colorless, starting at currentDir)
-	const fd = spawn("fdfind", ["--color", "never", ".", currentDir]);
-	// Spawn fzf in filter mode to perform fast fuzzy matching on the incoming file list
-	const fzf = spawn("fzf", ["-f", query]);
-
-	// Clean up child processes safely
-	const cleanup = () => {
-		try {
-			if (!fd.killed) fd.kill();
-		} catch (_) {}
-		try {
-			if (!fzf.killed) fzf.kill();
-		} catch (_) {}
-	};
-
-	// Catch spawn and process errors on both workers to prevent server crash
-	fd.on("error", (err) => {
-		cleanup();
-		safeRespond(500, { error: `File searcher error: ${err.message}` });
-	});
-
-	fzf.on("error", (err) => {
-		cleanup();
-		safeRespond(500, { error: `Fuzzy matcher error: ${err.message}` });
-	});
-
-	// Handle broken pipe (EPIPE) gracefully if fzf closes before fdfind finishes streaming
-	fzf.stdin.on("error", (err) => {
-		if (err.code !== "EPIPE") {
-			console.error("[file search] fzf.stdin error:", err.message);
-		}
-	});
-
-	fd.stdout.on("error", (err) => {
-		if (err.code !== "EPIPE") {
-			console.error("[file search] fd.stdout error:", err.message);
-		}
-	});
-
-	// Pipe the output of fd directly into fzf's input
-	fd.stdout.pipe(fzf.stdin);
-
-	let stdout = "";
-	let stderr = "";
-
-	fzf.stdout.on("data", (data) => {
-		stdout += data;
-	});
-
-	fzf.stderr.on("data", (data) => {
-		stderr += data;
-	});
-
-	fzf.on("close", async (code) => {
-		// When fzf finishes, terminate fd immediately so it doesn't stay scanning as a background zombie
-		try {
-			if (!fd.killed) fd.kill();
-		} catch (_) {}
-
-		if (settled || res.headersSent) return;
-
-		// fzf exits with code 1 if no matches are found, which is a normal state
-		if (code !== 0 && code !== 1 && stderr) {
-			console.error(`fzf search error: ${stderr}`);
-			return safeRespond(500, { error: "Search failed" });
-		}
-
-		const filePaths = stdout.split("\n").filter(Boolean).slice(0, 50); // limit to top 50 matches
-
-		try {
-			const metadata = await Promise.all(
-				filePaths.map(async (filepath) => {
-					try {
-						const abs = path.isAbsolute(filepath)
-							? path.resolve(filepath)
-							: path.resolve(currentDir, filepath);
-						if (!isInsideBase(abs)) return null;
-						const stat = await fs.stat(abs);
-						return {
-							name: path.basename(filepath),
-							path: abs,
-							isDirectory: stat.isDirectory(),
-							size: stat.size,
-							modified: stat.mtime,
-							mimeType: stat.isDirectory()
-								? null
-								: mime.lookup(filepath) ||
-									"application/octet-stream",
-						};
-					} catch {
-						return null;
-					}
-				}),
-			);
-			safeRespond(200, metadata.filter(Boolean));
-		} catch (err) {
-			console.error(err);
-			safeRespond(500, { error: "Failed to gather file metadata" });
-		}
-	});
-
-	// If the client aborts the request, kill both processes immediately
+	let aborted = false;
 	req.on("close", () => {
-		cleanup();
+		if (!res.writableEnded) aborted = true;
 	});
+
+	try {
+		const root = canonicalize(currentDir);
+		const { matches, truncated } = await searchFiles(root, query, {
+			isAborted: () => aborted,
+		});
+		if (aborted) return;
+
+		const metadata = await Promise.all(
+			matches.map(async (m) => {
+				try {
+					const stat = await fs.stat(m.abs);
+					return {
+						name: m.name,
+						path: m.abs,
+						isDirectory: stat.isDirectory(),
+						size: stat.size,
+						modified: stat.mtime,
+						mimeType: stat.isDirectory()
+							? null
+							: mime.lookup(m.name) || "application/octet-stream",
+					};
+				} catch {
+					return null;
+				}
+			}),
+		);
+		res.setHeader("X-Search-Truncated", truncated ? "1" : "0");
+		res.json(metadata.filter(Boolean));
+	} catch (err) {
+		console.error("[file search] failed:", err.message);
+		if (!res.headersSent) res.status(500).json({ error: "Search failed" });
+	}
 });
 
 router.patch("/rename", async (req, res) => {

@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0
+
+Faster, ranked file search with keyboard navigation in Files, a warning before deploying risky Compose files, and copy that works over the LAN address.
+
+### Added
+
+- File search walks the folder tree in the agent and ranks results: exact names first, then names that start with the query, then names that contain it, then path and fuzzy matches. Every word in the query must match. Hidden files, `node_modules`, symlinks and virtual filesystems (`/proc`, `/sys` and similar) are skipped unless a search word starts with a dot. A search stops after 4 seconds or 200,000 entries and says when results are cut short.
+- Search results show a match count and the folder each result is in, so files with the same name can be told apart.
+- Keyboard navigation in Files: Ctrl+F focuses search, the arrow keys move the selection (Shift extends it), Home and End jump to the first and last item, Enter opens, Delete deletes, and Esc clears the search.
+- The Compose deploy dialog warns, without blocking, when a file mounts the Docker socket or a system path such as `/` or `/etc`, runs privileged, uses the host network or PID namespace, maps devices, or adds powerful capabilities.
+
+### Fixed
+
+- Copy buttons (the SSH config snippet, file paths, and container JSON) work over the plain HTTP LAN address, where the browser clipboard API is unavailable.
+- Selecting, renaming or deleting one of several search results with the same name acts on that file only.
+- A narrow Files window no longer scrolls the whole window sideways when the path is long. The breadcrumb strip scrolls on its own, and the status bar path is shortened from the left.
+
+### Changed
+
+- The `cookie` dependency is updated to 2.0.1, along with `axios`, `@babel/core`, `typescript-eslint` and `follow-redirects`.
+- The developer docs in `docs/` are trimmed to the current architecture, design language, roadmap and known tradeoffs.
+
 ## 1.1.0
 
 Remote SSH over the tunnel, an installer that sets up its own prerequisites, stronger session and ingress handling, and a new website with full documentation.

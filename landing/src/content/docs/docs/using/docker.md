@@ -91,6 +91,8 @@ Output streams to the dashboard as it runs. Because of `--remove-orphans`, a ser
 
 The host needs the `docker compose` plugin. The Compose YAML you submit is passed to Docker as written.
 
+Compose deploys are not limited to your storage scope the way single containers are. The deploy dialog shows a warning when the YAML mounts the Docker socket, bind-mounts a system path such as `/` or `/etc`, runs a service privileged, uses the host network or process namespace, maps devices, or adds powerful capabilities. The warning does not block the deploy. Read the file before you deploy it.
+
 :::caution
 The file explorer's storage scope does not apply to Compose YAML. A Compose file can bind any host path and use options such as `privileged`. Only deploy YAML you have read.
 :::

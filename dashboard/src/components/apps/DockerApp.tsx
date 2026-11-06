@@ -41,6 +41,8 @@ import SlidingPillBar from '../SlidingPillBar';
 import styles from './docker.module.css';
 import { useNetworkDetector } from '../../hooks/useNetworkDetector';
 import * as yaml from 'js-yaml';
+import { copyText } from '../../utils/clipboard';
+import { findRiskyComposeSettings } from '../../utils/composeRisk';
 
 /* ─── Types ─── */
 
@@ -1271,6 +1273,7 @@ export default function DockerApp() {
   const [deploying, setDeploying]                     = useState(false);
   const [deployConsoleLogs, setDeployConsoleLogs]     = useState<string[]>([]);
   const [deployError, setDeployError]                 = useState<string | null>(null);
+  const deployRiskWarnings                            = useMemo(() => findRiskyComposeSettings(deployYaml), [deployYaml]);
   const fileInputRef                                  = useRef<HTMLInputElement>(null);
 
   // In-App Compose Delete Confirmation Dialog state
@@ -2586,10 +2589,11 @@ export default function DockerApp() {
     const gateway = inspectData.NetworkSettings?.Gateway || inspectData.NetworkSettings?.Networks?.bridge?.Gateway || '—';
     const ipAddress = inspectData.NetworkSettings?.IPAddress || inspectData.NetworkSettings?.Networks?.bridge?.IPAddress || '—';
 
-    const handleCopyJson = () => {
-      navigator.clipboard.writeText(JSON.stringify(inspectData, null, 2));
-      setJsonCopied(true);
-      setTimeout(() => setJsonCopied(false), 2000);
+    const handleCopyJson = async () => {
+      if (await copyText(JSON.stringify(inspectData, null, 2))) {
+        setJsonCopied(true);
+        setTimeout(() => setJsonCopied(false), 2000);
+      }
     };
 
     return (
@@ -4021,6 +4025,19 @@ export default function DockerApp() {
                   <div className={styles.alertError}>
                     <AlertCircle size={14} />
                     <span>{deployError}</span>
+                  </div>
+                )}
+
+                {deployRiskWarnings.length > 0 && (
+                  <div className={styles.alertWarning} role="note">
+                    <AlertTriangle size={14} />
+                    <div>
+                      <strong>This file gives containers control of the host.</strong>{' '}
+                      Compose deploys are not limited to your storage scope. Deploy only if you trust it.
+                      <ul>
+                        {deployRiskWarnings.map(w => <li key={w}>{w}</li>)}
+                      </ul>
+                    </div>
                   </div>
                 )}
 

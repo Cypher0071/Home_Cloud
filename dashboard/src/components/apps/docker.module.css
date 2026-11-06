@@ -1467,6 +1467,30 @@
   font-size: 11.5px;
 }
 
+.alertWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.10);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.alertWarning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alertWarning ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: #fcd34d;
+}
+
 .alertSuccess {
   display: flex;
   align-items: center;

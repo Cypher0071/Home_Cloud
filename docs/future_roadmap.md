@@ -1,16 +1,20 @@
-# Home Cloud — Future Roadmap & Post-1.0 Architecture
+# Home Cloud — Future Roadmap
 
-This document outlines the strategic architectural roadmap and feature milestones for **Home Cloud** post-1.0 release. These capabilities extend Home Cloud from a rock-solid, single-user personal cloud OS into a fully autonomous, highly resilient, and enterprise-grade self-hosted infrastructure platform.
+This document lists the features planned next for **Home Cloud**. None of them are built yet.
+Milestones are ordered by priority, not tied to release numbers. What has shipped is recorded in
+[`CHANGELOG.md`](../CHANGELOG.md), and known rough edges are in [`TECHNICAL_DEBT.md`](TECHNICAL_DEBT.md).
 
 ---
 
 ## 🗺️ Roadmap Overview
 
-| Priority / Milestone | Focus Area | Complexity | Target Release |
-| :--- | :--- | :---: | :---: |
-| **Milestone 1** | Container Crash Watchdogs & Multi-Channel Alerting | Medium | v1.1.0 |
-| **Milestone 2** | Automated Docker Volume & Database Snapshots | High | v1.2.0 |
-| **Milestone 3** | Resumable Chunked File Uploads (`tus` protocol) | Medium | v1.3.0 |
+| Milestone | Focus Area | Complexity |
+| :--- | :--- | :---: |
+| **Milestone 1** | Container Crash Watchdogs & Multi-Channel Alerting | Medium |
+| **Milestone 2** | Automated Docker Volume & Database Snapshots | High |
+| **Milestone 3** | Resumable Chunked File Uploads (`tus` protocol) | Medium |
+| **Milestone 4** | Desktop Window Layout Persistence | Low |
+| **Milestone 5** | File Explorer Grid View & Details Pane | Medium |
 
 ---
 
@@ -151,3 +155,33 @@ When accessing Home Cloud remotely via Cloudflare Tunnel, Cloudflare's edge prox
 - The browser splits files `>= 50 MB` into sequential chunks, transmitting each chunk below Cloudflare's 100 MB ceiling.
 - The Node.js Agent receives chunks in a staging directory (`~/.cache/home-cloud/uploads/<uploadId>`), validates chunk hashes, and assembles the target file atomically upon completion.
 - Includes automatic pause, resume, and retry upon network drops or Wi-Fi reconnects.
+
+---
+
+## 🖥️ Milestone 4: Desktop Window Layout Persistence
+
+### 1. Problem Statement
+The dashboard is a windowed desktop, but it forgets the layout on every reload: open windows, their positions and sizes, and which one was focused are all lost. Anyone who arranges a workspace has to rebuild it after each refresh or re-login.
+
+### 2. Architecture & Design
+- Track each open window's position (`x`, `y`), size, minimized or maximized state, and z-order.
+- Cache the layout in `localStorage` and optionally sync it through an agent preferences endpoint so it follows the user across devices.
+- On load, restore the previous windows in place, and reattach terminals and container monitors to their sessions rather than opening blank ones.
+
+---
+
+## 🗂️ Milestone 5: File Explorer Grid View & Details Pane
+
+### 1. Problem Statement
+The File Explorer only has a list view. Browsing photo and media folders by name alone is slow, and size, type, and dates for a large file are only visible in the row or after opening it.
+
+### 2. Architecture & Design
+- A grid view with thumbnails for images (served through the existing `/api/files/view` route, which already limits inline content to safe image types), toggled next to the list view and remembered per user.
+- A collapsible details pane showing full path, size, type, timestamps, and a preview for the selected item.
+- Keyboard navigation (arrows, `Enter`, `Delete`, `Ctrl+F`) already exists for the list view and should carry over to the grid.
+
+---
+
+## ✅ Already shipped
+
+Earlier roadmap drafts listed a one-click update engine. It is built: the agent checks GitHub releases for a newer tag, an Update action in Settings applies it with progress streaming, and a failed update rolls back to the previous revision. Details and limits are in the changelog and `agent/services/updateManager.js`.

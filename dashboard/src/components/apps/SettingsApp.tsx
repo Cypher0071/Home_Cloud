@@ -25,6 +25,7 @@ import {
 import axios from 'axios';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { FIT_OPTIONS, WALLPAPER_PRESETS } from '../../utils/wallpaper';
+import { copyText } from '../../utils/clipboard';
 import styles from './settings.module.css';
 
 interface StorageDrive {
@@ -631,12 +632,9 @@ export default function SettingsApp() {
     ProxyCommand cloudflared access ssh --hostname %h`;
 
   const handleCopySshConfig = async () => {
-    try {
-      await navigator.clipboard.writeText(sshConfigSnippet);
+    if (await copyText(sshConfigSnippet)) {
       setSshCopied(true);
       setTimeout(() => setSshCopied(false), 2000);
-    } catch {
-      // ignore
     }
   };
 
