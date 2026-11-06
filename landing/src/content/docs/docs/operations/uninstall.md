@@ -117,15 +117,34 @@ sudo ufw delete allow 3000/tcp
 
 Keep the OpenSSH rule if you still use SSH.
 
+**Node.js the installer added.** If your machine had no suitable Node.js, the installer unpacked its own copy into `/opt/home-cloud`. Only the service uses it, so once the service is removed (step 1) you can delete it:
+
+```bash
+sudo rm -rf /opt/home-cloud
+```
+
+If you set `HOME_CLOUD_RUNTIME_DIR` when you installed, delete that directory instead. A Node.js you installed yourself was never touched, so there is nothing to undo for it.
+
+**Docker's package repository.** If the installer installed Docker, it also added Docker's signed package repository so Docker keeps updating with your system. Removing the repository does not remove Docker. On apt systems:
+
+```bash
+sudo rm /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.asc
+sudo apt-get update
+```
+
+On dnf and yum systems the file is `/etc/yum.repos.d/docker-ce.repo`. The files are absent if your system used the distribution's Docker packages instead.
+
+**systemd on WSL.** If the installer turned systemd on in `/etc/wsl.conf`, it stays on. Remove `systemd=true` from the `[boot]` section only if you do not want systemd in this distribution, then run `wsl --shutdown` from Windows.
+
 ## What is not removed
 
 The installer never removes these, and the steps above leave them alone:
 
-- Docker, and every container, image, volume and network on it.
-- Node.js and pnpm. The installer enables pnpm through corepack and does not undo it.
+- Docker, and every container, image, volume and network on it. If the installer installed Docker, uninstall it with your package manager (for example `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin` and `docker-compose-plugin` on apt systems) if you no longer want it.
+- Your own Node.js, and pnpm. The installer enables pnpm through corepack and does not undo it. The Node.js it installed for itself is covered in step 4.
 - The `cloudflared` binary, installed as a package or at `/usr/local/bin/cloudflared`.
 - Your membership in the `docker` group.
 - The OpenSSH server, if the installer installed or enabled it.
-- System packages the installer added: `curl`, `ca-certificates`, `gnupg`, `build-essential`, `python3`, `git` and `psmisc` (names differ on non-apt systems).
+- System packages the installer added: `curl`, `ca-certificates`, `gnupg`, `build-essential`, `python3`, `git`, `psmisc`, `xz-utils` and `tar` (names differ on non-apt systems).
 
 Remove any of these yourself with your package manager if you no longer want them.

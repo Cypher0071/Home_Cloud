@@ -112,7 +112,7 @@ This matters because a sibling hostname such as `grafana.example.com` counts as 
 The expected host comes from `X-Forwarded-Host` if present, then `Host`. The expected scheme comes from `X-Forwarded-Proto`. If you add your own reverse proxy in front of the agent, make sure it sets those headers correctly.
 
 :::tip
-If you script the API with `curl`, add a matching header to mutating calls, for example `-H 'Origin: http://192.168.1.50:3000'`. You also need the cookie from `/api/auth/login`.
+If you script the API with `curl`, add a matching header to mutating calls, for example `-H 'Origin: http://<server-ip>:3000'`. You also need the cookie from `/api/auth/login`.
 :::
 
 ## Security headers

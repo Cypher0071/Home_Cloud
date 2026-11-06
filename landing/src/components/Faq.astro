@@ -2,43 +2,30 @@
 // landing/src/components/Faq.astro
 // Honest answers to the questions people ask before installing.
 // Every answer is checked against setup.sh, agent/ and the README.
-import { links, getRelease } from '../data/site';
-
-const { nodeMin } = await getRelease();
+import { links } from '../data/site';
 
 const faqs = [
   {
     q: 'What do I need to run it?',
     a: [
-      `A 64-bit x86 PC running a systemd Linux distribution such as Ubuntu, Debian, Fedora or Arch, with Node.js ${nodeMin}+ and Docker 24+ installed. The installer sets up everything else.`,
-      'For remote access you also need a free Cloudflare account and a domain whose DNS is on Cloudflare.',
+      'A 64-bit x86 PC running a systemd Linux distribution such as Ubuntu, Debian, Fedora or Arch, a user with sudo, and an internet connection. The installer sets up everything else, including Node.js and Docker if they are missing.',
+      'It does not replace your operating system. It installs on the Linux you already run, as a regular systemd service, alongside everything else on the machine.',
     ],
+    more: { href: links.docsRequirements, label: 'Full requirements' },
   },
   {
     q: 'Do I need a domain?',
     a: [
       'Only for remote access. On your home network the dashboard works right away at `http://<server-ip>:3000`.',
-      'Remote access uses a Cloudflare Tunnel, which needs a domain on Cloudflare DNS. The free Cloudflare plan is enough; you only pay for the domain itself.',
+      'Remote access uses a Cloudflare Tunnel, which needs a domain on Cloudflare DNS (the free plan is enough). It is one prompt in the installer: sign in to Cloudflare, type your domain, and it creates the tunnel and the DNS record for `dash.<your-domain>`. No port forwarding, static IP or VPN client, and it works behind CGNAT.',
     ],
-  },
-  {
-    q: 'How hard is remote access to set up?',
-    a: [
-      'It is one prompt in the installer. Say yes, sign in to Cloudflare in your browser, type your domain, and the installer creates the tunnel, writes its config and adds the DNS record for `dash.<your-domain>`.',
-      'There is no port forwarding, static IP or VPN client involved, and it works behind CGNAT. You can also skip it and run the same steps later.',
-    ],
+    more: { href: '/docs/getting-started/remote-access/', label: 'Remote access guide' },
   },
   {
     q: 'Does my data leave my machine?',
     a: [
       'Your files, settings and dashboard live on your machine, and Home Cloud sends no telemetry. It contacts GitHub only when you check for or apply an update.',
       'With remote access on, traffic between your browser and the server passes through Cloudflare, which terminates HTTPS at its edge. At home, the dashboard switches to your LAN address automatically, so local traffic stays local.',
-    ],
-  },
-  {
-    q: 'Does it replace my operating system?',
-    a: [
-      'No. It installs on the Linux you already run, as a regular systemd service, and runs alongside everything else on the machine.',
     ],
   },
   {
@@ -54,17 +41,12 @@ const faqs = [
     ],
   },
   {
-    q: 'How do I uninstall it?',
+    q: 'Is it free, and how do I remove it?',
     a: [
-      'There is no uninstaller yet. Run `sudo systemctl disable --now home-cloud`, delete `/etc/systemd/system/home-cloud.service`, then remove the install folder (`~/home-cloud` by default) and `~/.config/home-cloud`.',
-      'If you set up remote access, delete the tunnel with `cloudflared tunnel delete home-cloud` and remove its DNS record in Cloudflare. The uninstall guide in the docs lists every step.',
+      'Yes. Home Cloud is open source under Apache-2.0, with no subscription or paid tier.',
+      'There is no uninstaller yet, so removal is a few manual steps: disable the systemd service, delete its unit file and the install folder, and, if you set up remote access, delete the tunnel and its DNS record.',
     ],
-  },
-  {
-    q: 'Is it really free?',
-    a: [
-      'Yes. Home Cloud is open source under Apache-2.0, with no account, subscription or paid tier.',
-    ],
+    more: { href: '/docs/operations/uninstall/', label: 'Uninstall steps' },
   },
 ];
 ---
@@ -81,6 +63,7 @@ const faqs = [
         <a class="btn btn-ghost faq-ask" href={links.discussions} target="_blank" rel="noopener noreferrer">
           Ask a question <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span>
         </a>
+        <a class="faq-docs" href={links.docs}>Read the documentation <span aria-hidden="true">→</span></a>
       </header>
 
       <div class="faq-list reveal" data-reveal-delay="1">
@@ -92,6 +75,7 @@ const faqs = [
             </summary>
             <div class="faq-answer">
               {item.a.map((p) => <p>{p.split('`').map((part, i) => (i % 2 ? <code>{part}</code> : part))}</p>)}
+              {item.more && <a class="faq-more" href={item.more.href}>{item.more.label} <span aria-hidden="true">→</span></a>}
             </div>
           </details>
         ))}
@@ -107,8 +91,11 @@ const faqs = [
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   }
 
+  /* Follows the reader down the list instead of leaving the column empty. */
   .faq-header {
     align-self: start;
+    position: sticky;
+    top: 104px;
     padding: var(--hc-space-9) clamp(24px, 4vw, 48px) var(--hc-space-7);
   }
 
@@ -123,6 +110,34 @@ const faqs = [
 
   .faq-ask {
     border-color: var(--hc-border-strong);
+  }
+
+  .faq-docs {
+    display: block;
+    width: fit-content;
+    margin-top: var(--hc-space-5);
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--hc-text-tertiary);
+    text-decoration: none;
+    transition: color var(--hc-duration-micro) var(--hc-ease-out);
+  }
+
+  .faq-docs:hover,
+  .faq-more:hover {
+    color: var(--hc-accent);
+  }
+
+  .faq-more {
+    display: inline-block;
+    margin-top: var(--hc-space-3);
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--hc-text-tertiary);
+    text-decoration: none;
+    transition: color var(--hc-duration-micro) var(--hc-ease-out);
   }
 
   .faq-list {
@@ -180,13 +195,18 @@ const faqs = [
     transition: transform var(--hc-duration-ui) var(--hc-ease-out), stroke var(--hc-duration-micro) var(--hc-ease-out);
   }
 
-  .faq-item[open] .faq-icon {
+  .faq-item[data-expanded='true'] .faq-icon {
     transform: rotate(45deg);
     stroke: var(--hc-accent);
   }
 
   .faq-answer {
     padding: 0 clamp(24px, 4vw, 48px) 24px;
+  }
+
+  /* While the height animates, clip the answer instead of letting it spill. */
+  .faq-item[data-animating='true'] {
+    overflow: hidden;
   }
 
   .faq-answer p {
@@ -217,6 +237,7 @@ const faqs = [
     }
 
     .faq-header {
+      position: static;
       padding-top: var(--hc-space-8);
       padding-bottom: var(--hc-space-6);
     }
@@ -241,3 +262,103 @@ const faqs = [
     }
   }
 </style>
+
+<script>
+  // Native <details> snaps open and shut. This animates the item's height (and
+  // fades the answer) so it opens and closes smoothly, and is safe to
+  // interrupt mid-way. Only one answer is open at a time: opening one closes
+  // the others in the same motion. Keyboard and screen-reader behaviour stay
+  // native: we only intercept the summary click, and `open` still toggles.
+  // A symmetric ease-in-out: the site's ease-out is front-loaded and reads as a snap here.
+  const EASE = 'cubic-bezier(0.45, 0, 0.2, 1)';
+  const DURATION = 420;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  type Controller = { item: HTMLDetailsElement; isExpanded: () => boolean; set: (open: boolean) => void };
+  const controllers: Controller[] = [];
+
+  document.querySelectorAll<HTMLDetailsElement>('.faq-item').forEach((item) => {
+    const summary = item.querySelector('summary');
+    const panel = item.querySelector<HTMLElement>('.faq-answer');
+    if (!summary || !panel) return;
+
+    item.dataset.expanded = String(item.open);
+    let anims: Animation[] = [];
+
+    const cancel = () => {
+      anims.forEach((a) => a.cancel());
+      anims = [];
+    };
+    const height = () => item.getBoundingClientRect().height;
+    const isExpanded = () => item.dataset.expanded === 'true';
+
+    const run = (from: number, to: number, opening: boolean) => {
+      item.dataset.animating = 'true';
+      const box = item.animate(
+        [{ height: `${from}px` }, { height: `${to}px` }],
+        { duration: DURATION, easing: EASE },
+      );
+      const fade = panel.animate(
+        opening
+          ? [{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }]
+          : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-6px)' }],
+        { duration: opening ? DURATION * 0.7 : DURATION * 0.5, easing: 'ease-out', delay: opening ? DURATION * 0.2 : 0, fill: 'both' },
+      );
+      anims = [box, fade];
+      box.onfinish = () => {
+        // Only the most recent animation may finalise the state.
+        if (anims[0] !== box) return;
+        if (!opening) item.open = false;
+        cancel();
+        delete item.dataset.animating;
+      };
+    };
+
+    // Open or close this item. With reduced motion it just toggles.
+    const set = (open: boolean) => {
+      if (open === isExpanded() && !reduce.matches) return;
+      if (reduce.matches) {
+        item.open = open;
+        item.dataset.expanded = String(open);
+        return;
+      }
+      const from = height(); // current height, so an interrupted animation reverses from where it is
+      cancel();
+      item.dataset.expanded = String(open);
+      if (open) {
+        item.open = true;
+        run(from, height(), true);
+      } else {
+        const closed = height() - panel.getBoundingClientRect().height;
+        run(from, closed, false);
+      }
+    };
+
+    controllers.push({ item, isExpanded, set });
+
+    summary.addEventListener('click', (event) => {
+      event.preventDefault();
+      const opening = !isExpanded();
+
+      if (opening) {
+        const others = controllers.filter((c) => c.item !== item && c.isExpanded());
+        const above = others.some((c) => c.item.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING);
+        others.forEach((c) => c.set(false));
+
+        // An item above this one collapsing would drag it upward. Hold the
+        // clicked question still on screen while the layout settles.
+        if (above && !reduce.matches) {
+          const startTop = summary.getBoundingClientRect().top;
+          const t0 = performance.now();
+          const hold = (now: number) => {
+            const drift = summary.getBoundingClientRect().top - startTop;
+            if (Math.abs(drift) > 0.5) window.scrollBy({ top: drift, behavior: 'instant' });
+            if (now - t0 < DURATION + 60) requestAnimationFrame(hold);
+          };
+          requestAnimationFrame(hold);
+        }
+      }
+      set(opening);
+    });
+  });
+</script>

@@ -5,26 +5,32 @@ sidebar:
   order: 2
 ---
 
-The installer is a single Bash script, `setup.sh`. It clones the repository, builds the dashboard, writes the config, and starts a systemd service. Check the [requirements](/docs/getting-started/requirements/) first.
+The installer is a single Bash script, `setup.sh`. It installs the latest Home Cloud release, sets up Node.js and Docker if they are missing, builds the dashboard, writes the config, and starts a systemd service. Check the [requirements](/docs/getting-started/requirements/) first. You do not need to install anything beforehand.
 
 ## One-command install
 
-Download the script from a release tag, read it, then run it. Replace `v1.0.1` with the latest release from the [Releases page](https://github.com/Cypher0071/Home_Cloud/releases).
+Download the script, read it, then run it.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/v1.0.1/setup.sh -o setup.sh && \
+curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh -o setup.sh && \
 less setup.sh && \
 bash setup.sh
 ```
 
-Run it as your normal user, not as root. The script calls `sudo` where it needs it. The `v1.0.1` script installs `v1.0.1` by default. Run `bash setup.sh --help` to see the default ref of the script you downloaded.
+Run it as your normal user, not as root. The script calls `sudo` where it needs it.
+
+The script always installs the **latest published release** from the [Releases page](https://github.com/Cypher0071/Home_Cloud/releases), never unreleased commits from `main`. It finds the release through `github.com/Cypher0071/Home_Cloud/releases/latest`, and falls back to the highest version tag if that page cannot be reached. To install a specific version instead, pass it with `--branch`:
+
+```bash
+bash setup.sh --branch v1.0.1
+```
 
 The script asks for:
 
 1. A dashboard password (at least 8 characters, entered twice).
 2. Whether to install `cloudflared` and set up a Cloudflare Tunnel. You can say no and add it later.
 
-When it finishes it prints the local URL, for example `http://192.168.1.50:3000`. Continue with [First login](/docs/getting-started/first-login/).
+When it finishes it prints the local URL, for example `http://<server-ip>:3000`. Continue with [First login](/docs/getting-started/first-login/).
 
 :::note
 Running as root is refused unless you name a non-root account with `--service-user <user>` or `HOME_CLOUD_SERVICE_USER`. The service never runs as root.
@@ -39,7 +45,7 @@ Running as root is refused unless you name a non-root account with `--service-us
 | `-d`, `--domain <domain>` | Cloudflare root domain, for example `example.com`. Sets `CF_DOMAIN`. |
 | `--tunnel <name>` | Tunnel name. Default `home-cloud`. |
 | `--dir <path>` | Install directory. Default `$HOME/home-cloud`. |
-| `--branch <ref>` | Git tag or branch to install. The default is shown in `--help`. |
+| `--branch <ref>` | Git tag or branch to install instead of the latest release. Also set with `HOME_CLOUD_BRANCH`. |
 | `--service-user <user>` | Account for the service when you run the script as root. |
 | `--password-file <path>` | Read the password from the first line of a file. |
 | `--password-stdin` | Read the password from standard input. |
@@ -68,21 +74,24 @@ If you run non-interactively and give no password, the script generates a random
 In order:
 
 1. Works out which user the service runs as and refuses `root`.
-2. Installs essential packages (`git`, `curl`, build tools) with your package manager.
-3. Installs and enables the OpenSSH server if it is not running (skip with `--skip-ssh`).
-4. Clones the repository into the install directory. It refuses to use a non-empty directory that is not a complete Home Cloud checkout.
-5. Checks Node.js 22.23.4 or newer and exits if it is missing.
-6. Activates pnpm 12.15.0 with `corepack`.
-7. Checks for Docker and the Compose plugin, and adds the service user to the `docker` group.
-8. Optionally downloads `cloudflared`, verifies its SHA-256, and installs it.
-9. Writes `agent/.env` with mode `0600`, a random `JWT_SECRET`, and your password.
-10. Optionally creates the Cloudflare Tunnel. See [Remote access](/docs/getting-started/remote-access/).
-11. Runs `pnpm install --frozen-lockfile` and builds the dashboard.
-12. If UFW is active, allows `3000/tcp` (and OpenSSH unless `--skip-ssh`).
-13. Writes `/etc/systemd/logind.conf.d/10-home-cloud-lid.conf` so closing a laptop lid does not suspend the machine. Skip with `--skip-lid`.
-14. Renders `/etc/systemd/system/home-cloud.service`, sets ownership of the install directory to the service user, and runs `systemctl enable --now home-cloud.service`.
+2. Checks that systemd is running, before installing anything. On WSL it enables systemd in `/etc/wsl.conf` and asks you to run `wsl --shutdown` and start the installer again. See [systemd and WSL](/docs/getting-started/requirements/#systemd-and-wsl).
+3. Installs essential packages (`git`, `curl`, `xz`, `tar`, build tools) with your package manager.
+4. Installs and enables the OpenSSH server if it is not running (skip with `--skip-ssh`).
+5. Looks up the latest published release, then clones the repository into the install directory and checks that release out. It refuses to use a non-empty directory that is not a complete Home Cloud checkout.
+6. Uses your Node.js if it is 22.23.4 or newer with `corepack`. Otherwise it downloads Node.js 24.22.2, verifies its SHA-256, and unpacks it into `/opt/home-cloud`. Your own Node.js is left alone.
+7. Activates pnpm 12.15.0 with `corepack`.
+8. Installs Docker Engine and the Compose plugin if `docker` is missing, installs the Compose plugin if only that is missing, and adds the service user to the `docker` group.
+9. Optionally downloads `cloudflared`, verifies its SHA-256, and installs it.
+10. Writes `agent/.env` with mode `0600`, a random `JWT_SECRET`, and your password.
+11. Optionally creates the Cloudflare Tunnel. See [Remote access](/docs/getting-started/remote-access/).
+12. Runs `pnpm install --frozen-lockfile` and builds the dashboard.
+13. If UFW is active, allows `3000/tcp` (and OpenSSH unless `--skip-ssh`).
+14. Writes `/etc/systemd/logind.conf.d/10-home-cloud-lid.conf` so closing a laptop lid does not suspend the machine. Skip with `--skip-lid`.
+15. Renders `/etc/systemd/system/home-cloud.service`, sets ownership of the install directory to the service user, and runs `systemctl enable --now home-cloud.service`.
 
 The installer is safe to run again. It keeps a journal in `~/.local/state/home-cloud` and keeps an existing `agent/.env` password unless you pass a new one, and keeps an existing valid Cloudflare config.
+
+Running it again on an existing install also moves that install to the newest release. It does not restart a service that is already running, so restart it afterward with `sudo systemctl restart home-cloud`. To stay on the version you have, pass it with `--branch <tag>`. If the installer cannot look up the latest release, it keeps your current checkout and carries on.
 
 ## Manage the service
 

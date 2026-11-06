@@ -56,17 +56,14 @@ const different = [
   },
   {
     title: 'Plainly open source',
-    body: 'Apache-2.0, with no paid tier and no account with us. Read every line, fork it, ship it.',
+    body: 'Apache-2.0, with no paid tier. Read every line, fork it, ship it.',
   },
 ];
 
 const ahead = [
-  'App stores: CasaOS, umbrelOS and others install apps in one click. Home Cloud has none.',
+  'App stores: CasaOS, umbrelOS and others install apps in one click. Home Cloud has no app store, but its Docker management can pull and run any open source app from an image or Compose file.',
   'Multiple users: umbrelOS, Cockpit and Portainer Business support more than one account. Home Cloud is single-owner.',
   'ARM: CasaOS, umbrelOS, Portainer and Cockpit run on ARM. Home Cloud is tested on x86_64 only.',
-  'Remote access without a domain: Tailscale-style options need no domain or Cloudflare account. Home Cloud needs both, and remote traffic passes through Cloudflare.',
-  'Setup: umbrelOS flashes and boots. Home Cloud expects Node.js and Docker to be installed first.',
-  'Maturity: These projects have years of history and much larger communities.',
 ];
 
 const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported', part: 'Partly or via add-on' };
@@ -85,29 +82,51 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
         </p>
       </header>
 
+      <label class="compare-vs" for="compare-vs-select">
+        <span>Compare Home Cloud with</span>
+        <select id="compare-vs-select">
+          {products.slice(1).map((p, i) => <option value={String(i + 1)}>{p}</option>)}
+        </select>
+      </label>
+
       <div class="compare-scroll reveal" data-reveal-delay="1" tabindex="0" role="region" aria-label="Comparison table, scrolls horizontally">
-        <table class="compare-table">
+        <table class="compare-table" data-vs="1">
           <thead>
             <tr>
-              <th scope="col" class="compare-corner"><span class="sr-only">Capability</span></th>
+              <th scope="col" class="compare-corner" data-col="0">
+                <span class="sr-only">Capability</span>
+                <ul class="compare-legend" aria-hidden="true">
+                  <li><span class="compare-mark is-yes"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg></span>Yes</li>
+                  <li><span class="compare-mark is-part"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5a4.5 4.5 0 0 0 0 9z" class="fill" /></svg></span>Partly or add-on</li>
+                  <li><span class="compare-mark is-no"><svg viewBox="0 0 16 16"><path d="M4.5 8h7" /></svg></span>No</li>
+                </ul>
+              </th>
               {products.map((p, i) => (
-                <th scope="col" class:list={['compare-product', { 'is-us': i === 0 }]}>{p}</th>
+                <th scope="col" class:list={['compare-product', { 'is-us': i === 0 }]} data-col={i + 1} data-c={i > 0 ? i : undefined}>
+                  {i === 0 && (
+                    <svg class="compare-logo" viewBox="0 0 32 32" width="18" height="18" fill="none" aria-hidden="true">
+                      <circle cx="22.5" cy="9.5" r="3" fill="var(--hc-accent)" />
+                      <path d="M9 21.5h14a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 11.1 14 3.75 3.75 0 0 0 9 21.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                    </svg>
+                  )}
+                  {p}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr>
-                <th scope="row" class="compare-label">{row.label}</th>
+                <th scope="row" class="compare-label" data-col="0">{row.label}</th>
                 {row.cells.map(([mark, text], i) => (
-                  <td class:list={['compare-cell', `is-${mark}`, { 'is-us': i === 0 }]}>
+                  <td class:list={['compare-cell', `is-${mark}`, { 'is-us': i === 0, 'is-bare': text === 'Yes' || text === 'No' }]} data-col={i + 1} data-c={i > 0 ? i : undefined}>
                     <span class="compare-mark" aria-hidden="true">
                       {mark === 'yes' && <svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg>}
-                      {mark === 'part' && <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5v9" /></svg>}
+                      {mark === 'part' && <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5a4.5 4.5 0 0 0 0 9z" class="fill" /></svg>}
                       {mark === 'no' && <svg viewBox="0 0 16 16"><path d="M4.5 8h7" /></svg>}
                     </span>
                     <span class="sr-only">{markLabel[mark]}: </span>
-                    {text}
+                    {text !== 'Yes' && text !== 'No' && text}
                   </td>
                 ))}
               </tr>
@@ -130,11 +149,14 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
         </div>
         <div class="compare-col">
           <h3 class="compare-col-title">Where others are ahead</h3>
-          <ul class="compare-ahead">
+          <ul class="compare-diff">
             {ahead.map((a) => {
               const [head, ...rest] = a.split(': ');
               return (
-                <li><span>{head}.</span> {rest.join(': ')}</li>
+                <li>
+                  <span class="compare-diff-title">{head}</span>
+                  <p>{rest.join(': ')}</p>
+                </li>
               );
             })}
           </ul>
@@ -149,6 +171,30 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     <div class="band-hatch" aria-hidden="true"></div>
   </div>
 </section>
+
+<script>
+  // Row/column hover highlight, and the phone-width "compare with" picker.
+  const table = document.querySelector<HTMLTableElement>('.compare-table');
+  if (table) {
+    let hot = '';
+    const setHot = (col: string) => {
+      if (col === hot) return;
+      table.querySelectorAll('.is-hot').forEach((el) => el.classList.remove('is-hot'));
+      hot = col;
+      if (col && col !== '0') table.querySelectorAll(`[data-col="${col}"]`).forEach((el) => el.classList.add('is-hot'));
+    };
+    table.addEventListener('pointerover', (e) => {
+      if ((e as PointerEvent).pointerType === 'touch') return;
+      setHot((e.target as HTMLElement).closest<HTMLElement>('[data-col]')?.dataset.col ?? '');
+    });
+    table.addEventListener('pointerleave', () => setHot(''));
+
+    const select = document.querySelector<HTMLSelectElement>('#compare-vs-select');
+    select?.addEventListener('change', () => {
+      table.dataset.vs = select.value;
+    });
+  }
+</script>
 
 <style>
   .compare-scroll {
@@ -220,9 +266,61 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     color: var(--hc-text-secondary);
   }
 
-  /* Our column: a quiet tint, not a coloured highlight. */
+  /* Our column: orange rule on top, warm tint all the way down. */
   .compare-table .is-us {
-    background: var(--hc-surface-1);
+    background: color-mix(in srgb, var(--hc-accent) 5%, var(--hc-surface-1));
+  }
+
+  .compare-product.is-us {
+    box-shadow: inset 0 2px 0 var(--hc-accent);
+  }
+
+  .compare-logo {
+    display: inline-block;
+    vertical-align: -3px;
+    margin-right: 8px;
+  }
+
+  /* Hover: a soft wash over the row and the column under the pointer. */
+  .compare-table tbody tr:hover > *,
+  .compare-table .is-hot {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.035));
+  }
+
+  /* Legend lives in the empty corner cell. */
+  .compare-legend {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--hc-font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--hc-text-tertiary);
+  }
+
+  .compare-legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .compare-legend .compare-mark {
+    margin-right: 0;
+    vertical-align: 0;
+  }
+
+  .compare-legend svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Picker is phone-only and needs JS. */
+  .compare-vs {
+    display: none;
   }
 
   .compare-cell.is-us {
@@ -248,16 +346,29 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     stroke-linejoin: round;
   }
 
-  .is-yes .compare-mark svg {
-    stroke: var(--hc-text-primary);
+  .is-yes .compare-mark svg,
+  .compare-mark.is-yes svg {
+    stroke: var(--hc-success);
   }
 
-  .is-part .compare-mark svg {
-    stroke: var(--hc-text-tertiary);
+  .is-part .compare-mark svg,
+  .compare-mark.is-part svg {
+    stroke: var(--hc-warn);
   }
 
-  .is-no .compare-mark svg {
+  .is-part .compare-mark .fill,
+  .compare-mark.is-part .fill {
+    fill: var(--hc-warn);
+  }
+
+  .is-no .compare-mark svg,
+  .compare-mark.is-no svg {
     stroke: var(--hc-text-muted);
+  }
+
+  /* Plain Yes/No: the mark carries it, no word needed. */
+  .is-bare .compare-mark {
+    margin-right: 0;
   }
 
   .compare-notes {
@@ -285,15 +396,33 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     color: var(--hc-text-tertiary);
   }
 
-  .compare-diff,
-  .compare-ahead {
+  .compare-col {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Three equal rows per side so the two columns line up row for row. */
+  .compare-diff {
+    flex: 1;
+    display: grid;
+    grid-template-rows: repeat(3, 1fr);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .compare-diff li + li {
-    margin-top: var(--hc-space-5);
+  .compare-diff li {
+    padding-block: var(--hc-space-4);
+    border-bottom: 1px solid var(--hc-border-default);
+  }
+
+  .compare-diff li:first-child {
+    padding-top: 0;
+  }
+
+  .compare-diff li:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
   }
 
   .compare-diff-title {
@@ -313,28 +442,6 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     color: var(--hc-text-secondary);
   }
 
-  .compare-ahead li {
-    max-width: 58ch;
-    padding-block: 10px;
-    border-bottom: 1px solid var(--hc-border-default);
-    font-size: var(--hc-text-small);
-    line-height: 1.6;
-    color: var(--hc-text-secondary);
-  }
-
-  .compare-ahead li:first-child {
-    padding-top: 0;
-  }
-
-  .compare-ahead li:last-child {
-    border-bottom: none;
-  }
-
-  .compare-ahead span {
-    font-weight: 500;
-    color: var(--hc-text-primary);
-  }
-
   @media (max-width: 960px) {
     .compare-notes {
       grid-template-columns: minmax(0, 1fr);
@@ -346,22 +453,68 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     }
   }
 
-  @media (max-width: 640px) {
+  /* Phones: Home Cloud against one other product, picked from a dropdown.
+     Without JS the full table stays and scrolls sideways. */
+  @media (max-width: 760px) {
+    :global(html.js) .compare-vs {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--hc-space-3);
+      padding: var(--hc-space-3) var(--hc-space-4);
+      border-top: 1px solid var(--hc-border-strong);
+      font-family: var(--hc-font-mono);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      color: var(--hc-text-tertiary);
+    }
+
+    .compare-vs select {
+      padding: 7px 28px 7px 10px;
+      border: 1px solid var(--hc-border-strong);
+      border-radius: var(--hc-radius-sm);
+      background: var(--hc-surface-1);
+      font: inherit;
+      color: var(--hc-text-primary);
+    }
+
+    .compare-vs select:focus-visible {
+      outline: 2px solid var(--hc-accent);
+      outline-offset: 2px;
+    }
+
+    :global(html.js) .compare-table {
+      min-width: 0;
+    }
+
+    :global(html.js) .compare-table[data-vs="1"] [data-c]:not([data-c="1"]),
+    :global(html.js) .compare-table[data-vs="2"] [data-c]:not([data-c="2"]),
+    :global(html.js) .compare-table[data-vs="3"] [data-c]:not([data-c="3"]),
+    :global(html.js) .compare-table[data-vs="4"] [data-c]:not([data-c="4"]) {
+      display: none;
+    }
+
+    :global(html.js) .compare-corner,
+    :global(html.js) .compare-label {
+      width: 36%;
+    }
+
+    .compare-table th,
+    .compare-table td {
+      padding: 12px 10px;
+    }
+
     .compare-corner,
     .compare-label {
       padding-left: var(--hc-space-4) !important;
-      width: 180px;
     }
 
-    /* Keep the capability column visible while the table scrolls. */
-    .compare-label,
-    .compare-corner {
-      position: sticky;
-      left: 0;
-      z-index: 1;
-      background: var(--hc-canvas);
+    .compare-legend {
+      font-size: 10px;
     }
+  }
 
+  @media (max-width: 640px) {
     .compare-col {
       padding-inline: var(--hc-space-4);
     }

@@ -46,9 +46,9 @@ sudo systemctl start home-cloud
 
 ## The service fails right after a Node.js change
 
-The unit file stores the full path to the `node` binary that was active at install time. If you upgraded, moved or removed that Node.js, the service cannot start. Check `node -v`: Home Cloud needs 22.23.4 or newer.
+The unit file stores the full path to the `node` binary that was active at install time. If you upgraded, moved or removed that Node.js, the service cannot start. Check `node -v`: Home Cloud needs 22.23.4 or newer. If the installer set up its own Node.js, that copy lives in `/opt/home-cloud` and your system Node.js does not affect it.
 
-Re-run the installer from the install directory to render a new unit. Pass the tag you are on, because the installer checks out its default version otherwise:
+Re-run the installer from the install directory to render a new unit. The installer moves an existing install to the latest release. To stay on the version you have, pass its tag:
 
 ```bash
 cd ~/home-cloud
@@ -72,15 +72,19 @@ sudo systemctl restart home-cloud
 
 `setup.sh --dry-run` checks prerequisites without changing anything.
 
-**Node.js too old or missing.** The installer exits with `Node.js >= 22.23.4 must be installed by the operator.` It does not install Node.js. Install a supported version, open a new shell, and run the installer again.
+**systemd is not running.** The installer exits with `systemd is not running on this machine.` before it installs anything. On WSL it has already enabled systemd in `/etc/wsl.conf`: run `wsl --shutdown` in Windows PowerShell, reopen the WSL terminal, and run the installer again. Containers and other setups without systemd are not supported.
 
-**Docker missing.** The installer exits with `Docker Engine and the Compose plugin must be installed by the operator.` Install Docker Engine first. If only the Compose plugin is missing, the installer installs it on apt systems and stops on other systems.
+**Could not look up the latest release.** `Could not look up the latest Home Cloud release.` means the installer could not reach GitHub. Check the internet connection and run it again, or pass `--branch <tag>` to name a release yourself.
+
+**Node.js could not be installed.** Missing or older Node.js is installed for you, so these only appear when that fails. `Failed to download Node.js` means nodejs.org was not reachable: check the connection and run the installer again. `SHA256 verification failed` means the download did not match the checksum stored in the script. The installer deleted it, so run the installer again. `There is no official Node.js ... build` means your CPU has no official build, for example 32-bit ARM. Install Node.js 22.23.4 or newer with corepack yourself and run the installer again.
+
+**Docker could not be installed.** `Docker could not be installed automatically on this system` means neither Docker's repository nor your distribution's packages worked. Install Docker Engine from the [official guide](https://docs.docker.com/engine/install/) and run the installer again. `The Docker Compose plugin could not be installed` means the plugin is missing and no package provided it. Install it, then run the installer again.
 
 **Not in the docker group.** The installer adds your user to the `docker` group for you. Your current shell does not pick that up until you log out and back in, or run `newgrp docker`. The service itself gets the group from its unit file, so it does not need a re-login.
 
 **Install directory not empty.** `already exists and is not a complete Home Cloud checkout`. The installer will not overwrite existing files. Move the directory aside or pass `--dir <new-path>`.
 
-**Other messages.** `corepack is required` means your Node.js install lacks corepack. `sudo is required` means you need sudo for system changes. `Refusing to render a systemd unit with User=root` means you ran as root: set `HOME_CLOUD_SERVICE_USER` to a normal account. `Another setup.sh run is already using this installation state` means a previous run is still going or left a lock.
+**Other messages.** `corepack was not found next to ...` means that Node.js has no corepack. `sudo is required` means you need sudo for system changes. `Refusing to render a systemd unit with User=root` means you ran as root: set `HOME_CLOUD_SERVICE_USER` to a normal account. `Another setup.sh run is already using this installation state` means a previous run is still going or left a lock.
 
 ## The tunnel does not connect
 

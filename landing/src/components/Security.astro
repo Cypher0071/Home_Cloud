@@ -2,38 +2,59 @@
 // landing/src/components/Security.astro
 // Security facts, each one checked against agent/ and setup.sh.
 // Ruled-band layout: header, 3×2 hairline cells, honest threat-model note.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { links } from '../data/site';
+
+// Pull the pinned cloudflared release and its amd64 hash straight from
+// setup.sh so the INSTALL vignette never drifts from what the installer checks.
+let cfVersion = 'pinned';
+let cfHash = '';
+try {
+  const sh = readFileSync(join(process.cwd(), '..', 'setup.sh'), 'utf8');
+  cfVersion = sh.match(/^CLOUDFLARED_VERSION="([^"]+)"/m)?.[1] ?? cfVersion;
+  cfHash = sh.match(/cloudflared-linux-amd64\) expected="([0-9a-f]{64})"/)?.[1] ?? cfHash;
+} catch {
+  // Building without the repo root: keep the fallback values.
+}
+const hashShort = cfHash ? `${cfHash.slice(0, 12)}…${cfHash.slice(-6)}` : "sha256 pinned";
 
 const facts = [
   {
     label: 'NETWORK',
+    kind: 'net',
     title: 'No open ports',
     body: 'Remote access runs through an outbound Cloudflare Tunnel. Nothing listens on your public IP, and you never touch router settings or DDNS.',
   },
   {
     label: 'LOGIN',
+    kind: 'login',
     title: 'Hardened sign-in',
     body: 'Constant-time password checks. Five failed attempts within a minute lock that address out for five minutes.',
   },
   {
     label: 'SESSIONS',
+    kind: 'sess',
     title: 'Revocable sessions',
     body: 'HttpOnly, SameSite=Lax, host-only cookies, Secure over HTTPS. “Log out everywhere” invalidates every session at once.',
   },
   {
     label: 'SERVICE',
+    kind: 'svc',
     title: 'Never runs as root',
     body: 'The systemd service runs as your user. The installer refuses to write a unit that runs as root.',
   },
   {
     label: 'FILES',
+    kind: 'fs',
     title: 'Kernel paths blocked',
     body: '/proc, /sys and /dev stay off-limits in the file explorer, even when full system access is turned on.',
   },
   {
     label: 'INSTALL',
+    kind: 'dl',
     title: 'Verified downloads',
-    body: 'cloudflared is pinned to a release and SHA-256 checked. The installer does not pipe third-party install scripts.',
+    body: 'Node.js and cloudflared are pinned downloads, SHA-256 checked. Docker comes from its signed repository after its key fingerprint is verified. No third-party install scripts are piped into a shell.',
   },
 ];
 ---
@@ -54,6 +75,70 @@ const facts = [
       <ul class="security-grid reveal" data-reveal-delay="1" aria-label="Security properties">
         {facts.map((f) => (
           <li class="security-cell">
+            <div class={`vig vig-${f.kind}`} aria-hidden="true">
+              {f.kind === 'net' && (
+                <>
+                  <div class="net-row">
+                    <div class="net-node net-a"><b>home pc</b><span>0 open ports</span></div>
+                    <div class="net-link net-la"><i class="a" /></div>
+                    <div class="net-node net-b"><b>phone</b><span>anywhere</span></div>
+                    <div class="net-link net-lb"><i class="a" /></div>
+                    <div class="net-node net-edge"><b>cloudflare</b><span>edge</span></div>
+                  </div>
+                  <div class="net-probe">
+                    <span>:443 inbound</span>
+                    <span class="net-x a">✕ no listener</span>
+                  </div>
+                </>
+              )}
+              {f.kind === 'login' && (
+                <>
+                  <div class="lg-field"><span class="vk">password</span><span class="lg-dots a">••••••••</span></div>
+                  <div class="lg-row">
+                    <span class="vk">failed / 60s</span>
+                    <span class="lg-pips">{[0, 1, 2, 3, 4].map((i) => <i class="a" style={`--i:${i}`} />)}</span>
+                  </div>
+                  <div class="lg-lock a">⏸ 203.0.113.7 locked · 5:00</div>
+                </>
+              )}
+              {f.kind === 'sess' && (
+                <>
+                  {[['laptop', 'this device'], ['phone', '2h ago'], ['tablet', '3d ago']].map(([d, t], i) => (
+                    <div class="ss-row a" style={`--i:${i}`}>
+                      <span class="ss-dot a" style={`--i:${i}`} /><span>{d}</span><span class="vk">{t}</span>
+                    </div>
+                  ))}
+                  <div class="ss-btn a">log out everywhere</div>
+                </>
+              )}
+              {f.kind === 'svc' && (
+                <>
+                  <div class="tl a" style="--i:0"><span class="vp">$</span> systemctl status home-cloud</div>
+                  <div class="tl a ok" style="--i:1">● active (running) · User=you</div>
+                  <div class="tl a" style="--i:2"><span class="vp">#</span> ./setup.sh <span class="vk">(root shell)</span></div>
+                  <div class="tl a bad" style="--i:3">✕ refusing to render User=root</div>
+                </>
+              )}
+              {f.kind === 'fs' && (
+                <>
+                  <span class="fs-scan a" />
+                  {[['home/', 0], ['mnt/', 0], ['proc/', 1], ['sys/', 1], ['dev/', 1]].map(([d, b]) => (
+                    <div class={b ? 'fs-row blocked' : 'fs-row'}>
+                      <span>/{d}</span>
+                      <span class="fs-tag">{b ? 'blocked' : 'browse'}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              {f.kind === 'dl' && (
+                <>
+                  <div class="dl-row"><span class="vk">cloudflared</span><span>{cfVersion} <span class="vk">pinned</span></span></div>
+                  <div class="dl-row"><span class="vk">expect</span><span>{hashShort}</span></div>
+                  <div class="dl-row"><span class="vk">sha256</span><span class="dl-got">{hashShort}<i class="a" /></span></div>
+                  <div class="dl-ok a">✓ match · installed</div>
+                </>
+              )}
+            </div>
             <span class="security-label">{f.label}</span>
             <h3 class="security-title">{f.title}</h3>
             <p class="security-body">{f.body}</p>
@@ -75,6 +160,30 @@ const facts = [
   </div>
 </section>
 
+<script>
+  // Vignettes loop only while their card is on screen; pointer drives a soft spotlight.
+  const grid = document.querySelector<HTMLElement>('.security-grid');
+  if (grid) {
+    const cells = grid.querySelectorAll<HTMLElement>('.security-cell');
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => entries.forEach((e) => e.target.classList.toggle('is-live', e.isIntersecting)),
+        { threshold: 0.35 },
+      );
+      cells.forEach((c) => io.observe(c));
+    } else {
+      cells.forEach((c) => c.classList.add('is-live'));
+    }
+    grid.addEventListener('pointermove', (ev) => {
+      const cell = (ev.target as HTMLElement).closest<HTMLElement>('.security-cell');
+      if (!cell) return;
+      const r = cell.getBoundingClientRect();
+      cell.style.setProperty('--mx', `${ev.clientX - r.left}px`);
+      cell.style.setProperty('--my', `${ev.clientY - r.top}px`);
+    });
+  }
+</script>
+
 <style>
   .security-grid {
     display: grid;
@@ -86,6 +195,8 @@ const facts = [
   }
 
   .security-cell {
+    position: relative;
+    isolation: isolate;
     min-width: 0;
     padding: var(--hc-space-6) clamp(24px, 4vw, 48px) var(--hc-space-7);
     border-right: 1px solid var(--hc-border-strong);
@@ -97,6 +208,167 @@ const facts = [
 
   .security-cell:nth-child(-n + 3) {
     border-bottom: 1px solid var(--hc-border-strong);
+  }
+
+  .security-cell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), var(--hc-accent-faint), transparent 60%);
+    opacity: 0;
+    transition: opacity var(--hc-duration-ui) var(--hc-ease-out);
+    pointer-events: none;
+  }
+
+  @media (hover: hover) {
+    .security-cell:hover::before { opacity: 1; }
+    .security-cell:hover .vig { border-color: var(--hc-border-strong); }
+  }
+
+  /* NETWORK: both ends dial out to the edge */
+  .vig-net { container-type: inline-size; gap: 10px; }
+  .net-row {
+    display: grid;
+    grid-template-columns: auto minmax(20px, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 0;
+    row-gap: 6px;
+    align-items: center;
+  }
+  .net-a { grid-area: 1 / 1; }
+  .net-la { grid-area: 1 / 2; }
+  .net-b { grid-area: 2 / 1; }
+  .net-lb { grid-area: 2 / 2; }
+  .net-edge { grid-area: 1 / 3 / 3 / 4; align-self: stretch; justify-content: center; }
+  .net-node {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+    padding: 4px 8px;
+    border: 1px solid var(--hc-border-default);
+    border-radius: var(--hc-radius-sm);
+    background: var(--hc-surface-1);
+  }
+  .net-edge { align-items: center; border-color: color-mix(in srgb, var(--hc-accent) 45%, transparent); background: var(--hc-accent-faint); }
+  .net-node b { font-weight: 500; color: var(--hc-text-primary); }
+  .net-node span { font-size: 10px; color: var(--hc-text-muted); }
+  .net-link {
+    position: relative; height: 8px; overflow: hidden;
+    background: linear-gradient(90deg, var(--hc-text-muted) 50%, transparent 0) 0 50% / 6px 1px repeat-x;
+  }
+  .net-link i {
+    position: absolute; inset: 0;
+    animation-name: net-pkt; animation-duration: 1.8s; animation-timing-function: cubic-bezier(.5,0,.5,1);
+  }
+  .net-lb i { animation-delay: .9s; }
+  .net-link i::after {
+    content: ''; position: absolute; right: 0; top: 1px; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--hc-accent); box-shadow: 0 0 8px var(--hc-accent);
+  }
+  @keyframes net-pkt { from { transform: translateX(-100%); } to { transform: translateX(8px); } }
+  .net-probe { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--hc-text-muted); }
+  .net-x { color: var(--hc-accent); animation-name: blink-in; }
+  @container (max-width: 250px) {
+    .net-a span, .net-b span { display: none; }
+  }
+  @keyframes blink-in { 0%, 40% { opacity: .25; } 46%, 90% { opacity: 1; } 100% { opacity: .25; } }
+
+  /* LOGIN: five strikes, then a lockout */
+  .lg-field, .lg-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .lg-field {
+    padding: 6px 10px; border: 1px solid var(--hc-border-default); border-radius: var(--hc-radius-sm);
+  }
+  .lg-dots { letter-spacing: 2px; color: var(--hc-text-tertiary); animation-name: lg-shake; }
+  @keyframes lg-shake {
+    0%, 6%, 12%, 18%, 24%, 30%, 100% { transform: none; }
+    3%, 9%, 15%, 21%, 27% { transform: translateX(3px); }
+  }
+  .lg-pips { display: inline-flex; gap: 5px; }
+  .lg-pips i {
+    width: 14px; height: 6px; border-radius: 2px; background: var(--hc-border-strong);
+    animation-name: lg-pip; animation-delay: calc(var(--i) * 480ms); animation-timing-function: steps(1, end);
+  }
+  @keyframes lg-pip { 0% { background: var(--hc-border-strong); } 4% { background: var(--hc-accent); } 76% { background: var(--hc-border-strong); } }
+  .lg-lock {
+    align-self: flex-start; padding: 3px 8px; border-radius: var(--hc-radius-sm);
+    color: var(--hc-accent); background: var(--hc-accent-soft); animation-name: lg-lock;
+  }
+  @keyframes lg-lock {
+    0%, 36% { opacity: 0; transform: translateY(4px); }
+    40%, 82% { opacity: 1; transform: none; }
+    88%, 100% { opacity: 0; transform: translateY(4px); }
+  }
+
+  /* SESSIONS: one press revokes everything */
+  .ss-row { position: relative; display: grid; grid-template-columns: 8px 1fr auto; align-items: center; gap: 8px; animation-name: ss-row; animation-delay: calc(var(--i) * 120ms); }
+  .ss-row::after {
+    content: ''; position: absolute; left: 16px; right: 0; top: 50%; height: 1px; background: var(--hc-text-muted);
+    transform: scaleX(0); transform-origin: left; animation: inherit; animation-name: ss-strike;
+  }
+  .ss-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hc-success); animation-name: ss-dot; animation-delay: calc(var(--i) * 120ms); }
+  @keyframes ss-row { 0%, 38% { opacity: 1; } 44%, 84% { opacity: .4; } 92%, 100% { opacity: 1; } }
+  @keyframes ss-strike { 0%, 38% { transform: scaleX(0); } 46%, 84% { transform: scaleX(1); } 92%, 100% { transform: scaleX(0); } }
+  @keyframes ss-dot { 0%, 38% { background: var(--hc-success); } 42%, 86% { background: var(--hc-text-muted); } 92%, 100% { background: var(--hc-success); } }
+  .ss-btn {
+    align-self: flex-start; margin-top: 2px; padding: 3px 9px;
+    border: 1px solid var(--hc-border-strong); border-radius: var(--hc-radius-sm); color: var(--hc-text-primary);
+    animation-name: ss-btn;
+  }
+  @keyframes ss-btn {
+    0%, 30% { transform: none; background: transparent; }
+    33% { transform: scale(.95); background: var(--hc-accent-soft); border-color: var(--hc-accent); }
+    38%, 100% { transform: none; background: transparent; }
+  }
+
+  /* SERVICE: runs as you, refuses root */
+  .tl { animation-name: tl-in; animation-timing-function: steps(1, end); }
+  .tl:nth-child(1) { animation-name: tl-1; }
+  .tl:nth-child(2) { animation-name: tl-2; }
+  .tl:nth-child(3) { animation-name: tl-3; }
+  .tl:nth-child(4) { animation-name: tl-4; }
+  .tl.ok { color: var(--hc-success); }
+  .tl.bad { color: var(--hc-accent); }
+  @keyframes tl-1 { 0% { opacity: 0; } 4%, 90% { opacity: 1; } 96% { opacity: 0; } }
+  @keyframes tl-2 { 0%, 14% { opacity: 0; } 16%, 90% { opacity: 1; } 96% { opacity: 0; } }
+  @keyframes tl-3 { 0%, 34% { opacity: 0; } 36%, 90% { opacity: 1; } 96% { opacity: 0; } }
+  @keyframes tl-4 { 0%, 48% { opacity: 0; } 50%, 90% { opacity: 1; } 96% { opacity: 0; } }
+
+  /* FILES: a scan walks the tree, kernel paths stay shut */
+  .vig-fs { gap: 0; padding-block: 10px; }
+  .fs-row { position: relative; display: flex; justify-content: space-between; height: 22px; align-items: center; padding-inline: 8px; }
+  .fs-tag { font-size: 10px; color: var(--hc-text-muted); }
+  .fs-row.blocked { color: var(--hc-text-muted); }
+  .fs-row.blocked span:first-child { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--hc-accent) 60%, transparent); }
+  .fs-row.blocked .fs-tag { color: var(--hc-accent); }
+  .fs-scan {
+    position: absolute; left: 8px; right: 8px; top: 10px; height: 22px; border-radius: var(--hc-radius-sm);
+    background: var(--hc-accent-faint); border: 1px solid var(--hc-accent-soft);
+    animation-name: fs-scan; animation-timing-function: cubic-bezier(.65,0,.35,1);
+  }
+  @keyframes fs-scan {
+    0%, 12% { transform: translateY(0); }
+    20%, 30% { transform: translateY(22px); }
+    38%, 48% { transform: translateY(44px); }
+    56%, 66% { transform: translateY(66px); }
+    74%, 84% { transform: translateY(88px); }
+    96%, 100% { transform: translateY(0); }
+  }
+
+  /* INSTALL: the hash has to match before anything runs */
+  .dl-row { display: flex; justify-content: space-between; gap: 12px; }
+  .dl-got { position: relative; }
+  .dl-got i {
+    position: absolute; inset: -1px -2px; background: var(--hc-canvas); transform-origin: right;
+    border-left: 1px solid var(--hc-accent);
+    animation-name: dl-reveal; animation-timing-function: linear;
+  }
+  @keyframes dl-reveal { 0%, 8% { transform: scaleX(1); } 40%, 90% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+  .dl-ok { align-self: flex-end; color: var(--hc-success); animation-name: dl-ok; }
+  @keyframes dl-ok { 0%, 42% { opacity: 0; transform: translateY(4px); } 48%, 88% { opacity: 1; transform: none; } 96%, 100% { opacity: 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vig .a, .vig .a::after { animation: none !important; }
+    .lg-pips i { background: var(--hc-accent); }
+    .net-link i, .dl-got i { display: none; }
   }
 
   .security-label {

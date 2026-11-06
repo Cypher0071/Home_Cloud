@@ -31,6 +31,7 @@ const columns = [
     head: 'Project',
     items: [
       { label: 'Repository', href: links.repo, ext: true },
+      { label: 'Architecture', href: links.docsArchitecture },
       { label: 'Contributing', href: links.contributing, ext: true },
       { label: 'Security policy', href: links.securityPolicy, ext: true },
       { label: 'Code of conduct', href: links.codeOfConduct, ext: true },
@@ -104,7 +105,7 @@ const rows = Math.max(...columns.map((c) => c.items.length)) + 1;
             {col.items.map((item) =>
               item.ext ? (
                 <a class="ft-link" href={item.href} target="_blank" rel="noopener noreferrer">
-                  {item.label}<span class="ft-ext" aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span>
+                  {item.label}<span class="sr-only"> (opens in a new tab)</span>
                 </a>
               ) : (
                 <a class="ft-link" href={item.href}>{item.label}</a>
@@ -120,7 +121,7 @@ const rows = Math.max(...columns.map((c) => c.items.length)) + 1;
 
     <div class="ft-bar">
       <span class="ft-copy">© 2026 Home Cloud. Released under the Apache-2.0 License.</span>
-      <span class="ft-note">Open source · Self-hosted · No cloud account required.</span>
+      <span class="ft-note">Open source · Self-hosted.</span>
     </div>
   </div>
 </footer>
@@ -263,12 +264,6 @@ const rows = Math.max(...columns.map((c) => c.items.length)) + 1;
 
   .ft-head {
     color: var(--hc-text-primary);
-  }
-
-  .ft-ext {
-    margin-left: 4px;
-    font-size: 0.75em;
-    color: var(--hc-text-muted);
   }
 
   .ft-empty {

@@ -93,6 +93,8 @@ sudo systemctl restart home-cloud
 
 The same commands, with the newer tag, update an install manually. The security notes recommend this pinned form and warn against an unpinned `git pull && pnpm install`.
 
+You can also run `setup.sh` again. It checks out the newest published release, rebuilds the dashboard, and keeps your password and config. It does not restart a service that is already running, so run `sudo systemctl restart home-cloud` afterward. Pass `--branch <tag>` to move to a specific release instead. See [Install](/docs/getting-started/install/).
+
 Home Cloud does not promise that a downgrade works with data written by a newer version. Back up before you update. See [Backup](/docs/operations/backup/).
 
 If an update fails and you cannot tell why, see [Troubleshooting](/docs/operations/troubleshooting/).

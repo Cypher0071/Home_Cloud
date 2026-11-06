@@ -7,10 +7,10 @@ sidebar:
 
 ## Open the dashboard
 
-The installer prints the local URL when it finishes. It looks like this:
+The installer prints the local URL when it finishes. It looks like this, with your server's own address in place of `<server-ip>`:
 
 ```text
-Access locally at:  http://192.168.1.50:3000
+Access locally at:  http://<server-ip>:3000
 ```
 
 From another device on the same network, open that address in a browser. From the server itself, use `http://localhost:3000`. To find the server's address later:
@@ -63,7 +63,7 @@ After login you get a desktop-style workspace with windows for these apps:
 | Docker Manager | Containers, logs, exec, Compose stacks | [Docker](/docs/using/docker/) |
 | Settings | Personalization, storage scope, password, updates | [Updates](/docs/using/updates/) |
 
-You can open an app directly by its path, for example `http://192.168.1.50:3000/terminal`. The valid paths are `/terminal`, `/files`, `/docker`, `/metrics`, and `/settings`.
+You can open an app directly by its path, for example `http://<server-ip>:3000/terminal`. The valid paths are `/terminal`, `/files`, `/docker`, `/metrics`, and `/settings`.
 
 The Settings app has four tabs:
 

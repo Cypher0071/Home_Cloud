@@ -464,3 +464,41 @@ html.js .reveal[data-reveal-delay='3'].is-visible {
     padding-inline: var(--hc-space-4);
   }
 }
+
+/* ---------- vignettes: small animated proof panels (Security, Setup) ----------
+   Loops only run while the parent card has .is-live (set by an IntersectionObserver). */
+.vig {
+  --T: 8s;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  height: 136px;
+  margin-bottom: var(--hc-space-5);
+  padding: 14px 16px;
+  overflow: hidden;
+  border: 1px solid var(--hc-border-default);
+  border-radius: var(--hc-radius-md);
+  background:
+    radial-gradient(var(--hc-dot-color) 1px, transparent 1px) 0 0 / 14px 14px,
+    var(--hc-canvas);
+  font-family: var(--hc-font-mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--hc-text-secondary);
+  white-space: nowrap;
+  transition: border-color var(--hc-duration-ui) var(--hc-ease-out);
+}
+
+.vig .vk { color: var(--hc-text-muted); }
+.vig .vp { color: var(--hc-text-muted); }
+
+.vig .a {
+  animation-duration: var(--T);
+  animation-iteration-count: infinite;
+  animation-timing-function: var(--hc-ease-out);
+  animation-fill-mode: both;
+}
+.vig .a { animation-play-state: paused; }
+.is-live .vig .a { animation-play-state: running; }

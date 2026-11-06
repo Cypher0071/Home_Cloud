@@ -50,7 +50,7 @@ Put a Cloudflare Access policy on `ssh.<domain>` in Zero Trust. The installer re
 
 ### Option 1: run the installer again
 
-Run the same `setup.sh` again. It detects the existing install, keeps your password, and offers the tunnel prompt again if `~/.cloudflared/config.yml` does not exist. Pass the same `--dir` if you used a custom one.
+Run the same `setup.sh` again. It detects the existing install, keeps your password, and offers the tunnel prompt again if `~/.cloudflared/config.yml` does not exist. Pass the same `--dir` if you used a custom one. It also moves the install to the latest release, so add `--branch <tag>` if you want to stay on your current version.
 
 ```bash
 bash setup.sh --domain example.com

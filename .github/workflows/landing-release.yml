@@ -2,9 +2,9 @@ name: Deploy landing
 
 # Rebuilds and deploys home-cloud.live:
 # - on every push to main (each merged PR), so site and docs changes go live;
-# - whenever a GitHub release is published, so the version, install command,
-#   Node.js minimum and changelog follow the latest tag (they are read from
-#   GitHub at build time in landing/src/data/site.ts);
+# - whenever a GitHub release is published, so the version and changelog follow
+#   the latest tag (they are read from GitHub at build time in
+#   landing/src/data/site.ts);
 # - on demand from the Actions tab.
 #
 # Required repository secrets:

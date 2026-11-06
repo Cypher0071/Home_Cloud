@@ -31,7 +31,7 @@ In development, Vite runs on port 5173 and proxies `/api`, `/terminal` and `/ws`
 
 ### setup.sh
 
-The installer. It checks prerequisites, clones the repository, writes `agent/.env`, optionally sets up the tunnel, builds the dashboard and installs the service. It uses `sudo` for the system changes it makes. See [Install](/docs/getting-started/install/).
+The installer. It checks that systemd is running, resolves and clones the latest published release, installs Node.js and Docker when they are missing, writes `agent/.env`, optionally sets up the tunnel, builds the dashboard and installs the service. It uses `sudo` for the system changes it makes. See [Install](/docs/getting-started/install/).
 
 ### systemd unit
 
