@@ -29,7 +29,7 @@ const rows: { label: string; cells: Cell[] }[] = [
   },
   {
     label: 'Docker and Compose management',
-    cells: [['yes', 'Yes'], ['yes', 'Yes, with Compose import'], ['part', 'Portainer app'], ['yes', 'Yes, plus Swarm and Kubernetes'], ['part', 'Podman; Docker via plugin']],
+    cells: [['yes', 'Yes'], ['yes', 'Compose import'], ['part', 'Portainer app'], ['yes', 'Swarm and Kubernetes too'], ['part', 'Podman; Docker plugin']],
   },
   {
     label: 'One-click app store',
@@ -89,17 +89,20 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
         </select>
       </label>
 
+      <div class="compare-key">
+        <ul class="compare-legend" aria-hidden="true">
+          <li><span class="compare-mark is-yes"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg></span>Yes</li>
+          <li><span class="compare-mark is-part"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5a4.5 4.5 0 0 0 0 9z" class="fill" /></svg></span>Partly or add-on</li>
+          <li><span class="compare-mark is-no"><svg viewBox="0 0 16 16"><path d="M4.5 8h7" /></svg></span>No</li>
+        </ul>
+      </div>
+
       <div class="compare-scroll reveal" data-reveal-delay="1" tabindex="0" role="region" aria-label="Comparison table, scrolls horizontally">
         <table class="compare-table" data-vs="1">
           <thead>
             <tr>
               <th scope="col" class="compare-corner" data-col="0">
-                <span class="sr-only">Capability</span>
-                <ul class="compare-legend" aria-hidden="true">
-                  <li><span class="compare-mark is-yes"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg></span>Yes</li>
-                  <li><span class="compare-mark is-part"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5a4.5 4.5 0 0 0 0 9z" class="fill" /></svg></span>Partly or add-on</li>
-                  <li><span class="compare-mark is-no"><svg viewBox="0 0 16 16"><path d="M4.5 8h7" /></svg></span>No</li>
-                </ul>
+                <span class="compare-corner-label">Capability</span>
               </th>
               {products.map((p, i) => (
                 <th scope="col" class:list={['compare-product', { 'is-us': i === 0 }]} data-col={i + 1} data-c={i > 0 ? i : undefined}>
@@ -119,7 +122,7 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
               <tr>
                 <th scope="row" class="compare-label" data-col="0">{row.label}</th>
                 {row.cells.map(([mark, text], i) => (
-                  <td class:list={['compare-cell', `is-${mark}`, { 'is-us': i === 0, 'is-bare': text === 'Yes' || text === 'No' }]} data-col={i + 1} data-c={i > 0 ? i : undefined}>
+                  <td class:list={['compare-cell', `is-${mark}`, { 'is-us': i === 0 }]} data-col={i + 1} data-c={i > 0 ? i : undefined}>
                     <span class="compare-mark" aria-hidden="true">
                       {mark === 'yes' && <svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" /></svg>}
                       {mark === 'part' && <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.5" /><path d="M8 3.5a4.5 4.5 0 0 0 0 9z" class="fill" /></svg>}
@@ -199,7 +202,7 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
 <style>
   .compare-scroll {
     overflow-x: auto;
-    border-top: 1px solid var(--hc-border-strong);
+    border-top: 1px solid var(--hc-border-default);
     scrollbar-width: thin;
     scrollbar-color: var(--hc-border-strong) transparent;
   }
@@ -261,6 +264,8 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
   }
 
   .compare-cell {
+    position: relative;
+    padding-left: 44px !important;
     font-size: var(--hc-text-small);
     line-height: 1.45;
     color: var(--hc-text-secondary);
@@ -268,7 +273,7 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
 
   /* Our column: orange rule on top, warm tint all the way down. */
   .compare-table .is-us {
-    background: color-mix(in srgb, var(--hc-accent) 5%, var(--hc-surface-1));
+    background: color-mix(in srgb, var(--hc-accent) 3.5%, var(--hc-surface-1));
   }
 
   .compare-product.is-us {
@@ -287,35 +292,43 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     background-image: linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.035));
   }
 
-  /* Legend lives in the empty corner cell. */
+  /* Key: one slim row above the table instead of a tall stack in the corner. */
+  .compare-key {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px clamp(24px, 4vw, 48px);
+    border-top: 1px solid var(--hc-border-strong);
+  }
+
   .compare-legend {
-    display: grid;
-    gap: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
     margin: 0;
     padding: 0;
     list-style: none;
     font-family: var(--hc-font-mono);
     font-size: 11px;
-    font-weight: 400;
     letter-spacing: 0.02em;
-    text-transform: none;
     color: var(--hc-text-tertiary);
   }
 
   .compare-legend li {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
   }
 
   .compare-legend .compare-mark {
-    margin-right: 0;
-    vertical-align: 0;
+    position: static;
   }
 
-  .compare-legend svg {
-    width: 14px;
-    height: 14px;
+  .compare-corner-label {
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--hc-text-muted);
   }
 
   /* Picker is phone-only and needs JS. */
@@ -331,10 +344,14 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
     color: var(--hc-text-tertiary);
   }
 
+  .compare-cell .compare-mark {
+    position: absolute;
+    left: 20px;
+    top: 16px;
+  }
+
   .compare-mark {
     display: inline-flex;
-    vertical-align: -3px;
-    margin-right: 8px;
   }
 
   .compare-mark svg {
@@ -364,11 +381,6 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
   .is-no .compare-mark svg,
   .compare-mark.is-no svg {
     stroke: var(--hc-text-muted);
-  }
-
-  /* Plain Yes/No: the mark carries it, no word needed. */
-  .is-bare .compare-mark {
-    margin-right: 0;
   }
 
   .compare-notes {
@@ -509,8 +521,18 @@ const markLabel: Record<Mark, string> = { yes: 'Supported', no: 'Not supported',
       padding-left: var(--hc-space-4) !important;
     }
 
-    .compare-legend {
-      font-size: 10px;
+    .compare-cell {
+      padding-left: 32px !important;
+    }
+
+    .compare-cell .compare-mark {
+      left: 10px;
+      top: 14px;
+    }
+
+    .compare-key {
+      justify-content: flex-start;
+      padding-inline: var(--hc-space-4);
     }
   }
 
