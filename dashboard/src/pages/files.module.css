@@ -10,6 +10,7 @@
   font-family: var(--sans);
   user-select: none;
   overflow: hidden;
+  outline: none; /* focusable for keyboard navigation; rows show the selection instead */
 }
 
 /* ─── Address Bar Area ─── */
@@ -115,7 +116,20 @@
   color: var(--text-muted, #737373);
 }
 
+/* The path strip must be allowed to shrink; without min-width: 0 a long path widens the
+   address bar past the window edge and pushes the search box out of view. */
+.breadcrumbsBox {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  overflow: hidden;
+  cursor: text;
+}
+
 .breadcrumbsScrollArea {
+  position: relative; /* offset parent for the active-segment scroll math */
   flex: 1;
   display: flex;
   align-items: center;
@@ -242,6 +256,18 @@
 
 .searchInput::placeholder {
   color: #525252;
+}
+
+.searchWrapper:has(.searchCount) {
+  width: 240px;
+}
+
+.searchCount {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-muted, #737373);
+  white-space: nowrap;
 }
 
 .clearSearchButton {
@@ -628,6 +654,22 @@
   white-space: nowrap;
 }
 
+.fileNameStack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+.searchResultPath {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-muted, #737373);
+}
+
 .fileIcon {
   display: flex;
   align-items: center;
@@ -715,14 +757,26 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .statusRight {
   display: flex;
   align-items: center;
+  min-width: 0;
+  margin-left: 16px;
   font-family: var(--mono);
   font-size: 11px;
   color: #737373;
+}
+
+.statusPath {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
 }
 
 /* ─── Context Menu ─── */

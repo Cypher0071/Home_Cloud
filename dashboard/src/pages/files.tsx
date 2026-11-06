@@ -35,6 +35,7 @@ import axios from 'axios';
 import { Highlight, themes } from 'prism-react-renderer';
 import { useNetworkDetector } from '../hooks/useNetworkDetector';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { copyText } from '../utils/clipboard';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,28 @@ function formatDate(raw: string | number | Date): string {
     year: 'numeric', month: 'short', day: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: false,
   });
+}
+
+/**
+ * Stable identity for a row. Folder listings are unique by name, but search results span
+ * folders and can share a name, so they are keyed by their absolute path.
+ */
+function keyOf(item: { name: string; path?: string }): string {
+  return item.path || item.name;
+}
+
+/** Absolute path of a row: search results carry it, folder listings are relative to `dir`. */
+function fullPathOf(item: { name: string; path?: string }, dir: string): string {
+  return item.path || ((dir === '/' ? '' : dir) + '/' + item.name);
+}
+
+/** Folder that contains a search result, shown relative to the folder being searched. */
+function parentLabel(absPath: string, searchRoot: string): string {
+  const parent = absPath.slice(0, absPath.lastIndexOf('/')) || '/';
+  const root = searchRoot === '/' ? '' : searchRoot.replace(/\/+$/, '');
+  if (parent === root || parent === searchRoot) return './';
+  if (root && parent.startsWith(root + '/')) return './' + parent.slice(root.length + 1);
+  return parent;
 }
 
 function getExt(name: string): string {
@@ -475,6 +498,9 @@ export default function FileExplorer() {
   const [searchResults, setSearchResults] = useState<FileItem[]>([]);
   const [searchLoading, setSearchLoading] = useState<boolean>(false);
   const [searchRefreshTrigger, setSearchRefreshTrigger] = useState<number>(0);
+  const [searchTruncated, setSearchTruncated] = useState<boolean>(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const explorerRootRef = useRef<HTMLDivElement>(null);
 
   // Viewer state
   const [viewingFile, setViewingFile] = useState<{ path: string; name: string; ext: string } | null>(null);
@@ -491,6 +517,7 @@ export default function FileExplorer() {
 
   const [clipboard, setClipboard] = useState<ClipboardState | null>(null);
   const [renamingItem, setRenamingItem] = useState<{
+    key: string;
     oldName: string;
     newName: string;
     path?: string; // absolute path if available (for search results)
@@ -580,6 +607,7 @@ export default function FileExplorer() {
     if (!searchQuery.trim()) {
       const timer = setTimeout(() => {
         setSearchResults([]);
+        setSearchTruncated(false);
         setSearchLoading(false);
       }, 0);
       return () => clearTimeout(timer);
@@ -609,6 +637,7 @@ export default function FileExplorer() {
         }));
 
         setSearchResults(mappedResults);
+        setSearchTruncated(response.headers?.['x-search-truncated'] === '1');
       } catch (err: unknown) {
         if (axios.isCancel(err)) {
           return;
@@ -680,14 +709,14 @@ export default function FileExplorer() {
   const selectedSingleItem = useMemo(() => {
     if (selectedItemNames.size !== 1) return null;
     const singleName = Array.from(selectedItemNames)[0];
-    return displayedFiles.find(item => item.name === singleName) || null;
+    return displayedFiles.find(item => keyOf(item) === singleName) || null;
   }, [selectedItemNames, displayedFiles]);
 
   // Total selected size calculation
   const selectedTotalBytes = useMemo(() => {
     let total = 0;
     displayedFiles.forEach(f => {
-      if (selectedItemNames.has(f.name) && f.type === 'file') {
+      if (selectedItemNames.has(keyOf(f)) && f.type === 'file') {
         total += f.sizeRaw ?? 0;
       }
     });
@@ -728,11 +757,11 @@ export default function FileExplorer() {
         };
 
         if (itemsContainerRef.current) {
-          const rowEls = itemsContainerRef.current.querySelectorAll<HTMLElement>('[data-filename]');
+          const rowEls = itemsContainerRef.current.querySelectorAll<HTMLElement>('[data-key]');
           const newlySelected = new Set(dragStartSelectionRef.current);
 
           rowEls.forEach(rowEl => {
-            const fileName = rowEl.dataset.filename;
+            const fileName = rowEl.dataset.key;
             if (!fileName) return;
 
             const rowRect = rowEl.getBoundingClientRect();
@@ -779,9 +808,9 @@ export default function FileExplorer() {
     const isRange = e.shiftKey;
 
     if (isRange && lastSelectedName) {
-      const names = itemsToRender.map(f => f.name);
+      const names = itemsToRender.map(keyOf);
       const startIdx = names.indexOf(lastSelectedName);
-      const endIdx = names.indexOf(item.name);
+      const endIdx = names.indexOf(keyOf(item));
       if (startIdx !== -1 && endIdx !== -1) {
         const [low, high] = [Math.min(startIdx, endIdx), Math.max(startIdx, endIdx)];
         const rangeNames = names.slice(low, high + 1);
@@ -793,20 +822,21 @@ export default function FileExplorer() {
     if (isMulti) {
       setSelectedItemNames(prev => {
         const next = new Set(prev);
-        if (next.has(item.name)) {
-          next.delete(item.name);
+        const key = keyOf(item);
+        if (next.has(key)) {
+          next.delete(key);
         } else {
-          next.add(item.name);
+          next.add(key);
         }
         return next;
       });
-      setLastSelectedName(item.name);
+      setLastSelectedName(keyOf(item));
     } else {
-      setSelectedItemNames(new Set([item.name]));
-      setLastSelectedName(item.name);
+      setSelectedItemNames(new Set([keyOf(item)]));
+      setLastSelectedName(keyOf(item));
     }
 
-    if (renamingItem && renamingItem.oldName !== item.name) {
+    if (renamingItem && renamingItem.key !== keyOf(item)) {
       setRenamingItem(null);
     }
   };
@@ -827,15 +857,18 @@ export default function FileExplorer() {
   // Auto-scroll breadcrumbs horizontally so active folder is in view
   useEffect(() => {
     if (!isEditingPath) {
-      if (activeBreadcrumbRef.current) {
-        activeBreadcrumbRef.current.scrollIntoView({
-          behavior: 'smooth',
-          inline: 'nearest',
-          block: 'nearest',
-        });
-      } else if (breadcrumbsRef.current) {
-        breadcrumbsRef.current.scrollTo({
-          left: breadcrumbsRef.current.scrollWidth,
+      const area = breadcrumbsRef.current;
+      const active = activeBreadcrumbRef.current;
+      if (area && active) {
+        // Scroll only the breadcrumb strip. scrollIntoView() would also scroll every
+        // overflow:hidden ancestor, shifting the whole window body sideways.
+        const overflowRight = active.offsetLeft + active.offsetWidth - (area.scrollLeft + area.clientWidth);
+        const overflowLeft = area.scrollLeft - active.offsetLeft;
+        if (overflowRight > 0) area.scrollBy({ left: overflowRight + 8, behavior: 'smooth' });
+        else if (overflowLeft > 0) area.scrollBy({ left: -(overflowLeft + 8), behavior: 'smooth' });
+      } else if (area) {
+        area.scrollTo({
+          left: area.scrollWidth,
           behavior: 'smooth',
         });
       }
@@ -917,9 +950,8 @@ export default function FileExplorer() {
     navigateToPath(cleanParent);
   };
 
-  const handleCopyPath = () => {
-    if (currentPath) {
-      navigator.clipboard.writeText(currentPath);
+  const handleCopyPath = async () => {
+    if (currentPath && (await copyText(currentPath))) {
       setCopiedPath(true);
       setTimeout(() => setCopiedPath(false), 1500);
     }
@@ -931,8 +963,10 @@ export default function FileExplorer() {
       alert('Cannot open: target file or directory does not exist (broken symlink).');
       return;
     }
-    const itemPath = (currentPath === '/' ? '' : currentPath) + '/' + item.name;
+    // Search results carry their absolute path; folder listings are relative to currentPath.
+    const itemPath = fullPathOf(item, currentPath);
     if (item.type === 'folder') {
+      if (searchQuery) setSearchQuery('');
       navigateToPath(itemPath);
     } else {
       setViewingFile({
@@ -1003,13 +1037,13 @@ export default function FileExplorer() {
   };
 
   // ─── Batch Delete Operation ───
-  const handleDelete = async (itemName?: string) => {
+  const handleDelete = async (itemKey?: string) => {
     let targets: FileItem[] = [];
-    if (itemName) {
-      const found = displayedFiles.find(f => f.name === itemName);
+    if (itemKey) {
+      const found = displayedFiles.find(f => keyOf(f) === itemKey);
       if (found) targets = [found];
     } else {
-      targets = displayedFiles.filter(f => selectedItemNames.has(f.name));
+      targets = displayedFiles.filter(f => selectedItemNames.has(keyOf(f)));
     }
 
     if (targets.length === 0) return;
@@ -1036,7 +1070,7 @@ Are you sure you want to proceed?`
     try {
       await Promise.all(
         targets.map(t => {
-          const targetPath = t.path || ((currentPath === '/' ? '' : currentPath) + '/' + t.name);
+          const targetPath = fullPathOf(t, currentPath);
           return axios.delete('/api/files/delete', { params: { path: targetPath } });
         })
       );
@@ -1055,12 +1089,13 @@ Are you sure you want to proceed?`
     }
   };
 
-  const handleStartRename = (itemName?: string) => {
-    const target = itemName
-      ? displayedFiles.find(f => f.name === itemName) ?? null
+  const handleStartRename = (itemKey?: string) => {
+    const target = itemKey
+      ? displayedFiles.find(f => keyOf(f) === itemKey) ?? null
       : selectedSingleItem;
     if (target) {
       setRenamingItem({
+        key: keyOf(target),
         oldName: target.name,
         newName: target.name,
         path: target.path,
@@ -1108,7 +1143,7 @@ Are you sure you want to proceed?`
   
   // ─── Batch Copy & Cut & Paste ───
   const handleCopy = useCallback(() => {
-    const selected = displayedFiles.filter(f => selectedItemNames.has(f.name));
+    const selected = displayedFiles.filter(f => selectedItemNames.has(keyOf(f)));
     if (selected.length > 0) {
       const srcPath = selected[0].path
         ? (selected[0].path.substring(0, selected[0].path.lastIndexOf('/')) || '/')
@@ -1118,7 +1153,7 @@ Are you sure you want to proceed?`
   }, [displayedFiles, selectedItemNames, currentPath]);
 
   const handleCut = useCallback(() => {
-    const selected = displayedFiles.filter(f => selectedItemNames.has(f.name));
+    const selected = displayedFiles.filter(f => selectedItemNames.has(keyOf(f)));
     if (selected.length > 0) {
       const srcPath = selected[0].path
         ? (selected[0].path.substring(0, selected[0].path.lastIndexOf('/')) || '/')
@@ -1131,7 +1166,7 @@ Are you sure you want to proceed?`
     if (!clipboard || clipboard.items.length === 0) return;
     try {
       for (const item of clipboard.items) {
-        const src = (clipboard.sourcePath === '/' ? '' : clipboard.sourcePath) + '/' + item.name;
+        const src = fullPathOf(item, clipboard.sourcePath);
         const dest = (currentPath === '/' ? '' : currentPath) + '/' + item.name;
         if (src === dest) continue;
 
@@ -1177,7 +1212,7 @@ Are you sure you want to proceed?`
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        setSelectedItemNames(new Set(displayedFiles.map(f => f.name)));
+        setSelectedItemNames(new Set(displayedFiles.map(keyOf)));
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -1188,9 +1223,9 @@ Are you sure you want to proceed?`
   const handleContextMenu = (e: React.MouseEvent, item: FileItem) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!selectedItemNames.has(item.name)) {
-      setSelectedItemNames(new Set([item.name]));
-      setLastSelectedName(item.name);
+    if (!selectedItemNames.has(keyOf(item))) {
+      setSelectedItemNames(new Set([keyOf(item)]));
+      setLastSelectedName(keyOf(item));
     }
     setContextMenu({ x: e.clientX, y: e.clientY, item });
   };
@@ -1230,8 +1265,105 @@ Are you sure you want to proceed?`
   const pathSegments   = currentPath.split('/').filter(Boolean);
   const buildPathUpTo  = (index: number) => '/' + pathSegments.slice(0, index + 1).join('/');
 
+  // Selection keys differ between a folder listing (names) and search results (paths),
+  // so starting, changing, or clearing a search starts with nothing selected.
+  const changeSearch = (value: string) => {
+    setSearchQuery(value);
+    setSelectedItemNames(new Set());
+    setLastSelectedName(null);
+  };
+
+  // ─── Keyboard: scoped to this window (the root takes focus when clicked) ───
+  const scrollRowIntoView = (key: string) => {
+    const root = explorerRootRef.current;
+    if (!root) return;
+    const row = root.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+  };
+
+  const moveSelection = (delta: number, extend: boolean) => {
+    if (displayedFiles.length === 0) return;
+    const currentIdx = lastSelectedName ? displayedFiles.findIndex(f => keyOf(f) === lastSelectedName) : -1;
+    const nextIdx = currentIdx === -1
+      ? (delta > 0 ? 0 : displayedFiles.length - 1)
+      : Math.min(displayedFiles.length - 1, Math.max(0, currentIdx + delta));
+    const target = displayedFiles[nextIdx];
+    if (extend) {
+      setSelectedItemNames(prev => new Set(prev).add(keyOf(target)));
+    } else {
+      setSelectedItemNames(new Set([keyOf(target)]));
+    }
+    setLastSelectedName(keyOf(target));
+    scrollRowIntoView(keyOf(target));
+  };
+
+  const handleExplorerMouseDown = (e: React.MouseEvent) => {
+    const el = e.target as HTMLElement;
+    if (el.closest('input, textarea, select, [contenteditable="true"]')) return;
+    explorerRootRef.current?.focus({ preventScroll: true });
+  };
+
+  const handleExplorerKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const isMod = e.ctrlKey || e.metaKey;
+    if (isMod && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      // preventScroll: the window body is overflow:hidden, and a plain focus() would scroll it
+      // sideways when the address bar is wider than a narrow window.
+      searchInputRef.current?.focus({ preventScroll: true });
+      searchInputRef.current?.select();
+      return;
+    }
+
+    const el = e.target as HTMLElement;
+    if (el.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (viewingFile || renamingItem || newItem || isEditingPath) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        moveSelection(1, e.shiftKey);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        moveSelection(-1, e.shiftKey);
+        break;
+      case 'Home':
+        e.preventDefault();
+        moveSelection(-displayedFiles.length, false);
+        break;
+      case 'End':
+        e.preventDefault();
+        moveSelection(displayedFiles.length, false);
+        break;
+      case 'Enter': {
+        if (selectedItemNames.size !== 1) return;
+        const [key] = [...selectedItemNames];
+        const item = displayedFiles.find(f => keyOf(f) === key);
+        if (item) {
+          e.preventDefault();
+          handleItemDoubleClick(item);
+        }
+        break;
+      }
+      case 'Delete':
+        if (selectedItemNames.size > 0) {
+          e.preventDefault();
+          handleDelete();
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-    <div className={styles.container}>
+    <div
+      className={styles.container}
+      ref={explorerRootRef}
+      tabIndex={-1}
+      onMouseDown={handleExplorerMouseDown}
+      onKeyDown={handleExplorerKeyDown}
+    >
       {/* ─── Address Bar ─── */}
       <div className={styles.addressBarArea}>
         <div className={styles.navButtonGroup}>
@@ -1374,14 +1506,35 @@ Are you sure you want to proceed?`
         <div className={styles.searchWrapper}>
           <Search size={14} className={styles.searchIcon} />
           <input
+            ref={searchInputRef}
             className={styles.searchInput}
             type="text"
             placeholder={`Search ${currentFolderTitle}`}
+            aria-label={`Search ${currentFolderTitle} (Ctrl+F)`}
+            title="Search (Ctrl+F)"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => changeSearch(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                changeSearch('');
+                explorerRootRef.current?.focus({ preventScroll: true });
+              } else if (e.key === 'ArrowDown' && displayedFiles.length > 0) {
+                e.preventDefault();
+                explorerRootRef.current?.focus({ preventScroll: true });
+                moveSelection(1, false);
+              }
+            }}
           />
+          {searchQuery && !searchLoading && (
+            <span className={styles.searchCount} aria-live="polite">
+              {searchResults.length === 0
+                ? 'No matches'
+                : `${searchResults.length}${searchTruncated ? '+' : ''} ${searchResults.length === 1 ? 'match' : 'matches'}`}
+            </span>
+          )}
           {searchQuery && (
-            <button className={styles.clearSearchButton} onClick={() => setSearchQuery('')} title="Clear search">
+            <button className={styles.clearSearchButton} onClick={() => changeSearch('')} title="Clear search">
               <X size={12} />
             </button>
           )}
@@ -1443,7 +1596,7 @@ Are you sure you want to proceed?`
             disabled={!selectedSingleItem || selectedSingleItem.type === 'folder'}
             onClick={() => {
               if (selectedSingleItem && selectedSingleItem.type === 'file') {
-                const itemPath = (currentPath === '/' ? '' : currentPath) + '/' + selectedSingleItem.name;
+                const itemPath = fullPathOf(selectedSingleItem, currentPath);
                 setViewingFile({ path: itemPath, name: selectedSingleItem.name, ext: selectedSingleItem.ext || '' });
               }
             }}
@@ -1616,19 +1769,20 @@ Are you sure you want to proceed?`
               {/* Items Container with ref for intersection testing */}
               <div className={styles.fileItemsContainer} ref={itemsContainerRef}>
                 {itemsToRender.map(item => {
-                  const isSelected     = selectedItemNames.has(item.name);
-                  const isRenamingThis = renamingItem && renamingItem.oldName === item.name;
+                  const isSelected     = selectedItemNames.has(keyOf(item));
+                  const isRenamingThis = renamingItem && renamingItem.key === keyOf(item);
                   const isNewThis      = item.isNewPlaceholder;
 
                   const isCutPending = clipboard && 
                     clipboard.action === 'cut' && 
-                    clipboard.items.some(ci => ci.name === item.name) && 
+                    clipboard.items.some(ci => keyOf(ci) === keyOf(item)) && 
                     clipboard.sourcePath === currentPath;
 
                   return (
                     <div
-                      key={isNewThis ? '__new_item_placeholder__' : item.name}
+                      key={isNewThis ? '__new_item_placeholder__' : keyOf(item)}
                       data-filename={isNewThis ? undefined : item.name}
+                      data-key={isNewThis ? undefined : keyOf(item)}
                       className={`${styles.fileItemRow} ${isSelected ? styles.fileItemRowSelected : ''}`}
                       style={{ opacity: isCutPending ? 0.45 : 1 }}
                       onClick={e => handleItemClick(e, item)}
@@ -1675,7 +1829,14 @@ Are you sure you want to proceed?`
                             className={styles.inlineInput}
                           />
                         ) : (
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                          <span className={styles.fileNameStack}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</span>
+                            {searchQuery && item.path && (
+                              <span className={styles.searchResultPath} title={item.path}>
+                                {parentLabel(item.path, currentPath)}
+                              </span>
+                            )}
+                          </span>
                         )}
                       </div>
                       <div className={styles.fileSizeCell}>{item.size}</div>
@@ -1773,7 +1934,7 @@ Are you sure you want to proceed?`
             {contextMenu.item !== null && (() => {
               const item = contextMenu.item!;
               const isMultiSelected = selectedItemNames.size > 1;
-              const itemFullPath = (currentPath === '/' ? '' : currentPath) + '/' + item.name;
+              const itemFullPath = fullPathOf(item, currentPath);
               return (
                 <>
                   {!isMultiSelected && item.type === 'file' && (
@@ -1804,7 +1965,7 @@ Are you sure you want to proceed?`
                   {!isMultiSelected && (
                     <div
                       className={styles.contextMenuItem}
-                      onClick={() => { handleStartRename(item.name); setContextMenu(null); }}
+                      onClick={() => { handleStartRename(keyOf(item)); setContextMenu(null); }}
                     >
                       <Edit2 size={13} /> Rename
                     </div>
@@ -1826,7 +1987,7 @@ Are you sure you want to proceed?`
 
                   <div
                     className={`${styles.contextMenuItem} ${styles.contextMenuDanger}`}
-                    onClick={() => { handleDelete(isMultiSelected ? undefined : item.name); setContextMenu(null); }}
+                    onClick={() => { handleDelete(isMultiSelected ? undefined : keyOf(item)); setContextMenu(null); }}
                   >
                     <Trash2 size={13} /> Delete {isMultiSelected ? `(${selectedItemNames.size} items)` : ''}
                   </div>
@@ -1853,7 +2014,8 @@ Are you sure you want to proceed?`
           )}
         </div>
         <div className={styles.statusRight}>
-          <span>{currentPath}</span>
+          {/* rtl + bdi: a long path is cut at the start, so the current folder stays visible */}
+          <span className={styles.statusPath} title={currentPath}><bdi>{currentPath}</bdi></span>
         </div>
       </div>
     </div>

@@ -19,12 +19,18 @@ You can select several items with `Ctrl`-click, `Shift`-click or by dragging a b
 | Shortcut | Action |
 | --- | --- |
 | `Ctrl+L` | Edit the path |
+| `Ctrl+F` | Search this folder |
 | `Ctrl+C` | Copy the selection |
 | `Ctrl+X` | Cut the selection |
 | `Ctrl+V` | Paste |
 | `Ctrl+A` | Select all |
+| `↑` / `↓` | Move the selection (`Shift` adds to it) |
+| `Home` / `End` | Jump to the first or last item |
+| `Enter` | Open the selected file or folder |
+| `Delete` | Delete the selection (asks first) |
+| `Esc` | Clear the search |
 
-On macOS, `Cmd` works in place of `Ctrl`.
+On macOS, `Cmd` works in place of `Ctrl`. Arrow keys, `Enter`, `Delete` and `Ctrl+F` work once you have clicked inside the File Explorer window.
 
 ## What you can access
 
@@ -82,9 +88,9 @@ The dashboard asks for confirmation first. If the folder you are in is outside y
 
 ## Search
 
-Type in the search box to search the current folder and everything under it. Matching is fuzzy, and the list shows the best 50 results. The file finder skips hidden files and anything a `.gitignore` excludes.
+Type in the search box, or press `Ctrl+F`, to search the current folder and everything under it. Each result shows the folder it is in. Matching is fuzzy: names that start with or contain your text rank first, then matches in folder names, then scattered letters. Several words must all match. The list shows the best 50 results, and the counter shows `50+` when there were more.
 
-Search needs two programs on the host: `fdfind` and `fzf`. The installer does not install them. On Debian and Ubuntu they come from the `fd-find` and `fzf` packages. If either is missing, search returns an error and everything else keeps working.
+The agent does the search itself, so nothing extra needs to be installed. To stay fast, it skips hidden files and folders (unless your search starts with `.`), `node_modules`, and symbolic links, goes at most 12 folders deep, and stops after about four seconds or 200,000 entries. Narrow the starting folder if something deep is missing.
 
 ## Errors you might see
 
