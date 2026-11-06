@@ -15,7 +15,7 @@ TUNNEL_NAME_INPUT="${TUNNEL_NAME:-home-cloud}"
 ADMIN_PASS_INPUT="${HOME_CLOUD_PASSWORD:-}"
 PASS_EXPLICITLY_PROVIDED=false
 TARGET_DIR="${HOME_CLOUD_DIR:-}"
-BRANCH="${HOME_CLOUD_BRANCH:-v1.0.1}"
+BRANCH="${HOME_CLOUD_BRANCH:-}"
 
 show_help() {
     printf '%s\n' \
@@ -24,7 +24,7 @@ show_help() {
         'Usage:' \
         '  ./setup.sh [OPTIONS]' \
         '' \
-        '  curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/v1.0.1/setup.sh -o setup.sh' \
+        '  curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh -o setup.sh' \
         '  bash setup.sh [OPTIONS]' \
         '' \
         'Options:' \
@@ -36,7 +36,7 @@ show_help() {
         '  --tunnel <name>               Cloudflare tunnel name (default: home-cloud)' \
         '  --dir <path>                  Installation target directory (default: current repo or $HOME/home-cloud)' \
         '  --service-user <user>         Non-root account for the systemd unit when running as root' \
-        '  --branch <branch>             Git ref to install (default: v1.0.1)' \
+        '  --branch <branch>             Git ref to install (default: latest published GitHub release)' \
         '  -y, --yes, --non-interactive  Non-interactive mode (auto-accept defaults, no prompts)' \
         '  --skip-cloudflared            Skip cloudflared download, installation, and tunnel configuration' \
         '  --skip-ssh                    Skip OpenSSH server check and installation' \
@@ -48,7 +48,7 @@ show_help() {
         '  CF_DOMAIN                     Cloudflare root domain' \
         '  TUNNEL_NAME                   Cloudflare tunnel name' \
         '  HOME_CLOUD_DIR                Installation directory' \
-        '  HOME_CLOUD_BRANCH             Git ref to install (default: v1.0.1)' \
+        '  HOME_CLOUD_BRANCH             Git ref to install (default: latest published GitHub release)' \
         '  HOME_CLOUD_SERVICE_USER       Non-root account for the systemd unit when the installer is root' \
         '  NON_INTERACTIVE=true          Run non-interactively' \
         '  SKIP_CLOUDFLARED=true         Skip cloudflared' \
@@ -304,7 +304,9 @@ apply_service_user_policy
 
 run_as_current_user() {
     if [ "$EUID" -eq 0 ] && [ "$CURRENT_USER" != "root" ]; then
-        sudo -u "$CURRENT_USER" -H "$@"
+        # sudo resets PATH, which would hide a Node/pnpm runtime this script
+        # just resolved or installed. Carry the installer's PATH across.
+        sudo -u "$CURRENT_USER" -H env "PATH=$PATH" "COREPACK_ENABLE_DOWNLOAD_PROMPT=0" "$@"
     else
         "$@"
     fi
@@ -1036,6 +1038,52 @@ echo "✔ Detected Distro:    $DISTRO_ID (pkg: ${PKG_MANAGER:-none})"
 echo "✔ Primary Host IP:    $ACTIVE_IP"
 echo "✔ Working Directory:  $SCRIPT_DIR"
 
+# 1b. Preflight: Home Cloud runs as a systemd service, so systemd must be PID 1.
+# Checked before anything is installed so an unsupported host fails fast.
+# >>> PREFLIGHT HELPERS >>>
+is_wsl() {
+    grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null
+}
+
+enable_wsl_systemd() {
+    local wsl_conf="${HOME_CLOUD_WSL_CONF:-/etc/wsl.conf}"
+    if grep -qsE '^[[:space:]]*systemd[[:space:]]*=[[:space:]]*true' "$wsl_conf"; then
+        return 0
+    fi
+    if grep -qsE '^[[:space:]]*\[boot\]' "$wsl_conf"; then
+        run_privileged sed -i '/^[[:space:]]*\[boot\]/a systemd=true' "$wsl_conf"
+    else
+        printf '\n[boot]\nsystemd=true\n' | run_privileged tee -a "$wsl_conf" >/dev/null
+    fi
+}
+
+preflight_systemd() {
+    # Tests and custom layouts point HOME_CLOUD_SYSTEMD_DIR elsewhere.
+    if [ -n "${HOME_CLOUD_SYSTEMD_DIR:-}" ] || [ -d /run/systemd/system ]; then
+        return 0
+    fi
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY-RUN] systemd is not running; setup would stop here."
+        return 0
+    fi
+    echo "❌ systemd is not running on this machine. Home Cloud needs it to run as a background service." >&2
+    if is_wsl; then
+        if enable_wsl_systemd; then
+            echo "✔ Enabled systemd in /etc/wsl.conf." >&2
+            echo "👉 In Windows PowerShell run:  wsl --shutdown" >&2
+            echo "   Then reopen this WSL terminal and run setup.sh again." >&2
+        else
+            echo "   Add '[boot]' and 'systemd=true' to /etc/wsl.conf, run 'wsl --shutdown' from Windows, then re-run setup.sh." >&2
+        fi
+    else
+        echo "   Containers and init systems without systemd are not supported. Use a regular Linux install or VM." >&2
+    fi
+    exit 1
+}
+# <<< PREFLIGHT HELPERS <<<
+
+preflight_systemd
+
 # 2. Install essential system tools for bare-bones Ubuntu Server
 install_essential_packages() {
     if [ "$DRY_RUN" = true ]; then
@@ -1050,17 +1098,17 @@ install_essential_packages() {
         run_privileged apt-get install -y -qq \
             curl ca-certificates gnupg \
             build-essential python3 \
-            git psmisc
+            git psmisc xz-utils tar
     elif [ "$PKG_MANAGER" = "dnf" ] || [ "$PKG_MANAGER" = "yum" ]; then
         run_privileged "$PKG_MANAGER" install -y \
             curl ca-certificates gnupg2 \
             gcc-c++ make python3 \
-            git psmisc
+            git psmisc xz tar
     elif [ "$PKG_MANAGER" = "pacman" ]; then
         run_privileged pacman -Sy --noconfirm \
             curl ca-certificates \
             base-devel python \
-            git psmisc
+            git psmisc xz tar
     fi
 }
 
@@ -1151,14 +1199,66 @@ install_dir_ready() {
     [ -f "$1/home-cloud.service.template" ] && [ -f "$1/agent/package.json" ]
 }
 
+# Home Cloud installs the latest published GitHub release, never unreleased
+# commits on main. --branch / HOME_CLOUD_BRANCH override this.
+# >>> RELEASE HELPERS >>>
+HOME_CLOUD_REPO_URL="https://github.com/Cypher0071/home_cloud.git"
+# github.com redirects this URL to /releases/tag/<tag> of the latest published
+# (non-draft, non-prerelease) release. Unlike api.github.com it is not limited
+# to 60 anonymous requests per hour.
+HOME_CLOUD_LATEST_RELEASE_URL="${HOME_CLOUD_LATEST_RELEASE_URL:-https://github.com/Cypher0071/Home_Cloud/releases/latest}"
+
+is_release_tag() {
+    [[ "${1:-}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+# Prints the tag of the latest published release. Falls back to the highest
+# stable version tag if github.com cannot be reached for the redirect.
+resolve_latest_release_tag() {
+    local tag="" final_url=""
+    final_url="$(curl -fsSL --max-time 20 -o /dev/null -w '%{url_effective}' "$HOME_CLOUD_LATEST_RELEASE_URL" 2>/dev/null)" || final_url=""
+    case "$final_url" in
+        */releases/tag/*) tag="${final_url##*/releases/tag/}" ;;
+    esac
+    if is_release_tag "$tag"; then
+        echo "$tag"
+        return 0
+    fi
+    tag="$(GIT_TERMINAL_PROMPT=0 git ls-remote --tags --refs "$HOME_CLOUD_REPO_URL" 2>/dev/null \
+        | awk '{ sub("^refs/tags/", "", $2); print $2 }' \
+        | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)" || tag=""
+    if is_release_tag "$tag"; then
+        echo "⚠️ Could not reach GitHub's latest-release page; using the newest version tag instead." >&2
+        echo "$tag"
+        return 0
+    fi
+    return 1
+}
+# <<< RELEASE HELPERS <<<
+
+if [ -z "$BRANCH" ]; then
+    if BRANCH="$(resolve_latest_release_tag)"; then
+        echo "✔ Latest release:     $BRANCH"
+    elif install_dir_ready "$INSTALL_DIR"; then
+        BRANCH=""
+        echo "⚠️ Could not look up the latest release; keeping the current checkout in $INSTALL_DIR."
+    elif [ "$DRY_RUN" = true ]; then
+        BRANCH="(latest release)"
+        echo "[DRY-RUN] Could not look up the latest release; a real run would stop here."
+    else
+        echo "❌ Could not look up the latest Home Cloud release. Check the internet connection, or pass --branch <tag>." >&2
+        exit 1
+    fi
+fi
+
 begin_transaction "$INSTALL_DIR"
 
 # Ensure repository tree is present (in case setup.sh was executed standalone or via curl)
 if ! install_dir_ready "$INSTALL_DIR"; then
     echo "⚠️ Home Cloud repository files not found in $INSTALL_DIR."
-    echo "⬇ Cloning full repository (branch: $BRANCH) from https://github.com/Cypher0071/home_cloud.git..."
+    echo "⬇ Cloning full repository (release: $BRANCH) from https://github.com/Cypher0071/home_cloud.git..."
     if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] Would clone https://github.com/Cypher0071/home_cloud.git (branch: $BRANCH) to $INSTALL_DIR"
+        echo "[DRY-RUN] Would clone https://github.com/Cypher0071/home_cloud.git (release: $BRANCH) to $INSTALL_DIR"
     else
         if [ -d "$INSTALL_DIR" ] && dir_has_entries "$INSTALL_DIR"; then
             echo "❌ $INSTALL_DIR already exists and is not a complete Home Cloud checkout." >&2
@@ -1230,6 +1330,10 @@ if [ -d "$INSTALL_DIR/.git" ] && [ "$DRY_RUN" = false ]; then
             echo "♻️  Removing a stale git index.lock from an interrupted setup checkout..."
             rm -f -- "$INSTALL_DIR/.git/index.lock" 2>/dev/null || true
         fi
+        # A newer release may have been published since this checkout was made.
+        if ! run_as_current_user git -C "$INSTALL_DIR" rev-parse --verify --quiet "$BRANCH^{commit}" >/dev/null 2>&1; then
+            run_as_current_user git -C "$INSTALL_DIR" fetch --tags --quiet origin 2>/dev/null || true
+        fi
         echo "🔄 Checking out '$BRANCH' in $INSTALL_DIR..."
         set_phase git_checkout
         run_as_current_user git -C "$INSTALL_DIR" checkout "$BRANCH"
@@ -1240,7 +1344,21 @@ fi
 SCRIPT_DIR="$INSTALL_DIR"
 TEMPLATE_FILE="$SCRIPT_DIR/home-cloud.service.template"
 
-# 3. Node.js Runtime Check (operator-installed; never piped from NodeSource)
+# 3-5. Runtime prerequisites: Node.js, pnpm and Docker are installed automatically
+# when missing. Nothing is piped into a shell: Node.js comes from a pinned
+# nodejs.org release checked against a SHA256 stored below, and Docker comes from
+# Docker's signed package repository after its signing key fingerprint is checked.
+# >>> RUNTIME HELPERS >>>
+NODE_MIN_VERSION="22.23.4"
+NODE_PIN_VERSION="24.22.2"
+NODE_DIST_BASE="https://nodejs.org/dist/v${NODE_PIN_VERSION}"
+HOME_CLOUD_RUNTIME_DIR="${HOME_CLOUD_RUNTIME_DIR:-/opt/home-cloud}"
+PINNED_NODE_DIR="$HOME_CLOUD_RUNTIME_DIR/node-v${NODE_PIN_VERSION}"
+PNPM_PIN="12.15.0"
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+DOCKER_DEB_KEY_FPR="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+DOCKER_RPM_KEY_FPR="060A61C51B558A7F742B77AAC52FEB6B621E9F35"
+
 # Require Node.js >= 22.23.4, including the patch version Astro needs to build.
 node_satisfies_minimum() {
     local raw="${1#v}"
@@ -1265,139 +1383,383 @@ node_satisfies_minimum() {
     return 1
 }
 
-NODE_PATH="$(command -v node || true)"
+node_pin_asset() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo "node-v${NODE_PIN_VERSION}-linux-x64" ;;
+        aarch64|arm64) echo "node-v${NODE_PIN_VERSION}-linux-arm64" ;;
+        *) return 1 ;;
+    esac
+}
+
+# SHA256 values from https://nodejs.org/dist/v24.22.2/SHASUMS256.txt
+node_pin_sha256() {
+    case "$1" in
+        node-v24.22.2-linux-x64) echo "48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75" ;;
+        node-v24.22.2-linux-arm64) echo "eb187837a2230d4047161ac0be008584e16b46f726e9c9490ee35dc6b17d9ba8" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Prints the corepack that belongs to a node binary, falling back to PATH.
+corepack_for_node() {
+    local dir
+    dir="$(dirname "$1")"
+    if [ -x "$dir/corepack" ]; then
+        echo "$dir/corepack"
+        return 0
+    fi
+    command -v corepack 2>/dev/null
+}
+
+pnpm_is_pinned() {
+    local ver=""
+    command -v pnpm >/dev/null 2>&1 || return 1
+    ver="$(pnpm --version 2>/dev/null || true)"
+    [ "$ver" = "$PNPM_PIN" ]
+}
+
+# A node is usable when it is new enough and can provide pnpm (either pnpm is
+# already at the pinned version or corepack is available to activate it).
+node_is_usable() {
+    local node_bin="$1" ver=""
+    [ -n "$node_bin" ] && [ -x "$node_bin" ] || return 1
+    ver="$("$node_bin" -v 2>/dev/null || true)"
+    node_satisfies_minimum "$ver" || return 1
+    if pnpm_is_pinned || [ -n "$(corepack_for_node "$node_bin" || true)" ]; then
+        return 0
+    fi
+    return 1
+}
+
+# Downloads the pinned Node.js release, verifies it, and unpacks it into
+# $PINNED_NODE_DIR. Never touches a Node.js the user installed themselves.
+install_pinned_node() {
+    local asset="" expected="" actual="" work="" tarball="" stage=""
+    if ! asset="$(node_pin_asset)"; then
+        echo "❌ There is no official Node.js ${NODE_PIN_VERSION} build for $(uname -m)." >&2
+        echo "   Install Node.js >= ${NODE_MIN_VERSION} (with corepack) yourself and re-run setup.sh." >&2
+        return 1
+    fi
+    expected="$(node_pin_sha256 "$asset")" || {
+        echo "❌ No pinned SHA256 for ${asset}." >&2
+        return 1
+    }
+    work="$(mktemp -d "${TMPDIR:-/tmp}/home-cloud-node.XXXXXX")" || return 1
+    register_temp_dir "$work"
+    tarball="$work/${asset}.tar.xz"
+    echo "⬇ Downloading Node.js ${NODE_PIN_VERSION} (${asset})..."
+    if ! curl -fsSL --retry 3 "${NODE_DIST_BASE}/${asset}.tar.xz" -o "$tarball"; then
+        rm -rf -- "$work"
+        echo "❌ Failed to download Node.js ${NODE_PIN_VERSION}. Check the internet connection and re-run setup.sh." >&2
+        return 1
+    fi
+    actual="$(sha256sum "$tarball" | awk '{print tolower($1)}')"
+    if [ "$actual" != "$expected" ]; then
+        rm -rf -- "$work"
+        echo "❌ SHA256 verification failed for ${asset}. Deleted the download." >&2
+        return 1
+    fi
+    echo "✔ SHA256 verified ${asset}"
+    run_privileged mkdir -p "$HOME_CLOUD_RUNTIME_DIR" || { rm -rf -- "$work"; return 1; }
+    stage="$(run_privileged mktemp -d "$HOME_CLOUD_RUNTIME_DIR/.node-stage.XXXXXX")" || { rm -rf -- "$work"; return 1; }
+    if ! run_privileged tar -xJf "$tarball" -C "$stage" --strip-components=1 --no-same-owner \
+        || ! run_privileged chmod 0755 "$stage" \
+        || ! "$stage/bin/node" -v >/dev/null 2>&1; then
+        run_privileged rm -rf -- "$stage" 2>/dev/null || true
+        rm -rf -- "$work"
+        echo "❌ Could not unpack Node.js ${NODE_PIN_VERSION}." >&2
+        return 1
+    fi
+    if [ -e "$PINNED_NODE_DIR" ]; then
+        run_privileged rm -rf -- "$PINNED_NODE_DIR"
+    fi
+    if ! run_privileged mv -T -- "$stage" "$PINNED_NODE_DIR"; then
+        run_privileged rm -rf -- "$stage" 2>/dev/null || true
+        rm -rf -- "$work"
+        echo "❌ Could not move Node.js into $PINNED_NODE_DIR." >&2
+        return 1
+    fi
+    rm -rf -- "$work"
+    echo "✔ Installed Node.js ${NODE_PIN_VERSION} to $PINNED_NODE_DIR"
+}
+
+# Runs corepack with the privileges its install directory needs.
+run_corepack() {
+    local corepack_bin="$1"
+    shift
+    if [ -w "$(dirname "$corepack_bin")" ]; then
+        run_as_current_user "$corepack_bin" "$@"
+    else
+        run_privileged env "PATH=$PATH" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 "$corepack_bin" "$@"
+    fi
+}
+
+docker_key_fingerprint() {
+    gpg --show-keys --with-colons "$1" 2>/dev/null | awk -F: '/^fpr/ { print $10; exit }'
+}
+
+# Prints "<docker repo distro> <codename>" for apt-based systems.
+docker_apt_target() {
+    local id="${ID:-}" like=" ${ID_LIKE:-} "
+    case "$id" in
+        ubuntu) echo "ubuntu ${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"; return 0 ;;
+        debian) echo "debian ${VERSION_CODENAME:-}"; return 0 ;;
+        raspbian) echo "raspbian ${VERSION_CODENAME:-}"; return 0 ;;
+    esac
+    if [[ "$like" == *" ubuntu "* ]] && [ -n "${UBUNTU_CODENAME:-}" ]; then
+        echo "ubuntu ${UBUNTU_CODENAME}"
+        return 0
+    fi
+    if [[ "$like" == *" debian "* ]] && [ -n "${DEBIAN_CODENAME:-${VERSION_CODENAME:-}}" ]; then
+        echo "debian ${DEBIAN_CODENAME:-${VERSION_CODENAME}}"
+        return 0
+    fi
+    return 1
+}
+
+install_docker_apt_repo() {
+    local target="" distro="" codename="" work="" key="" fpr="" arch=""
+    local keyring="/etc/apt/keyrings/docker.asc" list="/etc/apt/sources.list.d/docker.list"
+    target="$(docker_apt_target)" || return 1
+    distro="${target%% *}"
+    codename="${target#* }"
+    [ -n "$codename" ] || return 1
+    command -v gpg >/dev/null 2>&1 || return 1
+    work="$(mktemp -d "${TMPDIR:-/tmp}/home-cloud-docker.XXXXXX")" || return 1
+    register_temp_dir "$work"
+    key="$work/docker.asc"
+    if ! curl -fsSL --retry 3 "https://download.docker.com/linux/${distro}/gpg" -o "$key"; then
+        rm -rf -- "$work"
+        return 1
+    fi
+    fpr="$(docker_key_fingerprint "$key")"
+    if [ "$fpr" != "$DOCKER_DEB_KEY_FPR" ]; then
+        rm -rf -- "$work"
+        echo "⚠️ Docker's signing key fingerprint did not match; not adding its repository." >&2
+        return 1
+    fi
+    arch="$(dpkg --print-architecture)"
+    run_privileged install -d -m 0755 /etc/apt/keyrings || { rm -rf -- "$work"; return 1; }
+    run_privileged install -m 0644 "$key" "$keyring" || { rm -rf -- "$work"; return 1; }
+    rm -rf -- "$work"
+    printf 'deb [arch=%s signed-by=%s] https://download.docker.com/linux/%s %s stable\n' \
+        "$arch" "$keyring" "$distro" "$codename" | run_privileged tee "$list" >/dev/null || return 1
+    wait_for_apt_lock
+    if ! run_privileged apt-get update -qq; then
+        # An unsupported codename would otherwise break every later apt-get update.
+        run_privileged rm -f "$list"
+        return 1
+    fi
+    wait_for_apt_lock
+    run_privileged apt-get install -y -qq docker-ce docker-ce-cli containerd.io \
+        docker-buildx-plugin docker-compose-plugin
+}
+
+install_docker_rpm_repo() {
+    local distro="" work="" key="" fpr="" repo_file="/etc/yum.repos.d/docker-ce.repo"
+    case "${ID:-}" in
+        fedora) distro="fedora" ;;
+        rhel) distro="rhel" ;;
+        centos|rocky|almalinux|ol) distro="centos" ;;
+        *) return 1 ;;
+    esac
+    command -v gpg >/dev/null 2>&1 || return 1
+    work="$(mktemp -d "${TMPDIR:-/tmp}/home-cloud-docker.XXXXXX")" || return 1
+    register_temp_dir "$work"
+    key="$work/docker.gpg"
+    if ! curl -fsSL --retry 3 "https://download.docker.com/linux/${distro}/gpg" -o "$key"; then
+        rm -rf -- "$work"
+        return 1
+    fi
+    fpr="$(docker_key_fingerprint "$key")"
+    if [ "$fpr" != "$DOCKER_RPM_KEY_FPR" ]; then
+        rm -rf -- "$work"
+        echo "⚠️ Docker's signing key fingerprint did not match; not adding its repository." >&2
+        return 1
+    fi
+    run_privileged rpm --import "$key" || { rm -rf -- "$work"; return 1; }
+    if ! curl -fsSL --retry 3 "https://download.docker.com/linux/${distro}/docker-ce.repo" -o "$work/docker-ce.repo"; then
+        rm -rf -- "$work"
+        return 1
+    fi
+    run_privileged install -m 0644 "$work/docker-ce.repo" "$repo_file" || { rm -rf -- "$work"; return 1; }
+    rm -rf -- "$work"
+    if ! run_privileged "$PKG_MANAGER" install -y docker-ce docker-ce-cli containerd.io \
+        docker-buildx-plugin docker-compose-plugin; then
+        run_privileged rm -f "$repo_file"
+        return 1
+    fi
+}
+
+# Distribution packages, used when Docker's own repository does not cover this OS.
+install_docker_distro_packages() {
+    case "$PKG_MANAGER" in
+        apt)
+            wait_for_apt_lock
+            run_privileged apt-get install -y -qq docker.io || return 1
+            install_compose_plugin
+            ;;
+        dnf|yum)
+            run_privileged "$PKG_MANAGER" install -y moby-engine || return 1
+            install_compose_plugin
+            ;;
+        pacman)
+            run_privileged pacman -S --needed --noconfirm docker docker-compose
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+install_docker_engine() {
+    echo "📦 Docker is not installed. Installing Docker Engine and the Compose plugin..."
+    case "$PKG_MANAGER" in
+        apt)
+            if ! install_docker_apt_repo; then
+                echo "ℹ Docker's repository does not support this system; using the distribution's Docker packages."
+                install_docker_distro_packages || return 1
+            fi
+            ;;
+        dnf|yum)
+            if ! install_docker_rpm_repo; then
+                echo "ℹ Docker's repository does not support this system; using the distribution's Docker packages."
+                install_docker_distro_packages || return 1
+            fi
+            ;;
+        pacman)
+            install_docker_distro_packages || return 1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    hash -r 2>/dev/null || true
+    command -v docker >/dev/null 2>&1
+}
+
+# Package names differ: Docker's repo ships docker-compose-plugin, Ubuntu and
+# Debian ship docker-compose-v2, Fedora and Arch ship docker-compose.
+install_compose_plugin() {
+    local pkg
+    case "$PKG_MANAGER" in
+        apt)
+            for pkg in docker-compose-plugin docker-compose-v2; do
+                wait_for_apt_lock
+                if run_privileged apt-get install -y -qq "$pkg" && docker compose version >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            ;;
+        dnf|yum)
+            for pkg in docker-compose-plugin docker-compose; do
+                if run_privileged "$PKG_MANAGER" install -y "$pkg" && docker compose version >/dev/null 2>&1; then
+                    return 0
+                fi
+            done
+            ;;
+        pacman)
+            run_privileged pacman -S --needed --noconfirm docker-compose && docker compose version >/dev/null 2>&1 && return 0
+            ;;
+    esac
+    return 1
+}
+# <<< RUNTIME HELPERS <<<
+
+# 3. Node.js runtime: use a suitable existing Node.js, otherwise install the pinned one.
+NODE_PATH=""
 NODE_VERSION=""
-NEED_NODE_REFUSE=false
+for candidate in "$(command -v node 2>/dev/null || true)" "$PINNED_NODE_DIR/bin/node"; do
+    if node_is_usable "$candidate"; then
+        NODE_PATH="$candidate"
+        break
+    fi
+done
 
 if [ -z "$NODE_PATH" ]; then
-    echo "⚠️ Node.js is not installed on this system."
-    NEED_NODE_REFUSE=true
-else
-    NODE_VERSION="$("$NODE_PATH" -v)"
-    if ! node_satisfies_minimum "$NODE_VERSION"; then
-        echo "⚠️ Detected Node.js $NODE_VERSION, but Home Cloud requires Node.js >= 22.23.4."
-        NEED_NODE_REFUSE=true
-    fi
-fi
-
-if [ "$NEED_NODE_REFUSE" = true ]; then
-    if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] Node.js >= 22.23.4 must be installed by the operator. Setup would refuse and exit 1. Not installing Node.js."
-        if [ -z "$NODE_PATH" ]; then
-            NODE_PATH="/usr/bin/node"
-            NODE_VERSION="(not installed)"
-        fi
+    EXISTING_NODE="$(command -v node 2>/dev/null || true)"
+    if [ -n "$EXISTING_NODE" ]; then
+        echo "ℹ Found Node.js $("$EXISTING_NODE" -v 2>/dev/null || echo unknown) at $EXISTING_NODE, but Home Cloud needs >= ${NODE_MIN_VERSION} with corepack."
+        echo "  Installing a private Node.js ${NODE_PIN_VERSION} for Home Cloud; your existing Node.js is left untouched."
     else
-        echo "❌ Node.js >= 22.23.4 must be installed by the operator." >&2
-        exit 1
+        echo "ℹ Node.js is not installed. Installing Node.js ${NODE_PIN_VERSION} for Home Cloud."
+    fi
+    if [ "$DRY_RUN" = true ]; then
+        echo "[DRY-RUN] Would download Node.js ${NODE_PIN_VERSION}, verify its SHA256, and unpack it to $PINNED_NODE_DIR."
+        NODE_PATH="$PINNED_NODE_DIR/bin/node"
+        NODE_VERSION="v${NODE_PIN_VERSION} (not installed yet)"
+    else
+        install_pinned_node || exit 1
+        NODE_PATH="$PINNED_NODE_DIR/bin/node"
     fi
 fi
 
+if [ -z "$NODE_VERSION" ]; then
+    NODE_VERSION="$("$NODE_PATH" -v)"
+fi
 NODE_DIR="$(dirname "$NODE_PATH")"
+# Put the chosen runtime first so node, corepack and pnpm all resolve to it.
+export PATH="$NODE_DIR:$PATH"
+hash -r 2>/dev/null || true
 echo "✔ Active Node.js:     $NODE_PATH ($NODE_VERSION)"
 
 # 4. pnpm via corepack (pinned 12.15.0; never npm -g and never get.pnpm.io)
-export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-PNPM_PIN="12.15.0"
-
-pnpm_is_pinned_line() {
-    [ "${1:-}" = "$PNPM_PIN" ]
-}
-
-print_pnpm_corepack_plan() {
-    if ! command -v corepack >/dev/null 2>&1; then
-        echo "[DRY-RUN] corepack is not on PATH; not activating it during dry-run."
-    fi
+if pnpm_is_pinned; then
+    echo "✔ Active pnpm:        $(command -v pnpm) ($PNPM_PIN)"
+elif [ "$DRY_RUN" = true ]; then
     echo "[DRY-RUN] Would run: corepack enable && corepack prepare pnpm@${PNPM_PIN} --activate"
-}
-
-if [ "$DRY_RUN" = true ]; then
-    if command -v pnpm >/dev/null 2>&1; then
-        PNPM_VER="$(pnpm --version 2>/dev/null || true)"
-        if pnpm_is_pinned_line "$PNPM_VER"; then
-            echo "✔ Active pnpm:        $(command -v pnpm) ($PNPM_VER)"
-        else
-            echo "[DRY-RUN] pnpm ${PNPM_VER:-unknown} is not ${PNPM_PIN}. Not downloading."
-            print_pnpm_corepack_plan
-        fi
-    else
-        echo "[DRY-RUN] pnpm is not installed. Not downloading."
-        print_pnpm_corepack_plan
-    fi
 else
-    if ! command -v corepack >/dev/null 2>&1; then
-        echo "❌ corepack is required to activate pnpm@${PNPM_PIN}. Node.js >= 22.23.4 must be installed by the operator." >&2
+    COREPACK_BIN="$(corepack_for_node "$NODE_PATH" || true)"
+    if [ -z "$COREPACK_BIN" ]; then
+        echo "❌ corepack was not found next to $NODE_PATH." >&2
         exit 1
     fi
-    PNPM_VER=""
-    if command -v pnpm >/dev/null 2>&1; then
-        PNPM_VER="$(pnpm --version 2>/dev/null || true)"
+    echo "📦 Activating pnpm@${PNPM_PIN} via corepack..."
+    run_corepack "$COREPACK_BIN" enable
+    run_as_current_user "$COREPACK_BIN" prepare "pnpm@${PNPM_PIN}" --activate
+    hash -r 2>/dev/null || true
+    if ! pnpm_is_pinned; then
+        echo "❌ Error: expected pnpm ${PNPM_PIN} after corepack prepare, found '$(pnpm --version 2>/dev/null || echo none)'." >&2
+        exit 1
     fi
-    if pnpm_is_pinned_line "$PNPM_VER"; then
-        echo "✔ Active pnpm:        $(command -v pnpm) ($PNPM_VER)"
-    else
-        if [ -n "$PNPM_VER" ]; then
-            echo "📦 pnpm $PNPM_VER is not ${PNPM_PIN}. Activating pnpm@${PNPM_PIN} via corepack..."
-        else
-            echo "📦 Installing pnpm@${PNPM_PIN} via corepack..."
-        fi
-        run_privileged corepack enable
-        run_privileged corepack prepare "pnpm@${PNPM_PIN}" --activate
-        hash -r || true
-        if ! command -v pnpm >/dev/null 2>&1; then
-            echo "❌ Error: pnpm@${PNPM_PIN} could not be activated via corepack." >&2
-            exit 1
-        fi
-        PNPM_VER="$(pnpm --version 2>/dev/null || true)"
-        if ! pnpm_is_pinned_line "$PNPM_VER"; then
-            echo "❌ Error: expected pnpm ${PNPM_PIN} after corepack prepare, found '${PNPM_VER:-none}'." >&2
-            exit 1
-        fi
-        echo "✔ Active pnpm:        $(command -v pnpm) ($PNPM_VER)"
-    fi
+    echo "✔ Active pnpm:        $(command -v pnpm) ($PNPM_PIN)"
 fi
 
-# 5. Docker Engine & Compose Plugin Check (operator-installed; never piped)
+# 5. Docker Engine & Compose plugin (installed automatically when missing)
 if ! command -v docker >/dev/null 2>&1; then
-    echo ""
-    echo "⚠️ Docker Engine is required to run containers, but was not found on this system."
-    echo "❌ Docker Engine and the Compose plugin must be installed by the operator." >&2
     if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] Docker Engine and the compose plugin are absent. Setup would exit 1. Continuing dry-run without installing packages."
-    else
+        echo "[DRY-RUN] Docker is not installed. Would install Docker Engine and the Compose plugin via ${PKG_MANAGER:-package manager}."
+    elif ! install_docker_engine; then
+        echo "❌ Docker could not be installed automatically on this system (${DISTRO_ID}, ${PKG_MANAGER:-no package manager})." >&2
+        echo "   Install Docker Engine from https://docs.docker.com/engine/install/ and re-run setup.sh." >&2
         exit 1
+    else
+        echo "✔ Installed Docker:   $(command -v docker)"
     fi
 else
     echo "✔ Detected Docker:    $(command -v docker)"
-    if [ "$DRY_RUN" = false ]; then
-        if command -v systemctl >/dev/null 2>&1 && ! run_privileged systemctl is-active --quiet docker; then
-            echo "🔄 Starting docker.service..."
-            run_privileged systemctl enable --now docker || true
-        fi
-    fi
 fi
 
-if [ "$DRY_RUN" = false ]; then
-    if command -v docker >/dev/null 2>&1; then
-        # Ensure docker-compose-plugin is present
-        if ! docker compose version >/dev/null 2>&1; then
-            if [ "$PKG_MANAGER" = "apt" ]; then
-                echo "📦 Installing docker-compose-plugin..."
-                wait_for_apt_lock
-                run_privileged apt-get install -y -qq docker-compose-plugin
-            else
-                echo "❌ The Docker Compose plugin is missing. Install it and re-run setup.sh." >&2
-                exit 1
-            fi
-        fi
+if [ "$DRY_RUN" = false ] && command -v docker >/dev/null 2>&1; then
+    if command -v systemctl >/dev/null 2>&1 && ! run_privileged systemctl is-active --quiet docker; then
+        echo "🔄 Starting docker.service..."
+        run_privileged systemctl enable --now docker || true
+    fi
 
-        # Ensure user is in the docker group (not executed during dry-run)
-        CURRENT_USER_GROUPS="$(id -nG "$CURRENT_USER")"
-        if [[ " $CURRENT_USER_GROUPS " != *" docker "* ]]; then
-            echo "⚠️ Adding '$CURRENT_USER' to 'docker' group for socket permissions..."
-            run_privileged usermod -aG docker "$CURRENT_USER"
-            echo "✔ Added $CURRENT_USER to docker group."
+    if ! docker compose version >/dev/null 2>&1; then
+        echo "📦 Installing the Docker Compose plugin..."
+        if ! install_compose_plugin; then
+            echo "❌ The Docker Compose plugin could not be installed. Install it and re-run setup.sh." >&2
+            exit 1
         fi
+    fi
+
+    # Ensure user is in the docker group (not executed during dry-run)
+    CURRENT_USER_GROUPS="$(id -nG "$CURRENT_USER")"
+    if [[ " $CURRENT_USER_GROUPS " != *" docker "* ]]; then
+        echo "⚠️ Adding '$CURRENT_USER' to 'docker' group for socket permissions..."
+        run_privileged usermod -aG docker "$CURRENT_USER"
+        echo "✔ Added $CURRENT_USER to docker group. (The service picks this up automatically; log out and back in to use docker in your own shell.)"
     fi
 elif command -v docker >/dev/null 2>&1; then
     echo "[DRY-RUN] Would verify docker compose and ensure $CURRENT_USER is in docker group."
