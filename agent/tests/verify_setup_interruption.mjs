@@ -117,8 +117,14 @@ exit 0`,
 		"pnpm",
 		`echo "pnpm $*" >> "$MOCK_DIR/mock.log"
 if [ "$1" = "--version" ]; then echo "12.15.0"; exit 0; fi
-if [ -f "$MOCK_DIR/pnpm-block" ]; then
+# Block only the dashboard build: it runs after agent/.env is written (install runs before it).
+if [ -f "$MOCK_DIR/pnpm-block" ] && [ "$1" = "--filter" ]; then
   : > "$MOCK_DIR/pnpm-started"
+  trap 'exit 143' TERM INT
+  while :; do sleep 1; done
+fi
+if [ -f "$MOCK_DIR/pnpm-install-block" ] && [ "$1" = "install" ]; then
+  : > "$MOCK_DIR/pnpm-install-started"
   trap 'exit 143' TERM INT
   while :; do sleep 1; done
 fi
@@ -377,9 +383,9 @@ console.log("\n[Test 3] Pre-existing .env preservation");
 }
 
 // -----------------------------------------------------------------------------
-// Test 4: SIGTERM during dependency install records state and rerun completes
+// Test 4: SIGTERM during the dashboard build records state and rerun completes
 // -----------------------------------------------------------------------------
-console.log("\n[Test 4] SIGTERM during dependency install");
+console.log("\n[Test 4] SIGTERM during the dashboard build");
 {
 	const sandbox = registerSandbox(createSandbox("sigterm"));
 	fs.writeFileSync(path.join(sandbox.mockDir, "pnpm-block"), "1");
@@ -894,6 +900,63 @@ esac`,
 	} finally {
 		killGroup(child, "SIGKILL");
 	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 16: SIGTERM during dependency install leaves no partial secrets behind
+// -----------------------------------------------------------------------------
+console.log("\n[Test 16] SIGTERM during dependency install");
+{
+	const sandbox = registerSandbox(createSandbox("install-sigterm"));
+	fs.writeFileSync(path.join(sandbox.mockDir, "pnpm-install-block"), "1");
+	const { child, done } = startSetup(sandbox);
+	try {
+		await waitForFile(path.join(sandbox.mockDir, "pnpm-install-started"));
+		killGroup(child, "SIGTERM");
+		const result = await done;
+		assert.ok(result.code === 143 || result.signal === "SIGTERM", `expected SIGTERM handling, got code=${result.code}`);
+		assert.equal(readJournal(sandbox)?.status, "interrupted", "an interrupted install must be journaled");
+		assert.equal(fs.existsSync(path.join(sandbox.repo, "agent", ".env")), false, "no agent/.env may be written before dependencies exist");
+		assertNoTempArtifacts(sandbox);
+
+		fs.rmSync(path.join(sandbox.mockDir, "pnpm-install-block"));
+		const rerun = runSetup(sandbox);
+		assert.equal(rerun.status, 0, `rerun after install SIGTERM failed:\n${rerun.stdout}\n${rerun.stderr}`);
+		assertValidInstall(sandbox);
+		assert.equal(readJournal(sandbox), null);
+		assertNoArtifacts(sandbox);
+		console.log("  ✔ Interrupted install wrote no secrets; rerun completed cleanly.");
+	} finally {
+		killGroup(child, "SIGKILL");
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Test 17: A failing env step (missing agent dependencies) exits cleanly and a rerun recovers
+// -----------------------------------------------------------------------------
+console.log("\n[Test 17] Env step failure from missing dependencies, then recovery");
+{
+	const sandbox = registerSandbox(createSandbox("missing-deps"));
+	const nodeModules = path.join(sandbox.repo, "agent", "node_modules");
+	// The pnpm mock installs nothing, so without the seeded link dotenv cannot be found,
+	// which is the state a broken or offline dependency install leaves behind.
+	fs.rmSync(nodeModules);
+	const failed = runSetup(sandbox);
+	assert.notEqual(failed.status, 0, "setup must fail when dotenv is unavailable");
+	assert.match(failed.stderr, /Cannot find module 'dotenv'/);
+	assert.equal(readJournal(sandbox)?.status, "interrupted", "the failure must be journaled for a safe rerun");
+	assertNoTempArtifacts(sandbox);
+	const jwtBefore = readRepoEnv(sandbox).match(/^JWT_SECRET=(.*)$/m)?.[1];
+	assert.ok(jwtBefore, "the generated JWT is kept so a rerun does not rotate it");
+
+	fs.symlinkSync(path.join(REPO_ROOT, "agent", "node_modules"), nodeModules, "dir");
+	const rerun = runSetup(sandbox);
+	assert.equal(rerun.status, 0, `rerun after env failure failed:\n${rerun.stdout}\n${rerun.stderr}`);
+	assertValidInstall(sandbox);
+	assert.equal(readRepoEnv(sandbox).match(/^JWT_SECRET=(.*)$/m)?.[1], jwtBefore, "JWT must survive recovery");
+	assert.equal(readJournal(sandbox), null);
+	assertNoArtifacts(sandbox);
+	console.log("  ✔ Failure was journaled with no temp files; rerun finished and kept the JWT.");
 }
 
 console.log("\n--- ALL SETUP INTERRUPTION AND IDEMPOTENCY TESTS PASSED ---");

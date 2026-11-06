@@ -2047,6 +2047,19 @@ write_admin_password() {
     chmod 600 "$SCRIPT_DIR/agent/.env"
 }
 
+# 6b. Monorepo dependencies. Installed before step 7, which reads agent/.env with the
+# agent's own dotenv package (agent/node_modules does not exist on a fresh clone).
+if [ "$DRY_RUN" = true ]; then
+    echo ""
+    echo "[DRY-RUN] Would run pnpm install --frozen-lockfile in $SCRIPT_DIR"
+else
+    echo ""
+    echo "📦 Installing dependencies..."
+    export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+    (cd "$SCRIPT_DIR" && run_as_current_user pnpm install --frozen-lockfile)
+    echo "✔ Dependencies installed."
+fi
+
 echo ""
 echo "⚙ Configuring environment & security credentials..."
 
@@ -2680,15 +2693,13 @@ setup_cloudflare_tunnel() {
 
 setup_cloudflare_tunnel
 
-# 9. Monorepo Dependencies & Production Dashboard Build
+# 9. Production Dashboard Build (dependencies were installed in step 6b)
 if [ "$DRY_RUN" = true ]; then
     echo ""
-    echo "[DRY-RUN] Would run pnpm install --frozen-lockfile and build the dashboard in $SCRIPT_DIR"
+    echo "[DRY-RUN] Would build the dashboard in $SCRIPT_DIR"
 else
     echo ""
-    echo "📦 Installing dependencies & building dashboard..."
-    export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-    (cd "$SCRIPT_DIR" && run_as_current_user pnpm install --frozen-lockfile)
+    echo "📦 Building dashboard..."
     (cd "$SCRIPT_DIR" && run_as_current_user pnpm --filter dashboard build)
     echo "✔ Dashboard bundle built successfully in dashboard/dist/"
 fi

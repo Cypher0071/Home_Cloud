@@ -51,7 +51,7 @@ console.log("\n[Test Suite 2] Version & Commit Detection");
 
 const currentVersion = updateManager.getCurrentVersion();
 assert.ok(typeof currentVersion === "string" && currentVersion.length > 0, "Current version must be a non-empty string");
-assert.equal(currentVersion, "1.2.0", "Root package.json version is 1.2.0");
+assert.equal(currentVersion, "1.2.1", "Root package.json version is 1.2.1");
 
 const currentCommit = updateManager.getCurrentCommit();
 assert.ok(typeof currentCommit === "string" && currentCommit.length > 0, "Current commit must be detected");
@@ -147,7 +147,7 @@ assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
 assert.equal(status.latestVersion, "1.2.5");
 assert.equal(status.tagName, "v1.2.5");
-assert.equal(status.currentVersion, "1.2.0");
+assert.equal(status.currentVersion, "1.2.1");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
 
@@ -308,7 +308,7 @@ try {
 	assert.equal(resStatus.status, 200);
 	const dataStatus = await resStatus.json();
 	assert.equal(dataStatus.status, "ok");
-	assert.equal(dataStatus.currentVersion, "1.2.0");
+	assert.equal(dataStatus.currentVersion, "1.2.1");
 	assert.equal(dataStatus.isUpdating, false);
 	console.log("  ✔ GET /api/settings/update/status returns 200 with status payload");
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1
+
+Fixes the installer on fresh machines.
+
+### Fixed
+
+- A first install stopped at the credentials step with `Cannot find module 'dotenv'`. The installer read `agent/.env` with the agent's `dotenv` package before `pnpm install` had run, so it failed wherever `agent/node_modules` did not exist yet. Dependencies are now installed before that step. This affected every fresh install since 1.0.1. A machine that stopped at this point can rerun the install command; the rerun resumes and keeps the `JWT_SECRET` it already generated.
+- The installer tests now cover an interruption during the dependency install and a failure at the credentials step, each followed by a clean rerun, and check that dependencies are installed before the credentials step.
+
 ## 1.2.0
 
 Faster, ranked file search with keyboard navigation in Files, a warning before deploying risky Compose files, and copy that works over the LAN address.
