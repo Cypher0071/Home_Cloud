@@ -10,8 +10,8 @@ We provide security updates and patches for active release streams. Please ensur
 
 | Version | Supported | Status / Notes |
 | :--- | :---: | :--- |
-| **1.0.x** | :white_check_mark: | Current active release branch. Receives security patches, bug fixes, and critical updates. |
-| **< 1.0.0** | :x: | End of Life (EOL). Unsupported. Users must upgrade to 1.0.x or newer. |
+| **1.1.x** | :white_check_mark: | Current active release branch. Receives security patches, bug fixes, and critical updates. |
+| **< 1.1.0** | :x: | Superseded. Unsupported. Users must upgrade to 1.1.x or newer. |
 
 ---
 

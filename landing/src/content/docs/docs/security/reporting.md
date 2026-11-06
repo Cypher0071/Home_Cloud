@@ -11,8 +11,8 @@ This page summarizes [`SECURITY.md`](https://github.com/Cypher0071/Home_Cloud/bl
 
 | Version | Supported |
 | --- | --- |
-| 1.0.x | Yes. Receives security patches, bug fixes and critical updates. |
-| Earlier than 1.0.0 | No. End of life. Upgrade to 1.0.x or newer. |
+| 1.1.x | Yes. Receives security patches, bug fixes and critical updates. |
+| Earlier than 1.1.0 | No. Superseded. Upgrade to 1.1.x or newer. |
 
 Update from the dashboard or by hand. See [Updates and rollback](/docs/using/updates/).
 
