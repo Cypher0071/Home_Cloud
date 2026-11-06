@@ -130,13 +130,27 @@ flowchart TD
 
 ### Option 1: 1-Command Automated Installer (Recommended)
 
-The raw installer URL tracks the repository default branch (`main`):
+The installer installs the **latest published GitHub release**, never unreleased commits on `main`. Re-running it on an existing install moves it to the newest release. Use `--branch <tag>` to pin a version.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Cypher0071/Home_Cloud/main/setup.sh | bash
 ```
 
-Node.js `>= 22.23.4` and Docker must already be installed. The installer does not pipe NodeSource, `get.pnpm.io`, `get.docker.com`, or `cloudflared` `releases/latest`. It installs pnpm through corepack at the pinned version (`12.15.0`). `cloudflared` is optional and is downloaded only at a pinned release after sha256 verification. The installer then configures the tunnel when you ask it to, writes `agent/.env`, and installs a systemd service.
+The installer sets up everything Home Cloud needs, so you don't have to install anything first:
+
+- **Node.js**: if Node.js `>= 22.23.4` with corepack is not already installed, it downloads Node.js `24.22.2` from nodejs.org, checks it against a SHA256 stored in the script, and puts it in `/opt/home-cloud`. An existing Node.js is left untouched.
+- **pnpm**: activated through corepack at the pinned version (`12.15.0`).
+- **Docker Engine and the Compose plugin**: installed from Docker's official signed repository after its signing key fingerprint is checked, falling back to your distribution's packages when Docker's repository doesn't cover it. Your user is added to the `docker` group.
+- **Build tools, git, and OpenSSH server**: installed from your distribution's packages.
+- **`cloudflared`** (optional): downloaded at a pinned release after SHA256 verification.
+
+Nothing is piped into a shell: no NodeSource script, `get.pnpm.io`, `get.docker.com`, or `cloudflared` `releases/latest`. The installer then configures the tunnel when you ask it to, writes `agent/.env`, and installs a systemd service.
+
+What you still need:
+
+- A Linux machine with **systemd** and **sudo** access. On WSL, the installer turns systemd on in `/etc/wsl.conf` for you; run `wsl --shutdown` from Windows once and re-run it.
+- **For remote access:** a domain on Cloudflare DNS. The installer opens a Cloudflare login link for you to approve.
+- **For remote SSH:** your public key in `~/.ssh/authorized_keys` (for example via `ssh-copy-id`) before running the installer. Without it, SSH is not published, so you can't get locked out.
 
 The systemd unit runs as the install user, not root. The installer refuses `User=root` when there is no `SUDO_USER` and no `HOME_CLOUD_SERVICE_USER`.
 
@@ -156,7 +170,7 @@ Pass the password through `HOME_CLOUD_PASSWORD`, `--password-file <path>`, `--pa
 
 Available flags:
 - `--help`: Print usage and exit.
-- `--branch <name>`: Git branch to clone.
+- `--branch <name>`: Git tag or branch to install instead of the latest release.
 - `--check-only`, `--dry-run`: Validate prerequisites, flags, and configuration without changing the system.
 - `-d, --domain <domain>`: Cloudflare root domain for tunnel routing. This sets `CF_DOMAIN`. It does not default to any domain.
 - `--password-file <path>`: Read dashboard admin password from a file (refuses unreadable files; reads first line).
@@ -256,11 +270,11 @@ Runtime settings are persisted dynamically by the agent:
 
 | Component | Minimum Requirement | Verified & Supported |
 | :--- | :--- | :--- |
-| **OS** | Linux | Ubuntu and Debian (apt), Fedora (dnf), yum-based distros, Arch Linux (pacman) |
-| **Architecture** | x86_64 / amd64 | ARM64 / Raspberry Pi is untested. |
-| **Node.js** | `>= 22.23.4` | Node.js 20 is not supported. |
+| **OS** | Linux with systemd | Ubuntu and Debian (apt), Fedora (dnf), yum-based distros, Arch Linux (pacman) |
+| **Architecture** | x86_64 / amd64 | ARM64 / Raspberry Pi is untested. On 32-bit ARM, install Node.js yourself. |
+| **Node.js** | `>= 22.23.4` | Installed automatically (24.22.2) if missing or too old. Node.js 20 is not supported. |
 | **Package Manager**| pnpm `12.15.0` | Pinned version, installed with corepack. Not `pnpm >= 9`. |
-| **Docker** | `24.0.0+` | Must already be installed. The user running the agent must be in the `docker` group. |
+| **Docker** | `24.0.0+` | Installed automatically if missing. The installer adds the service user to the `docker` group. |
 | **Cloudflare** | Free Account | Domain managed on Cloudflare DNS with a Named Tunnel configured |
 
 ---

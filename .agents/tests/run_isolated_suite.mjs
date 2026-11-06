@@ -27,6 +27,7 @@ const suites = {
 		"agent/tests/verify_installer_lan_framing.mjs",
 		"agent/tests/verify_compose_ingress_reconcile.mjs",
 		"agent/tests/verify_stream_revocation.mjs",
+		"agent/tests/verify_setup_runtime_bootstrap.mjs",
 	],
 	e2e: [
 		".agents/tests/terminal_e2e.test.mjs",

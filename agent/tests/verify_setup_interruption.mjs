@@ -91,6 +91,10 @@ exit 0`,
 		"git",
 		`echo "git $*" >> "$MOCK_DIR/mock.log"
 if [ "$1" = "--version" ]; then echo "git version 2.0"; exit 0; fi
+if [ "$1" = "ls-remote" ]; then
+  printf '%s\\trefs/tags/%s\\n' aaa v1.0.0 bbb v1.0.1 ccc v1.1.0-rc1
+  exit 0
+fi
 if [ "$1" = "-C" ]; then
   if [ "\${3:-}" = "rev-parse" ]; then echo "v1.0.1"; exit 0; fi
   if [ "\${3:-}" = "describe" ]; then echo "v1.0.1"; exit 0; fi
@@ -547,6 +551,11 @@ console.log("\n[Test 7] Clone failure and pre-existing target safety");
 
 	const rerun = runSetup(sandbox);
 	assert.equal(rerun.status, 0, `clone retry failed:\n${rerun.stdout}\n${rerun.stderr}`);
+	assert.match(
+		fs.readFileSync(path.join(sandbox.mockDir, "mock.log"), "utf8"),
+		/git clone --branch v1\.0\.1 /,
+		"fresh clone must use the latest stable release tag, not main or a prerelease",
+	);
 	assertValidInstall(sandbox);
 	assertNoArtifacts(sandbox);
 
