@@ -1,6 +1,6 @@
 const pty = require("node-pty");
 const os = require("os");
-const cookie = require("cookie");
+const { parseCookie } = require("cookie");
 const jwt = require("jsonwebtoken");
 const preferences = require("../services/preferences");
 
@@ -367,7 +367,7 @@ function handleSystemTerminal(ws, request) {
 		});
 	}
 
-	const cookies = cookie.parse(request.headers?.cookie || "");
+	const cookies = parseCookie(request.headers?.cookie || "");
 	const token = cookies.token;
 	if (!token) {
 		ws.close();

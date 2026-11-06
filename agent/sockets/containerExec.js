@@ -1,6 +1,6 @@
 const Docker = require("dockerode");
 const docker = new Docker({ socketPath: "/var/run/docker.sock" });
-const cookie = require("cookie");
+const { parseCookie } = require("cookie");
 const jwt = require("jsonwebtoken");
 const preferences = require("../services/preferences");
 
@@ -14,7 +14,7 @@ function handleContainerExec(ws, request) {
 		});
 	}
 
-	const cookies = cookie.parse(request.headers?.cookie || "");
+	const cookies = parseCookie(request.headers?.cookie || "");
 	const token = cookies.token;
 	if (!token) {
 		ws.close();
