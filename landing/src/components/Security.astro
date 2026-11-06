@@ -1,0 +1,180 @@
+---
+// landing/src/components/Security.astro
+// Security facts, each one checked against agent/ and setup.sh.
+// Ruled-band layout: header, 3×2 hairline cells, honest threat-model note.
+import { links } from '../data/site';
+
+const facts = [
+  {
+    label: 'NETWORK',
+    title: 'No open ports',
+    body: 'Remote access runs through an outbound Cloudflare Tunnel. Nothing listens on your public IP, and you never touch router settings or DDNS.',
+  },
+  {
+    label: 'LOGIN',
+    title: 'Hardened sign-in',
+    body: 'Constant-time password checks. Five failed attempts within a minute lock that address out for five minutes.',
+  },
+  {
+    label: 'SESSIONS',
+    title: 'Revocable sessions',
+    body: 'HttpOnly, SameSite=Lax, host-only cookies, Secure over HTTPS. “Log out everywhere” invalidates every session at once.',
+  },
+  {
+    label: 'SERVICE',
+    title: 'Never runs as root',
+    body: 'The systemd service runs as your user. The installer refuses to write a unit that runs as root.',
+  },
+  {
+    label: 'FILES',
+    title: 'Kernel paths blocked',
+    body: '/proc, /sys and /dev stay off-limits in the file explorer, even when full system access is turned on.',
+  },
+  {
+    label: 'INSTALL',
+    title: 'Verified downloads',
+    body: 'cloudflared is pinned to a release and SHA-256 checked. The installer does not pipe third-party install scripts.',
+  },
+];
+---
+
+<section id="security" class="band security" aria-labelledby="security-title">
+  <div class="container">
+    <div class="band-frame">
+      <header class="band-header reveal">
+        <div>
+          <p class="band-eyebrow">SECURITY</p>
+          <h2 id="security-title" class="band-title">Private by default. Strict where it counts.</h2>
+        </div>
+        <p class="band-lede">
+          Your files and dashboard stay on your machine. Remote access goes out, never in, and the defaults assume the internet is hostile.
+        </p>
+      </header>
+
+      <ul class="security-grid reveal" data-reveal-delay="1" aria-label="Security properties">
+        {facts.map((f) => (
+          <li class="security-cell">
+            <span class="security-label">{f.label}</span>
+            <h3 class="security-title">{f.title}</h3>
+            <p class="security-body">{f.body}</p>
+          </li>
+        ))}
+      </ul>
+
+      <div class="band-foot">
+        <p>
+          <strong>Single owner by design.</strong> The password grants a host shell and the Docker socket, so pick a strong one.
+        </p>
+        <span class="security-links">
+          <a href={links.docsSecurity}>Threat model <span aria-hidden="true">→</span></a>
+          <a href={links.securityPolicy} target="_blank" rel="noopener noreferrer">Report a vulnerability <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+        </span>
+      </div>
+    </div>
+    <div class="band-hatch" aria-hidden="true"></div>
+  </div>
+</section>
+
+<style>
+  .security-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--hc-border-strong);
+  }
+
+  .security-cell {
+    min-width: 0;
+    padding: var(--hc-space-6) clamp(24px, 4vw, 48px) var(--hc-space-7);
+    border-right: 1px solid var(--hc-border-strong);
+  }
+
+  .security-cell:nth-child(3n) {
+    border-right: none;
+  }
+
+  .security-cell:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--hc-border-strong);
+  }
+
+  .security-label {
+    display: block;
+    margin-bottom: var(--hc-space-5);
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--hc-text-tertiary);
+  }
+
+  .security-title {
+    margin-bottom: var(--hc-space-2);
+    font-family: var(--hc-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--hc-text-primary);
+  }
+
+  .security-body {
+    max-width: 42ch;
+    font-size: var(--hc-text-small);
+    line-height: 1.6;
+    color: var(--hc-text-secondary);
+  }
+
+  .security .band-foot strong {
+    font-weight: 500;
+    color: var(--hc-text-secondary);
+  }
+
+  .security-links {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--hc-space-3) var(--hc-space-6);
+  }
+
+  @media (max-width: 960px) {
+    .security-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .security-cell,
+    .security-cell:nth-child(3n),
+    .security-cell:nth-child(-n + 3) {
+      border-right: none;
+      border-bottom: 1px solid var(--hc-border-strong);
+    }
+
+    .security-cell:nth-child(odd) {
+      border-right: 1px solid var(--hc-border-strong);
+    }
+
+    .security-cell:nth-last-child(-n + 2) {
+      border-bottom: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .security-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .security-cell,
+    .security-cell:nth-child(odd) {
+      padding-inline: var(--hc-space-4);
+      border-right: none;
+      border-bottom: 1px solid var(--hc-border-strong);
+    }
+
+    .security-cell:last-child {
+      border-bottom: none;
+    }
+
+    .security-cell:nth-last-child(2) {
+      border-bottom: 1px solid var(--hc-border-strong);
+    }
+  }
+</style>

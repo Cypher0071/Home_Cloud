@@ -1,7 +1,44 @@
 ---
 // landing/src/components/Footer.astro
 // Double footer: diagonal hatch, bordered brand + link table, second hatch,
-// then the copyright bar. Same destinations the page already exposes.
+// then the copyright bar. All external links come from src/data/site.ts.
+import { links } from '../data/site';
+
+const columns = [
+  {
+    head: 'Product',
+    items: [
+      { label: 'How it works', href: '#how-it-works' },
+      { label: 'Demo', href: '#demo' },
+      { label: 'Security', href: '#security' },
+      { label: 'Compare', href: '#compare' },
+      { label: 'Setup', href: '#setup' },
+      { label: 'FAQ', href: '#faq' },
+    ],
+  },
+  {
+    head: 'Resources',
+    items: [
+      { label: 'Docs', href: links.docs },
+      { label: 'Install guide', href: links.docsQuickstart },
+      { label: 'Changelog', href: links.changelog },
+      { label: 'Releases', href: links.releases, ext: true },
+      { label: 'Discussions', href: links.discussions, ext: true },
+      { label: 'Issue tracker', href: links.issues, ext: true },
+    ],
+  },
+  {
+    head: 'Project',
+    items: [
+      { label: 'Repository', href: links.repo, ext: true },
+      { label: 'Contributing', href: links.contributing, ext: true },
+      { label: 'Security policy', href: links.securityPolicy, ext: true },
+      { label: 'Code of conduct', href: links.codeOfConduct, ext: true },
+      { label: 'Apache-2.0 license', href: links.license, ext: true },
+    ],
+  },
+];
+const rows = Math.max(...columns.map((c) => c.items.length)) + 1;
 ---
 
 <footer class="ft-root">
@@ -49,7 +86,7 @@
 
         <a
           class="ft-social"
-          href="https://github.com/Cypher0071/Home_Cloud"
+          href={links.repo}
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Home Cloud on GitHub (opens in a new tab)"
@@ -60,31 +97,22 @@
         </a>
       </div>
 
-      <nav class="ft-nav" aria-label="Footer">
-        <div class="ft-col">
-          <p class="ft-head">Product</p>
-          <a class="ft-link" href="#hero">Overview</a>
-          <a class="ft-link" href="#features">Features</a>
-          <a class="ft-link" href="#setup">Setup</a>
-        </div>
-        <div class="ft-col">
-          <p class="ft-head">How It Works</p>
-          <a class="ft-link" href="#hiw-stage-1">Run it at home</a>
-          <a class="ft-link" href="#hiw-stage-2">Connect outward</a>
-          <a class="ft-link" href="#hiw-stage-3">Access it anywhere</a>
-        </div>
-        <div class="ft-col">
-          <p class="ft-head">Project</p>
-          <a class="ft-link" href="https://github.com/Cypher0071/Home_Cloud" target="_blank" rel="noopener noreferrer">
-            Repository<span class="sr-only"> (opens in a new tab)</span>
-          </a>
-          <a class="ft-link" href="https://github.com/Cypher0071/Home_Cloud/issues" target="_blank" rel="noopener noreferrer">
-            Issue Tracker<span class="sr-only"> (opens in a new tab)</span>
-          </a>
-          <a class="ft-link" href="https://github.com/Cypher0071/Home_Cloud/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
-            Apache-2.0<span class="sr-only"> (opens in a new tab)</span>
-          </a>
-        </div>
+      <nav class="ft-nav" aria-label="Footer" style={`--ft-rows: ${rows}`}>
+        {columns.map((col) => (
+          <div class="ft-col">
+            <p class="ft-head">{col.head}</p>
+            {col.items.map((item) =>
+              item.ext ? (
+                <a class="ft-link" href={item.href} target="_blank" rel="noopener noreferrer">
+                  {item.label}<span class="ft-ext" aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span>
+                </a>
+              ) : (
+                <a class="ft-link" href={item.href}>{item.label}</a>
+              )
+            )}
+            {Array.from({ length: rows - 1 - col.items.length }).map(() => <span class="ft-link ft-empty" aria-hidden="true"></span>)}
+          </div>
+        ))}
       </nav>
     </div>
 
@@ -106,7 +134,7 @@
 
   /* Diagonal hatch. Same rule above the table and under it. */
   .ft-hatch {
-    height: 28px;
+    height: var(--hc-hatch-height, 28px);
     background-color: var(--hc-canvas);
     background-image: repeating-linear-gradient(
       -45deg,
@@ -197,7 +225,7 @@
   .ft-nav {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: repeat(4, minmax(64px, auto));
+    grid-template-rows: repeat(var(--ft-rows, 4), minmax(52px, auto));
     min-width: 0;
   }
 
@@ -235,6 +263,20 @@
 
   .ft-head {
     color: var(--hc-text-primary);
+  }
+
+  .ft-ext {
+    margin-left: 4px;
+    font-size: 0.75em;
+    color: var(--hc-text-muted);
+  }
+
+  .ft-empty {
+    pointer-events: none;
+  }
+
+  .ft-col > :last-child {
+    border-bottom: none;
   }
 
   .ft-link {
@@ -289,8 +331,10 @@
       border-right: none;
     }
 
+    /* Product + Resources side by side, Project full width below,
+       instead of one long stack of rows. */
     .ft-nav {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       grid-template-rows: none;
     }
 
@@ -303,7 +347,39 @@
       grid-column: auto;
       grid-row: auto;
       grid-template-rows: none;
+    }
+
+    .ft-col:nth-child(1) {
+      border-right: 1px solid var(--hc-border-strong);
+    }
+
+    .ft-col:nth-child(2) {
       border-right: none;
+    }
+
+    .ft-col:nth-child(3) {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      border-top: 1px solid var(--hc-border-strong);
+    }
+
+    .ft-col:nth-child(3) .ft-head {
+      grid-column: 1 / -1;
+    }
+
+    .ft-col:nth-child(3) .ft-link:nth-of-type(odd) {
+      border-right: 1px solid var(--hc-border-strong);
+    }
+
+    .ft-col:nth-child(3) .ft-empty {
+      display: none;
+    }
+
+    .ft-head,
+    .ft-link {
+      padding: 14px 10px;
+      font-size: 0.875rem;
     }
   }
 

@@ -1,0 +1,42 @@
+---
+title: Home Cloud documentation
+description: Install, use and run Home Cloud, a self-hosted dashboard for one Linux machine.
+tableOfContents: false
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Home Cloud is a web dashboard for one Linux machine. It gives you a host terminal, a file manager, Docker and Compose management and live system stats in the browser. The installer can also put it on your own domain over HTTPS through a Cloudflare Tunnel, with no port forwarding.
+
+It is open source under Apache-2.0, built for a single owner, and runs as a regular systemd service on the Linux you already have.
+
+## Start here
+
+<CardGrid>
+  <LinkCard title="Requirements" description="What the host needs before you install." href="/docs/getting-started/requirements/" />
+  <LinkCard title="Install" description="Run the installer and get the dashboard up." href="/docs/getting-started/install/" />
+  <LinkCard title="First login" description="Open the dashboard and sign in." href="/docs/getting-started/first-login/" />
+  <LinkCard title="Remote access" description="Reach it from anywhere through a Cloudflare Tunnel." href="/docs/getting-started/remote-access/" />
+</CardGrid>
+
+## Using Home Cloud
+
+<CardGrid>
+  <LinkCard title="Dashboard" description="The web desktop, system stats and settings." href="/docs/using/dashboard/" />
+  <LinkCard title="Files" description="Browse, upload and manage files on the host." href="/docs/using/files/" />
+  <LinkCard title="Terminal" description="A host shell and container shells in the browser." href="/docs/using/terminal/" />
+  <LinkCard title="Docker and Compose" description="Containers, images, logs and stacks." href="/docs/using/docker/" />
+</CardGrid>
+
+## Run it well
+
+<CardGrid>
+  <LinkCard title="Threat model" description="What the password grants and where the trust boundaries are." href="/docs/security/threat-model/" />
+  <LinkCard title="Updates and rollback" description="How updates are applied and what happens on failure." href="/docs/using/updates/" />
+  <LinkCard title="Backup" description="What state exists and what to keep." href="/docs/operations/backup/" />
+  <LinkCard title="Troubleshooting" description="Service logs, ports, tunnels and lockouts." href="/docs/operations/troubleshooting/" />
+</CardGrid>
+
+## Get help
+
+Questions go to [GitHub Discussions](https://github.com/Cypher0071/Home_Cloud/discussions). Bugs go to the [issue tracker](https://github.com/Cypher0071/Home_Cloud/issues). Security problems follow the [reporting process](/docs/security/reporting/), not public issues.

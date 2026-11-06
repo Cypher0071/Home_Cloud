@@ -1,0 +1,243 @@
+---
+// landing/src/components/Faq.astro
+// Honest answers to the questions people ask before installing.
+// Every answer is checked against setup.sh, agent/ and the README.
+import { links, getRelease } from '../data/site';
+
+const { nodeMin } = await getRelease();
+
+const faqs = [
+  {
+    q: 'What do I need to run it?',
+    a: [
+      `A 64-bit x86 PC running a systemd Linux distribution such as Ubuntu, Debian, Fedora or Arch, with Node.js ${nodeMin}+ and Docker 24+ installed. The installer sets up everything else.`,
+      'For remote access you also need a free Cloudflare account and a domain whose DNS is on Cloudflare.',
+    ],
+  },
+  {
+    q: 'Do I need a domain?',
+    a: [
+      'Only for remote access. On your home network the dashboard works right away at `http://<server-ip>:3000`.',
+      'Remote access uses a Cloudflare Tunnel, which needs a domain on Cloudflare DNS. The free Cloudflare plan is enough; you only pay for the domain itself.',
+    ],
+  },
+  {
+    q: 'How hard is remote access to set up?',
+    a: [
+      'It is one prompt in the installer. Say yes, sign in to Cloudflare in your browser, type your domain, and the installer creates the tunnel, writes its config and adds the DNS record for `dash.<your-domain>`.',
+      'There is no port forwarding, static IP or VPN client involved, and it works behind CGNAT. You can also skip it and run the same steps later.',
+    ],
+  },
+  {
+    q: 'Does my data leave my machine?',
+    a: [
+      'Your files, settings and dashboard live on your machine, and Home Cloud sends no telemetry. It contacts GitHub only when you check for or apply an update.',
+      'With remote access on, traffic between your browser and the server passes through Cloudflare, which terminates HTTPS at its edge. At home, the dashboard switches to your LAN address automatically, so local traffic stays local.',
+    ],
+  },
+  {
+    q: 'Does it replace my operating system?',
+    a: [
+      'No. It installs on the Linux you already run, as a regular systemd service, and runs alongside everything else on the machine.',
+    ],
+  },
+  {
+    q: 'How do updates work?',
+    a: [
+      'In Settings, Check for Updates asks GitHub for new release tags. One click then fetches the release, installs dependencies, rebuilds and restarts the service, with live progress. If a step fails, it switches the code back to the version you were on.',
+    ],
+  },
+  {
+    q: 'Can more than one person use it?',
+    a: [
+      'Not today. Home Cloud is built for a single owner: one password, full access to the host. Multi-user accounts are not supported.',
+    ],
+  },
+  {
+    q: 'How do I uninstall it?',
+    a: [
+      'There is no uninstaller yet. Run `sudo systemctl disable --now home-cloud`, delete `/etc/systemd/system/home-cloud.service`, then remove the install folder (`~/home-cloud` by default) and `~/.config/home-cloud`.',
+      'If you set up remote access, delete the tunnel with `cloudflared tunnel delete home-cloud` and remove its DNS record in Cloudflare. The uninstall guide in the docs lists every step.',
+    ],
+  },
+  {
+    q: 'Is it really free?',
+    a: [
+      'Yes. Home Cloud is open source under Apache-2.0, with no account, subscription or paid tier.',
+    ],
+  },
+];
+---
+
+<section id="faq" class="band faq" aria-labelledby="faq-title">
+  <div class="container">
+    <div class="band-frame faq-layout">
+      <header class="faq-header reveal">
+        <p class="band-eyebrow">FAQ</p>
+        <h2 id="faq-title" class="band-title">Questions, answered.</h2>
+        <p class="faq-lede">
+          Something missing? Ask in GitHub Discussions and we will add it here.
+        </p>
+        <a class="btn btn-ghost faq-ask" href={links.discussions} target="_blank" rel="noopener noreferrer">
+          Ask a question <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      </header>
+
+      <div class="faq-list reveal" data-reveal-delay="1">
+        {faqs.map((item) => (
+          <details class="faq-item">
+            <summary>
+              <span>{item.q}</span>
+              <svg class="faq-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
+            </summary>
+            <div class="faq-answer">
+              {item.a.map((p) => <p>{p.split('`').map((part, i) => (i % 2 ? <code>{part}</code> : part))}</p>)}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+    <div class="band-hatch" aria-hidden="true"></div>
+  </div>
+</section>
+
+<style>
+  .faq-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+
+  .faq-header {
+    align-self: start;
+    padding: var(--hc-space-9) clamp(24px, 4vw, 48px) var(--hc-space-7);
+  }
+
+  .faq-lede {
+    max-width: 34ch;
+    margin-top: var(--hc-space-4);
+    margin-bottom: var(--hc-space-6);
+    font-size: var(--hc-text-body);
+    line-height: 1.6;
+    color: var(--hc-text-secondary);
+  }
+
+  .faq-ask {
+    border-color: var(--hc-border-strong);
+  }
+
+  .faq-list {
+    border-left: 1px solid var(--hc-border-strong);
+    padding-block: var(--hc-space-9) var(--hc-space-8);
+  }
+
+  .faq-item {
+    border-top: 1px solid var(--hc-border-strong);
+  }
+
+  .faq-item:last-child {
+    border-bottom: 1px solid var(--hc-border-strong);
+  }
+
+  .faq-item summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--hc-space-5);
+    padding: 20px clamp(24px, 4vw, 48px);
+    cursor: pointer;
+    list-style: none;
+    font-family: var(--hc-font-display);
+    font-size: 1.0625rem;
+    font-weight: 550;
+    letter-spacing: -0.015em;
+    color: var(--hc-text-primary);
+    transition: background-color var(--hc-duration-micro) var(--hc-ease-out);
+  }
+
+  .faq-item summary::-webkit-details-marker {
+    display: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .faq-item summary:hover {
+      background: var(--hc-surface-1);
+    }
+  }
+
+  .faq-item summary:focus-visible {
+    outline: 2px solid var(--hc-accent);
+    outline-offset: -2px;
+  }
+
+  .faq-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    fill: none;
+    stroke: var(--hc-text-tertiary);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    transition: transform var(--hc-duration-ui) var(--hc-ease-out), stroke var(--hc-duration-micro) var(--hc-ease-out);
+  }
+
+  .faq-item[open] .faq-icon {
+    transform: rotate(45deg);
+    stroke: var(--hc-accent);
+  }
+
+  .faq-answer {
+    padding: 0 clamp(24px, 4vw, 48px) 24px;
+  }
+
+  .faq-answer p {
+    max-width: 62ch;
+    font-size: var(--hc-text-small);
+    line-height: 1.7;
+    color: var(--hc-text-secondary);
+  }
+
+  .faq-answer code {
+    padding: 1px 5px;
+    border: 1px solid var(--hc-border-default);
+    border-radius: var(--hc-radius-sm);
+    background: var(--hc-surface-1);
+    font-family: var(--hc-font-mono);
+    font-size: 0.92em;
+    color: var(--hc-text-primary);
+    overflow-wrap: anywhere;
+  }
+
+  .faq-answer p + p {
+    margin-top: var(--hc-space-3);
+  }
+
+  @media (max-width: 960px) {
+    .faq-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .faq-header {
+      padding-top: var(--hc-space-8);
+      padding-bottom: var(--hc-space-6);
+    }
+
+    .faq-list {
+      border-left: none;
+      padding-top: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .faq-header,
+    .faq-item summary,
+    .faq-answer {
+      padding-inline: var(--hc-space-4);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .faq-icon {
+      transition: none;
+    }
+  }
+</style>

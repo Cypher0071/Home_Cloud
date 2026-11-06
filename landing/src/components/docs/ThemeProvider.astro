@@ -1,0 +1,8 @@
+---
+// The landing site is dark-only, so the docs always render dark.
+---
+
+<script is:inline>
+  document.documentElement.dataset.theme = 'dark';
+  window.StarlightThemeProvider = { updatePickers() {} };
+</script>
