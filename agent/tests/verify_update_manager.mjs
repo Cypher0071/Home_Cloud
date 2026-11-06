@@ -51,7 +51,7 @@ console.log("\n[Test Suite 2] Version & Commit Detection");
 
 const currentVersion = updateManager.getCurrentVersion();
 assert.ok(typeof currentVersion === "string" && currentVersion.length > 0, "Current version must be a non-empty string");
-assert.equal(currentVersion, "1.0.1", "Root package.json version is 1.0.1");
+assert.equal(currentVersion, "1.1.0", "Root package.json version is 1.1.0");
 
 const currentCommit = updateManager.getCurrentCommit();
 assert.ok(typeof currentCommit === "string" && currentCommit.length > 0, "Current commit must be detected");
@@ -130,8 +130,8 @@ updateManager._resetForTesting({
 	cachedReleaseInfo: {
 		currentVersion: "1.0.0",
 		currentCommit: "abc1234",
-		latestVersion: "1.0.5",
-		tagName: "v1.0.5",
+		latestVersion: "1.2.5",
+		tagName: "v1.2.5",
 		updateAvailable: true,
 		releaseNotes: "Fixes",
 		publishedAt: "2026-10-20T00:00:00Z",
@@ -145,9 +145,9 @@ updateManager._resetForTesting({
 const status = updateManager.getUpdateStatus();
 assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
-assert.equal(status.latestVersion, "1.0.5");
-assert.equal(status.tagName, "v1.0.5");
-assert.equal(status.currentVersion, "1.0.1");
+assert.equal(status.latestVersion, "1.2.5");
+assert.equal(status.tagName, "v1.2.5");
+assert.equal(status.currentVersion, "1.1.0");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
 
@@ -189,7 +189,7 @@ updateManager._setMockRunCommand(async (cmd, args) => {
 
 const result = await updateManager.applyUpdate(
 	(p) => progressEvents.push(p),
-	{ targetTag: "v1.1.0", skipRestart: true }
+	{ targetTag: "v1.2.0", skipRestart: true }
 );
 
 assert.equal(result.success, true, "Pipeline should return success: true");
@@ -205,8 +205,8 @@ assert.ok(stages.includes("restart"), "Should pass restart stage");
 
 // Verify commands invoked
 assert.ok(executedCommands.some((c) => c.includes("git fetch --tags origin")));
-assert.ok(executedCommands.some((c) => c.includes("git ls-remote --tags origin refs/tags/v1.1.0")));
-assert.ok(executedCommands.some((c) => c.includes("git checkout --detach v1.1.0")));
+assert.ok(executedCommands.some((c) => c.includes("git ls-remote --tags origin refs/tags/v1.2.0")));
+assert.ok(executedCommands.some((c) => c.includes("git checkout --detach v1.2.0")));
 assert.ok(executedCommands.some((c) => c.includes("pnpm install --frozen-lockfile")));
 assert.ok(executedCommands.some((c) => c.includes("pnpm --filter dashboard build")));
 console.log("  ✔ Pipeline successfully progresses through preflight, fetch, install, build, and restart");
@@ -308,7 +308,7 @@ try {
 	assert.equal(resStatus.status, 200);
 	const dataStatus = await resStatus.json();
 	assert.equal(dataStatus.status, "ok");
-	assert.equal(dataStatus.currentVersion, "1.0.1");
+	assert.equal(dataStatus.currentVersion, "1.1.0");
 	assert.equal(dataStatus.isUpdating, false);
 	console.log("  ✔ GET /api/settings/update/status returns 200 with status payload");
 

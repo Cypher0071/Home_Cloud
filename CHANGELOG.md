@@ -1,12 +1,38 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
-Installer: it now sets up its own prerequisites and installs released code only.
+Remote SSH over the tunnel, an installer that sets up its own prerequisites, stronger session and ingress handling, and a new website with full documentation.
 
-- The installer installs the latest published GitHub release, never unreleased commits on `main`. Re-running it on an existing install moves it to the newest release. `--branch <tag>` (or `HOME_CLOUD_BRANCH`) pins a version.
+### Added
+
+- Remote SSH through the Cloudflare Tunnel. The installer publishes `ssh.<your-domain>` to the host's OpenSSH server and makes tunnel connections key-only. Settings has a Remote SSH Access card with a copyable `~/.ssh/config` snippet. Ports 22 and 3001, and the `dash` and `ssh` hostnames, cannot be exposed or removed from the dashboard.
+- The installer installs and enables the OpenSSH server, allows it and port 3000 through an active UFW firewall, and stops a laptop lid from suspending the machine. `--skip-ssh` and `--skip-lid` opt out.
+- A new website at home-cloud.live with an interactive demo, a comparison table, an FAQ and a security overview, and documentation under `/docs` covering install, every app, configuration, security and operations. The site redeploys on every push to `main` and on every published release.
+- The security audit report and the known limitations are published in the repository under `docs/security_audit/` and `SECURITY.md`.
+
+### Changed
+
+- The installer installs the latest published GitHub release, never unreleased commits on `main`. Re-running it on an existing install moves it to the newest release, but does not restart a running service. `--branch <tag>` (or `HOME_CLOUD_BRANCH`) pins a version.
 - Node.js and Docker no longer have to be installed first. If Node.js `>= 22.23.4` with corepack is missing, the installer downloads Node.js `24.22.2` from nodejs.org, checks its SHA256 and unpacks it into `/opt/home-cloud`, leaving any existing Node.js alone. If Docker is missing, it installs Docker Engine and the Compose plugin from Docker's signed repository after checking the signing key fingerprint, falling back to the distribution's packages.
 - The installer checks that systemd is running before it installs anything. On WSL it enables systemd in `/etc/wsl.conf` and asks for a `wsl --shutdown`.
+- Setup runs are interruption-safe. The installer keeps a journal and a lock in `~/.local/state/home-cloud`, so an interrupted run can be repeated and two runs cannot collide.
+- The Node.js minimum is now `22.23.4`, the version Astro needs to build. pnpm is pinned to `12.15.0`. Workspace dependencies are updated.
+
+### Security
+
+- Logging out, or changing the password, now also closes open WebSockets, HTTP streams and detached terminal sessions, not only new requests.
+- Login also has an aggregate limit of 30 failed attempts per minute from one network peer, on top of the existing 5 failures per address.
+- Pulling an image is POST-only. A GET to the pull route returns 405.
+- Responses send `X-Frame-Options: SAMEORIGIN`, `Content-Security-Policy: frame-ancestors 'self'` and `X-Content-Type-Options: nosniff`, so a sibling subdomain cannot frame the dashboard.
+- Before switching to your local address, the dashboard checks a keyed proof that the address really is your server. The proof is refused for requests that arrive through the tunnel.
+- Ingress rules for a container or stack are removed when it is deleted or redeployed, including when a deploy fails.
+- An update installs with `pnpm install --frozen-lockfile` only. It no longer falls back to an unpinned install, so a lockfile mismatch fails the update and rolls back.
+
+### Fixed
+
+- Ingress validation no longer fails when `cloudflared` is not installed.
+- Dev login works through the Vite proxy.
 
 ## 1.0.1
 
