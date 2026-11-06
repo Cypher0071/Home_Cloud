@@ -56,7 +56,7 @@ This phase focuses on the low-level system engineering and daemonization require
   * Resolved Tunnel recycling race condition in `agent/tunnel.js` by awaiting process exit with a 3000ms `SIGKILL` escalation fallback.
   * Graceful shutdown signal trapping (`SIGTERM`, `SIGINT`) in `agent/index.js` cleanly draining HTTP connections, closing WebSockets, terminating active node-pty terminal sessions (`closeAllSessions()`), and stopping `cloudflared`.
 * [x] **Spare PC Setup Script (`setup.sh`):**
-  * Automated host configuration script. Node.js `>= 22.23.4` and Docker must already be installed. pnpm `12.15.0` is installed with corepack. `cloudflared` is optional and downloaded only at a pinned release after sha256 verification. The script writes `.env` and enables the systemd unit as the install user, not root.
+  * Automated host configuration script. It installs the latest published release, never unreleased commits from `main`. If Node.js `>= 22.23.4` with corepack is missing it installs a pinned, SHA256-verified Node.js `24.22.2` into `/opt/home-cloud`, and it installs Docker Engine and the Compose plugin from Docker's signed repository when Docker is missing. It checks that systemd is running first and enables it on WSL. pnpm `12.15.0` is installed with corepack. `cloudflared` is optional and downloaded only at a pinned release after sha256 verification. The script writes `.env` and enables the systemd unit as the install user, not root.
 
 ---
 

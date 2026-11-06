@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Installer: it now sets up its own prerequisites and installs released code only.
+
+- The installer installs the latest published GitHub release, never unreleased commits on `main`. Re-running it on an existing install moves it to the newest release. `--branch <tag>` (or `HOME_CLOUD_BRANCH`) pins a version.
+- Node.js and Docker no longer have to be installed first. If Node.js `>= 22.23.4` with corepack is missing, the installer downloads Node.js `24.22.2` from nodejs.org, checks its SHA256 and unpacks it into `/opt/home-cloud`, leaving any existing Node.js alone. If Docker is missing, it installs Docker Engine and the Compose plugin from Docker's signed repository after checking the signing key fingerprint, falling back to the distribution's packages.
+- The installer checks that systemd is running before it installs anything. On WSL it enables systemd in `/etc/wsl.conf` and asks for a `wsl --shutdown`.
+
 ## 1.0.1
 
 Security, installer, dependency, and documentation fixes.

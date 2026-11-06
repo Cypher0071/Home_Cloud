@@ -1,42 +1,61 @@
 ---
 // landing/src/components/Setup.astro
 // Install section in the ruled-band language: header, three step cells,
-// then the pinned installer command. Version, Node.js minimum and links
-// come from the latest GitHub release at build time (src/data/site.ts).
+// then the installer command. The release tag and links come from the latest
+// GitHub release at build time (src/data/site.ts); tool versions come from setup.sh.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { links, getRelease, installCommand, installerSource } from '../data/site';
 
 const release = await getRelease();
-const command = installCommand(release.tag);
+const command = installCommand;
+
+// Pinned tool versions come straight from setup.sh so the facts never drift.
+let pnpmPin = '';
+let nodePin = '';
+try {
+  const sh = readFileSync(join(process.cwd(), '..', 'setup.sh'), 'utf8');
+  pnpmPin = sh.match(/^PNPM_PIN="([^"]+)"/m)?.[1] ?? '';
+  nodePin = sh.match(/^NODE_PIN_VERSION="([^"]+)"/m)?.[1] ?? '';
+} catch {
+  // Built without the repo root: those rows fall back to plain text.
+}
 
 const steps = [
   {
     num: '01',
+    kind: 'host',
     title: 'Prepare a Linux host',
-    body: 'Any spare PC, mini PC or laptop running a systemd distribution such as Ubuntu or Debian. Install Node.js and Docker first; the installer checks for both.',
+    body: 'Any spare PC, mini PC or laptop running a systemd distribution such as Ubuntu or Debian. You do not need to install anything else first.',
     facts: [
       ['OS', 'Linux with systemd'],
       ['CPU', 'x86_64 (ARM untested)'],
-      ['Node.js', `${release.nodeMin} or newer`],
-      ['Docker', 'Engine 24+'],
+      ['Access', 'A user with sudo'],
+      ['Network', 'Internet during install'],
     ],
   },
   {
     num: '02',
+    kind: 'run',
     title: 'Run the installer',
-    body: 'It handles the rest: pnpm, a SHA-256 verified cloudflared, the dashboard build, your password and a systemd service.',
+    body: 'It installs the latest release and whatever is missing, Node.js and Docker included, then builds the dashboard, sets your password and starts a systemd service.',
     facts: [
-      ['Release', release.tag],
-      ['Service', 'home-cloud.service'],
+      ['Release', `${release.tag} (latest)`],
+      ['Node.js', nodePin ? `${nodePin} if missing` : 'Installed if missing'],
+      ['Docker', 'Installed if missing'],
+      ['pnpm', pnpmPin ? `${pnpmPin} (pinned)` : 'Pinned'],
     ],
   },
   {
     num: '03',
+    kind: 'remote',
     title: 'Say yes to remote access',
     body: 'Sign in to Cloudflare in your browser and enter your domain. The installer creates the tunnel and the DNS record. No router settings, works behind CGNAT.',
     facts: [
       ['Local', 'http://<server-ip>:3000'],
       ['Remote', 'https://dash.<your-domain>'],
-      ['Needs', 'Cloudflare account + domain'],
+      ['Needs', 'Cloudflare + a domain'],
+      ['Tunnel', 'Outbound only'],
     ],
   },
 ];
@@ -58,6 +77,33 @@ const steps = [
       <ol class="setup-steps reveal" data-reveal-delay="1" aria-label="Installation steps">
         {steps.map((step) => (
           <li class="setup-step">
+            <div class={`vig vig-${step.kind}`} aria-hidden="true">
+              {step.kind === 'host' && (
+                <>
+                  <div class="vl a" style="--n:1"><span class="ok">✓</span> systemd <span class="vk">init</span></div>
+                  <div class="vl a" style="--n:2"><span class="ok">✓</span> sudo <span class="vk">available</span></div>
+                  <div class="vl a" style="--n:3"><span class="ok">✓</span> internet <span class="vk">reachable</span></div>
+                  <div class="vl a hot" style="--n:4"><span class="vp">›</span> ready for the installer</div>
+                </>
+              )}
+              {step.kind === 'run' && (
+                <>
+                  <div class="vl a" style="--n:1"><span class="ok">✓</span> node <span class="vk">{nodePin ? `${nodePin} sha256 ok` : 'sha256 ok'}</span></div>
+                  <div class="vl a" style="--n:2"><span class="ok">✓</span> docker <span class="vk">engine + compose</span></div>
+                  <div class="vl a" style="--n:3"><span class="ok">✓</span> dashboard <span class="vk">built</span></div>
+                  <div class="vl a" style="--n:4"><span class="ok">✓</span> home-cloud.service <span class="vk">active</span></div>
+                  <span class="vbar"><i class="a" /></span>
+                </>
+              )}
+              {step.kind === 'remote' && (
+                <>
+                  <div class="vl a" style="--n:1"><span class="vp">?</span> Enable remote access? <span class="vk">[y/N]</span> <span class="vy a">y</span></div>
+                  <div class="vl a" style="--n:2"><span class="ok">✓</span> tunnel <span class="vk">+ DNS created</span></div>
+                  <div class="vl a" style="--n:3"><span class="vk">local</span> http://&lt;server-ip&gt;:3000</div>
+                  <div class="vl a hot" style="--n:4"><span class="ok">🔒</span> https://dash.&lt;your-domain&gt;</div>
+                </>
+              )}
+            </div>
             <span class="step-num">{step.num}</span>
             <h3 class="step-title">{step.title}</h3>
             <p class="step-body">{step.body}</p>
@@ -79,7 +125,7 @@ const steps = [
             <span class="command-file">
               <span class="command-prompt" aria-hidden="true">$</span>
               setup.sh
-              <span class="command-tag">{release.tag}</span>
+              <span class="command-tag">installs {release.tag}</span>
             </span>
             <button type="button" class="command-copy" id="setup-copy" data-copy={command} aria-label="Copy installer commands">
               <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="8" height="9" rx="1.5" /><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" /></svg>
@@ -92,10 +138,10 @@ const steps = [
       </div>
 
       <div class="band-foot">
-        <p>The installer is a plain bash script, pinned to a release. Read it before you run it.</p>
+        <p>The installer is a plain bash script. It installs the latest published release, never unreleased code. Read it before you run it.</p>
         <span class="setup-foot-links">
           <a href={links.docsQuickstart}>Full install guide <span aria-hidden="true">→</span></a>
-          <a href={installerSource(release.tag)} target="_blank" rel="noopener noreferrer">Read installer source <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+          <a href={installerSource} target="_blank" rel="noopener noreferrer">Read installer source <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
         </span>
       </div>
     </div>
@@ -126,12 +172,82 @@ const steps = [
     border-top: 1px solid var(--hc-border-strong);
   }
 
+  /* Rows are shared across the three cells (subgrid) so the panels, titles,
+     bodies and fact lists sit at the same heights and no cell has dead space. */
+  .setup-steps {
+    grid-template-rows: repeat(5, auto);
+  }
+
   .setup-step {
-    display: flex;
-    flex-direction: column;
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-row: span 5;
+    grid-template-rows: subgrid;
     min-width: 0;
     padding: var(--hc-space-6) clamp(24px, 4vw, 48px);
     border-right: 1px solid var(--hc-border-strong);
+  }
+
+  .setup-step .vig {
+    margin-bottom: var(--hc-space-5);
+  }
+
+  .setup-step::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), var(--hc-accent-faint), transparent 60%);
+    opacity: 0;
+    transition: opacity var(--hc-duration-ui) var(--hc-ease-out);
+    pointer-events: none;
+  }
+
+  @media (hover: hover) {
+    .setup-step:hover::before { opacity: 1; }
+    .setup-step:hover .vig { border-color: var(--hc-border-strong); }
+  }
+
+  /* ---------- step panels ---------- */
+  .vl { animation-timing-function: steps(1, end); }
+  .vl .ok { color: var(--hc-success); }
+  .vl.hot { color: var(--hc-text-primary); }
+  .vl:nth-child(1) { animation-name: su-l1; }
+  .vl:nth-child(2) { animation-name: su-l2; }
+  .vl:nth-child(3) { animation-name: su-l3; }
+  .vl:nth-child(4) { animation-name: su-l4; }
+  @keyframes su-l1 { 0% { opacity: 0; } 4%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+  @keyframes su-l2 { 0%, 17% { opacity: 0; } 19%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+  @keyframes su-l3 { 0%, 32% { opacity: 0; } 34%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+  @keyframes su-l4 { 0%, 47% { opacity: 0; } 49%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+
+  .vbar {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 12px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--hc-border-default);
+    overflow: hidden;
+  }
+  .vbar i {
+    display: block;
+    height: 100%;
+    background: var(--hc-accent);
+    transform-origin: left;
+    animation-name: su-bar;
+    animation-timing-function: linear;
+  }
+  @keyframes su-bar { 0%, 3% { transform: scaleX(0); } 52%, 90% { transform: scaleX(1); } 96%, 100% { transform: scaleX(0); } }
+  .vig-run { padding-bottom: 22px; }
+
+  .vy { color: var(--hc-accent); animation-name: su-y; animation-timing-function: steps(1, end); }
+  @keyframes su-y { 0%, 8% { opacity: 0; } 10%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vig .a { animation: none !important; }
   }
 
   .setup-step:last-child {
@@ -165,7 +281,8 @@ const steps = [
   }
 
   .step-facts {
-    margin: auto 0 0;
+    margin: 0;
+    align-self: start;
     border-top: 1px solid var(--hc-border-default);
   }
 
@@ -178,12 +295,12 @@ const steps = [
     border-bottom: 1px solid var(--hc-border-default);
   }
 
-  .setup-step {
+  .step-facts {
     container-type: inline-size;
   }
 
   /* Narrow cells: stack label above value instead of breaking URLs mid-word. */
-  @container (max-width: 330px) {
+  @container (max-width: 300px) {
     .step-fact {
       grid-template-columns: minmax(0, 1fr);
       gap: 2px;
@@ -333,9 +450,13 @@ const steps = [
   @media (max-width: 960px) {
     .setup-steps {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
     }
 
     .setup-step {
+      display: flex;
+      flex-direction: column;
+      grid-row: auto;
       border-right: none;
       border-bottom: 1px solid var(--hc-border-strong);
     }
@@ -346,6 +467,10 @@ const steps = [
 
     .step-body {
       max-width: 60ch;
+    }
+
+    .step-facts {
+      margin-top: auto;
     }
   }
 
@@ -365,6 +490,28 @@ const steps = [
 </style>
 
 <script>
+  // Panels animate only while their step is on screen; pointer drives a soft spotlight.
+  const stepsEl = document.querySelector<HTMLElement>('.setup-steps');
+  if (stepsEl) {
+    const cells = stepsEl.querySelectorAll<HTMLElement>('.setup-step');
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(
+        (entries) => entries.forEach((e) => e.target.classList.toggle('is-live', e.isIntersecting)),
+        { threshold: 0.35 },
+      );
+      cells.forEach((c) => io.observe(c));
+    } else {
+      cells.forEach((c) => c.classList.add('is-live'));
+    }
+    stepsEl.addEventListener('pointermove', (ev) => {
+      const cell = (ev.target as HTMLElement).closest<HTMLElement>('.setup-step');
+      if (!cell) return;
+      const r = cell.getBoundingClientRect();
+      cell.style.setProperty('--mx', `${ev.clientX - r.left}px`);
+      cell.style.setProperty('--my', `${ev.clientY - r.top}px`);
+    });
+  }
+
   const copyButton = document.getElementById('setup-copy');
   const copyLabel = document.getElementById('setup-copy-label');
   const copyStatus = document.getElementById('setup-copy-status');

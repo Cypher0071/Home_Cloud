@@ -13,6 +13,11 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
   <div class="container demo-container">
     <div class="demo-frame">
       <div class="demo-device">
+        <p class="demo-hint">
+          <span class="demo-hint-tag">LIVE DEMO</span>
+          <span class="demo-hint-text demo-hint-wide">Open apps from the dock, drag and resize windows.</span>
+          <span class="demo-hint-text demo-hint-narrow">Best on a larger screen.</span>
+        </p>
         <div class="demo-desktop-stage" id="demo-desktop-stage">
           <div
             class="hc-desktop hc-desktop-live"
@@ -532,7 +537,7 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
               </div>
               <div class="metric-stat-row">
                 <span>Server Local IP</span>
-                <span class="val">192.168.29.185:3000</span>
+                <span class="val">&lt;server-ip&gt;:3000</span>
               </div>
             </div>
             <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 8px; display: flex; flex-direction: column; gap: 6px;">
@@ -643,6 +648,11 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
               <div class="window-resize-handle" data-resize="settings"></div>
             </div>
 
+          </div>
+
+          <!-- Cursor for the scripted tour in the step 3 preview (hidden otherwise) -->
+          <div class="tour-cursor" data-tour-cursor aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 2.5v17l4.6-4.1 3 6.6 3-1.4-3-6.5h6.4L4 2.5Z" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"></path></svg>
           </div>
 
           <!-- Floating Taskbar matching App.css (z-index 1000 so windows slide underneath) -->
@@ -770,6 +780,39 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     box-sizing: border-box;
   }
 
+  /* Fades in as the desktop arrives (opacity is set by the script below). */
+  .demo-hint {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 24px;
+    margin: 0 0 14px;
+    font-family: var(--hc-font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--hc-text-tertiary);
+  }
+
+  .demo-hint-narrow {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .demo-hint-wide {
+      display: none;
+    }
+
+    .demo-hint-narrow {
+      display: inline;
+    }
+  }
+
+  .demo-hint-tag {
+    color: var(--hc-accent);
+    letter-spacing: 0.08em;
+  }
+
   .demo-caption {
     display: flex;
     align-items: center;
@@ -872,7 +915,9 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     transition: opacity 300ms var(--hc-ease-out);
   }
 
-  @media (max-width: 768px) {
+  /* Below the stage's natural width, lay the desktop out at full size and let
+     the script scale it to fit, so windows and dock are never clipped. */
+  @media (max-width: 1280px) {
     .hc-desktop {
       width: 1147px;
       height: 625px;
@@ -1185,6 +1230,68 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
   .hc-desktop .dock-item.active {
     background: rgba(255, 255, 255, 0.11);
     color: #ffffff;
+  }
+
+  /* ── Scripted tour: cursor, click ripple, dock hover, window entrance ── */
+  .hc-desktop .tour-cursor {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1200;
+    width: 26px;
+    height: 26px;
+    margin: -3px 0 0 -4px;
+    opacity: 0;
+    pointer-events: none;
+    will-change: transform, opacity;
+  }
+
+  .hc-desktop .tour-cursor svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  }
+
+  .hc-desktop .tour-cursor::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 3px;
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  .hc-desktop .tour-cursor.is-click::after {
+    animation: tour-ripple 480ms var(--hc-ease-out, ease-out) both;
+  }
+
+  @keyframes tour-ripple {
+    from { opacity: 0.9; transform: scale(0.3); }
+    to { opacity: 0; transform: scale(1.15); }
+  }
+
+  .hc-desktop .dock-item.tour-hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ededed;
+  }
+
+  .hc-desktop .dock-item.tour-hover .dock-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .hc-desktop .os-window.tour-pop {
+    animation: tour-pop 280ms var(--hc-ease-out, ease-out) both;
+  }
+
+  @keyframes tour-pop {
+    from { opacity: 0; transform: translateY(10px) scale(0.965); }
+    to { opacity: 1; transform: none; }
   }
 
   .hc-desktop .dock-item-dot {
@@ -2721,21 +2828,43 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
 </style>
 
 <script>
-  // ── Scroll-Linked Interactive Desktop Transition Engine ──
-  // Smoothly morphs the desktop between Stage 3 slot in HowItWorks
-  // and full-size interactive sandbox in Features using requestAnimationFrame
-  // and IntersectionObserver.
+  // ── Scroll-linked hand-off: step 3 preview → interactive demo ──
+  // One live desktop element with three scroll phases:
+  //   1. parked in the step 3 slot (the tour plays on its own clock);
+  //   2. hold: pinned at the centre of the viewport while the tour finishes
+  //      (scrolling through this runway also advances the tour);
+  //   3. growth: the left rail fades, the desktop grows to full size, still
+  //      centred, and lands in the demo stage, ready for interaction.
+  // Transform and opacity only.
   (() => {
+    // A reload starts the story over. Without this the browser restores the old
+    // scroll position, the page opens past step 3, and the tour is skipped.
+    // Back/forward navigation and #hash links keep their normal behaviour.
+    try {
+      const nav = performance.getEntriesByType('navigation')[0];
+      if (nav && nav.type === 'reload' && !location.hash) {
+        history.scrollRestoration = 'manual';
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        window.addEventListener('load', () => {
+          requestAnimationFrame(() => { history.scrollRestoration = 'auto'; });
+        }, { once: true });
+      }
+    } catch {
+      /* scroll restoration is a nicety */
+    }
+
     const desktopEl = document.querySelector('[data-demo-desktop]');
     const slotEl = document.getElementById('hiw-stage3-slot');
     const targetEl = document.getElementById('demo-desktop-stage');
     const hiwSection = document.getElementById('how-it-works');
-    const featuresSection = document.getElementById('demo');
+    const demoSection = document.getElementById('demo');
     const stage3Panel = document.getElementById('hiw-stage-3');
 
-    if (!desktopEl || !slotEl || !targetEl || !hiwSection || !featuresSection) return;
+    if (!desktopEl || !slotEl || !targetEl || !hiwSection || !demoSection) return;
 
-    let isIntersecting = false;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const smooth = (v) => v * v * (3 - 2 * v);
+
     let ticking = false;
     let metrics = null;
     let currentScale = 1;
@@ -2744,116 +2873,169 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     let reduceMotion = reduceMotionQuery.matches;
     reduceMotionQuery.addEventListener?.('change', (e) => {
       reduceMotion = e.matches;
-      updateMetrics();
-      render();
+      remeasure();
     });
 
+    // While pinned (hold + growth) the desktop is position: fixed, so the
+    // compositor keeps it still while the page scrolls under it. Counter-scrolling
+    // it with transforms from a scroll handler runs a frame behind the scroll and
+    // looks like jitter. Outside that range it rides with the page as before.
+    let isFixed = false;
+    function setFixed(on, w, h) {
+      if (on) {
+        desktopEl.style.position = 'fixed';
+        desktopEl.style.width = `${w}px`;
+        desktopEl.style.height = `${h}px`;
+        desktopEl.style.zIndex = '30';
+        isFixed = true;
+      } else if (isFixed) {
+        desktopEl.style.position = '';
+        desktopEl.style.width = '';
+        desktopEl.style.height = '';
+        desktopEl.style.zIndex = '';
+        isFixed = false;
+      }
+    }
+
+    // Written straight to the two elements that fade, not as custom properties on
+    // the sections: a changing inherited property restyles the whole desktop.
+    const railEl = hiwSection.querySelector('.hiw-rail');
+    const hintEl = demoSection.querySelector('.demo-hint');
+    let lastExit = -1;
+    let lastArrive = -1;
+
     function updateMetrics() {
+      setFixed(false); // measure the desktop in its stage, not pinned
+      // The hold runway is layout (a spacer in step 3), so set it before measuring.
+      const hold = reduceMotion ? 0 : Math.round(Math.min(Math.max(window.innerHeight * 0.8, 360), 760));
+      if (hiwSection.dataset.hold !== String(hold)) {
+        hiwSection.dataset.hold = String(hold);
+        hiwSection.style.setProperty('--hiw-hold', `${hold}px`);
+      }
+
       const scrollY = window.scrollY;
       const scrollX = window.scrollX;
 
       const slotRect = slotEl.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
 
-      const slotPageTop = slotRect.top + scrollY;
-      const slotPageLeft = slotRect.left + scrollX;
-      const targetPageTop = targetRect.top + scrollY;
-      const targetPageLeft = targetRect.left + scrollX;
-
       const targetW = targetRect.width || targetEl.offsetWidth;
       const targetH = targetRect.height || targetEl.offsetHeight;
       const slotW = slotRect.width || slotEl.offsetWidth;
       const desktopW = desktopEl.offsetWidth || targetW;
-
+      const desktopH = desktopEl.offsetHeight || targetH;
       if (targetW <= 0 || targetH <= 0 || slotW <= 0 || desktopW <= 0) return;
 
-      const baseScale = targetW / desktopW;
-      const s0 = slotW / targetW;
-      const slotH = targetH * s0;
-
-      // Sync slot aspect ratio to target aspect ratio
+      // Keep the slot the same shape as the desktop so nothing is cropped.
       const aspectVal = `${targetW} / ${targetH}`;
       slotEl.style.aspectRatio = aspectVal;
       slotEl.style.setProperty('--desktop-aspect-ratio', aspectVal);
 
-      const tx0 = slotPageLeft - targetPageLeft;
-      const ty0 = slotPageTop - targetPageTop;
+      const s0 = slotW / targetW;
+      const slotH = targetH * s0;
+
+      const targetLeft = targetRect.left + scrollX;
+      const targetTop = targetRect.top + scrollY;
+      const slotLeft = slotRect.left + scrollX;
+      const slotTop = slotRect.top + scrollY;
+
+      const slotCx = slotLeft + slotW / 2;
+      const slotCy = slotTop + slotH / 2;
+      const targetCx = targetLeft + targetW / 2;
+      const targetCy = targetTop + targetH / 2;
 
       const navHeight = document.querySelector('#nav')?.getBoundingClientRect().height || 0;
       const viewportMid = (window.innerHeight + navHeight) / 2;
-      const slotCenterY = slotPageTop + slotH / 2;
-      const targetCenterY = targetPageTop + targetH / 2;
+      const ySlot = slotCy - viewportMid;
+      const yTarget = targetCy - viewportMid;
+      const buffer = 0; // the preview is exactly centred when pinned and when landed
 
-      const ySlotCenter = slotCenterY - viewportMid;
-      const yTargetCenter = targetCenterY - viewportMid;
-
-      const totalSpan = Math.max(1, yTargetCenter - ySlotCenter);
-      const buffer = Math.min(48, totalSpan * 0.08);
-
-      const yStart = ySlotCenter + buffer;
-      const yEnd = yTargetCenter - buffer;
-      const activeSpan = Math.max(1, yEnd - yStart);
+      const yHold = ySlot + buffer;            // slot centred: the desktop pins here
+      const yGrow = yHold + hold;              // hold over: growth starts
+      const yEnd = yTarget - buffer;           // stage centred: growth done
 
       metrics = {
-        tx0,
-        ty0,
-        s0,
-        yStart,
-        yEnd,
-        activeSpan,
-        targetW,
-        targetH,
-        baseScale,
+        slotCx, slotCy, targetCx, targetCy, targetLeft, targetTop,
+        desktopW, desktopH,
+        baseScale: targetW / desktopW,
+        s0, hold, yHold, yGrow, buffer, viewportMid,
+        growSpan: Math.max(1, yEnd - yGrow),
       };
     }
 
     function render() {
       if (!metrics) updateMetrics();
       if (!metrics) return;
+      const m = metrics;
 
       const scrollY = window.scrollY;
-      let rawP = 0;
-      if (scrollY <= metrics.yStart) {
-        rawP = 0;
-      } else if (scrollY >= metrics.yEnd) {
-        rawP = 1;
-      } else {
-        rawP = (scrollY - metrics.yStart) / metrics.activeSpan;
+      const pHold = m.hold > 0 ? clamp01((scrollY - m.yHold) / m.hold) : (scrollY >= m.yHold ? 1 : 0);
+      const pGrow = clamp01((scrollY - m.yGrow) / m.growSpan);
+
+      const transitioning = String(scrollY > m.yHold + 1);
+      if (slotEl.dataset.transitioning !== transitioning) slotEl.dataset.transitioning = transitioning;
+      window.__hc_handoff_state = { pHold, pGrow };
+      window.__hc_tour?.sync(pHold);
+
+      // Growth is linear in scroll, so the desktop grows at a constant pace
+      // (an eased curve reads as speeding up and slowing down).
+      const tPos = reduceMotion ? (pGrow < 0.5 ? 0 : 1) : pGrow;
+      const tSize = tPos;
+
+      const exit = reduceMotion ? (pGrow > 0 ? 1 : 0) : clamp01(pGrow / 0.22);
+      if (railEl && Math.abs(exit - lastExit) > 0.002) {
+        lastExit = exit;
+        railEl.style.opacity = (1 - exit).toFixed(3);
+      }
+      const arrive = reduceMotion ? (pGrow >= 1 ? 1 : 0) : clamp01((pGrow - 0.75) / 0.25);
+      if (hintEl && Math.abs(arrive - lastArrive) > 0.002) {
+        lastArrive = arrive;
+        hintEl.style.opacity = arrive.toFixed(3);
       }
 
-      const p = Math.max(0, Math.min(1, rawP));
-      slotEl.dataset.transitioning = String(p > 0.001);
-      // Smoothstep easing for calm, natural acceleration and deceleration
-      const t = reduceMotion ? (p < 0.5 ? 0 : 1) : (p * p * (3 - 2 * p));
+      currentScale = m.baseScale * (m.s0 + (1 - m.s0) * tSize);
 
-      currentScale = metrics.baseScale * (metrics.s0 + (1 - metrics.s0) * t);
-      const currentTx = metrics.tx0 * (1 - t);
-      const currentTy = metrics.ty0 * (1 - t);
-
-      if (t >= 0.999) {
-        desktopEl.style.transform = metrics.baseScale === 1 ? '' : `scale(${metrics.baseScale.toFixed(4)})`;
+      if (pGrow >= 0.999) {
+        setFixed(false);
+        currentScale = m.baseScale;
         desktopEl.style.transformOrigin = '0 0';
+        desktopEl.style.transform = m.baseScale === 1 ? '' : `scale(${m.baseScale.toFixed(4)})`;
         desktopEl.style.willChange = 'auto';
         desktopEl.style.pointerEvents = 'auto';
         desktopEl.style.opacity = '1';
-      } else {
-        desktopEl.style.transformOrigin = '0 0';
-        desktopEl.style.transform = `translate3d(${currentTx.toFixed(2)}px, ${currentTy.toFixed(2)}px, 0) scale(${currentScale.toFixed(4)})`;
-        desktopEl.style.willChange = 'transform';
-        desktopEl.style.pointerEvents = t >= 0.95 ? 'auto' : 'none';
-
-        // Synchronize dimming with Stage 3 active status when parked at Stage 3
-        if (p <= 0) {
-          const isStage3Active = stage3Panel ? stage3Panel.getAttribute('data-active') === 'true' : true;
-          desktopEl.style.opacity = isStage3Active ? '1' : '0.45';
-        } else {
-          desktopEl.style.opacity = '1';
-        }
+        return;
       }
+
+      const visW = m.desktopW * currentScale;
+      const visH = m.desktopH * currentScale;
+      desktopEl.style.transformOrigin = '0 0';
+      desktopEl.style.willChange = 'transform';
+      desktopEl.style.pointerEvents = 'none';
+
+      if (scrollY > m.yHold) {
+        // Pinned: viewport coordinates. Starts where the parked desktop was
+        // (slot centred, a `buffer` above the middle) and ends where the stage
+        // will be (a `buffer` below it), so both hand-overs are seamless.
+        setFixed(true, m.desktopW, m.desktopH);
+        const cx = m.slotCx + (m.targetCx - m.slotCx) * tPos - window.scrollX;
+        const cy = (m.viewportMid - m.buffer) + 2 * m.buffer * tPos;
+        desktopEl.style.transform = `translate3d(${(cx - visW / 2).toFixed(2)}px, ${(cy - visH / 2).toFixed(2)}px, 0) scale(${currentScale.toFixed(4)})`;
+        desktopEl.style.opacity = '1';
+        return;
+      }
+
+      // Parked in step 3: absolute inside the stage, riding with the page.
+      setFixed(false);
+      const tx = m.slotCx - visW / 2 - m.targetLeft;
+      const ty = m.slotCy - visH / 2 - m.targetTop;
+      desktopEl.style.transform = `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scale(${currentScale.toFixed(4)})`;
+
+      // Follow the panel's active/inactive dimming.
+      const isStage3Active = stage3Panel ? stage3Panel.getAttribute('data-active') === 'true' : true;
+      desktopEl.style.opacity = isStage3Active ? '1' : '0.45';
     }
 
     function onScroll() {
-      if (!isIntersecting) return;
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
@@ -2862,45 +3044,26 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
       });
     }
 
-    function onResize() {
+    function remeasure() {
       updateMetrics();
       render();
-    }
-
-    if ('IntersectionObserver' in window) {
-      const observer = new IntersectionObserver(
-        () => {
-          const rectHIW = hiwSection.getBoundingClientRect();
-          const rectFeat = featuresSection.getBoundingClientRect();
-          const inRange = rectHIW.bottom > -150 && rectFeat.top < window.innerHeight + 150;
-          isIntersecting = inRange;
-          if (isIntersecting) {
-            updateMetrics();
-            render();
-          }
-        },
-        { rootMargin: '150px 0px 150px 0px', threshold: 0 }
-      );
-      observer.observe(hiwSection);
-      observer.observe(featuresSection);
-    } else {
-      isIntersecting = true;
     }
 
     updateMetrics();
     render();
 
     window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onResize, { passive: true });
+    window.addEventListener('resize', remeasure, { passive: true });
+    window.addEventListener('load', remeasure);
+    if ('ResizeObserver' in window) {
+      const ro = new ResizeObserver(remeasure);
+      ro.observe(hiwSection);
+      ro.observe(demoSection);
+    }
+    window.addEventListener('hiw-stage-change', render);
+    document.fonts?.ready.then(remeasure);
 
     window.__hc_demo_scale = () => currentScale || 1;
-    window.__hc_update_desktop = () => {
-      render();
-    };
-
-    window.addEventListener('hiw-stage-change', () => {
-      render();
-    });
   })();
 
   // ── Home Cloud Desktop Interactive Engine ──
@@ -4097,7 +4260,7 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
               </div>
               <div class="metric-stat-row">
                 <span>Server Local IP</span>
-                <span class="val">192.168.29.185:3000</span>
+                <span class="val">&lt;server-ip&gt;:3000</span>
               </div>
             </div>
             <div style="border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 8px; display: flex; flex-direction: column; gap: 6px;">
@@ -4758,6 +4921,235 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     attachSettingsEvents();
     updateDockDots();
     updateActiveClasses();
+
+    // ── Product film in the step 3 preview ──
+    // Empty desktop → File Explorer → Docker → Terminal, driven through the same
+    // dock and app handlers a visitor uses. Runs on its own clock; scrolling
+    // through the hold runway also advances it, so it is always finished (and the
+    // desktop in the same state) by the time the user can interact with it.
+    (() => {
+      const slotEl = document.getElementById('hiw-stage3-slot');
+      const cursor = desktop.querySelector('[data-tour-cursor]');
+      if (!slotEl || !cursor) return;
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const CMD = 'docker ps';
+      const DURATION = 9200;
+      const TYPE_START = 6800;
+      const TYPE_STEP = 80;
+      const ENTER_AT = 7800;
+
+      // Final layout: Docker (needs ~700px) on the right, Files and Terminal stacked
+      // on the left. Only Files' spare right-hand columns are covered.
+      const LAYOUT = {
+        files: { x: 28, y: 36, w: 520, h: 290 },
+        docker: { x: 392, y: 36, w: 730, h: 410 },
+        terminal: { x: 28, y: 308, w: 356, h: 248 },
+      };
+
+      const ease = (v) => (v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2);
+      const getWin = (id) => windows.find((w) => w.id === id);
+
+      const closeAll = () => {
+        windows.forEach((w) => {
+          w.isOpen = false;
+          w.isMin = false;
+          if (w.el) {
+            w.el.style.display = 'none';
+            w.el.classList.remove('minimized', 'maximized', 'tour-pop');
+          }
+        });
+        activeWinId = null;
+        updateDockDots();
+        updateActiveClasses();
+      };
+
+      const openApp = (id, animate) => {
+        const win = getWin(id);
+        const box = LAYOUT[id];
+        if (!win || !win.el || !box) return;
+        Object.assign(win, box);
+        win.el.style.left = `${box.x}px`;
+        win.el.style.top = `${box.y}px`;
+        win.el.style.width = `${box.w}px`;
+        win.el.style.height = `${box.h}px`;
+        if (!win.isOpen) handleDockClick(id);
+        if (animate) {
+          win.el.classList.remove('tour-pop');
+          void win.el.offsetWidth;
+          win.el.classList.add('tour-pop');
+          win.el.addEventListener('animationend', () => win.el.classList.remove('tour-pop'), { once: true });
+        }
+      };
+
+      const selectRow = () => {
+        const row = bodyFiles && bodyFiles.querySelector('[data-fs-item="docker-compose.yml"]');
+        if (row) row.click();
+      };
+
+      const typeCommand = (text) => {
+        const input = document.getElementById('term-input');
+        if (input) input.value = text;
+      };
+
+      const submitCommand = () => {
+        const form = document.getElementById('term-form');
+        const input = document.getElementById('term-input');
+        if (!form || !input) return;
+        input.value = CMD;
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      };
+
+      // Cursor targets, in the desktop's own coordinates (independent of scale).
+      const localPoint = (el, fx, fy) => {
+        const d = desktop.getBoundingClientRect();
+        const s = d.width / desktop.offsetWidth || 1;
+        const r = el.getBoundingClientRect();
+        return { x: (r.left - d.left + r.width * fx) / s, y: (r.top - d.top + r.height * fy) / s };
+      };
+      const dockBtn = (id) => desktop.querySelector(`.taskbar-center [data-dock="${id}"]`);
+      const point = {
+        start: () => ({ x: desktop.offsetWidth * 0.68, y: desktop.offsetHeight * 0.6 }),
+        dock: (id) => () => localPoint(dockBtn(id), 0.55, 0.5),
+        row: () => {
+          const row = bodyFiles && bodyFiles.querySelector('[data-fs-item="docker-compose.yml"]');
+          return row ? localPoint(row, 0.22, 0.5) : { x: 200, y: 200 };
+        },
+        input: () => {
+          const input = document.getElementById('term-input');
+          return input ? localPoint(input, 0.28, 0.5) : { x: 300, y: 480 };
+        },
+      };
+
+      // Cursor path: each move starts at the previous target.
+      const moves = [
+        { t0: 500, t1: 1300, to: point.dock('files'), hover: 'files', clickAt: 1450 },
+        { t0: 1900, t1: 2700, to: point.row, clickAt: 2850 },
+        { t0: 3400, t1: 4200, to: point.dock('docker'), hover: 'docker', clickAt: 4350 },
+        { t0: 4900, t1: 5600, to: point.dock('terminal'), hover: 'terminal', clickAt: 5750 },
+        { t0: 6100, t1: 6600, to: point.input, clickAt: 6650 },
+      ];
+
+      // One-off actions, run in order as the clock passes them.
+      const actions = [
+        { at: 1450, click: true, run: (a) => openApp('files', a) },
+        { at: 2850, click: true, run: () => selectRow() },
+        { at: 4350, click: true, run: (a) => openApp('docker', a) },
+        { at: 5750, click: true, run: (a) => openApp('terminal', a) },
+        { at: 6650, click: true, run: () => {} },
+        { at: ENTER_AT, click: false, run: () => submitCommand() },
+      ];
+
+      let nextAction = 0;
+      let finished = false;
+
+      const cursorPoint = (T) => {
+        let from = point.start();
+        for (let i = 0; i < moves.length; i++) {
+          const m = moves[i];
+          if (T < m.t0) return from;
+          const to = m.to();
+          if (T < m.t1) {
+            const k = ease((T - m.t0) / (m.t1 - m.t0));
+            return { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k };
+          }
+          from = to;
+        }
+        return from;
+      };
+
+      const cursorOpacity = (T) => {
+        if (T < 300) return 0;
+        if (T < 600) return (T - 300) / 300;
+        if (T < 8600) return 1;
+        if (T < 9100) return 1 - (T - 8600) / 500;
+        return 0;
+      };
+
+      const apply = (T, instant) => {
+        while (nextAction < actions.length && actions[nextAction].at <= T) {
+          const a = actions[nextAction++];
+          a.run(!instant);
+          if (a.click && !instant && T - a.at < 250) {
+            cursor.classList.remove('is-click');
+            void cursor.offsetWidth;
+            cursor.classList.add('is-click');
+          }
+        }
+
+        if (T >= TYPE_START && T < ENTER_AT) {
+          typeCommand(CMD.slice(0, Math.min(CMD.length, Math.floor((T - TYPE_START) / TYPE_STEP) + 1)));
+        }
+
+        const hovering = instant ? null : (moves.find((m) => m.hover && T >= m.t1 && T < m.clickAt + 250) || {}).hover;
+        dockButtons.forEach((btn) => btn.classList.toggle('tour-hover', btn.getAttribute('data-dock') === hovering));
+
+        if (instant) {
+          cursor.style.opacity = '0';
+          return;
+        }
+        const pt = cursorPoint(T);
+        cursor.style.transform = `translate3d(${pt.x.toFixed(1)}px, ${pt.y.toFixed(1)}px, 0)`;
+        cursor.style.opacity = cursorOpacity(T).toFixed(2);
+      };
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        apply(DURATION, true);
+        cursor.style.opacity = '0';
+        dockButtons.forEach((btn) => btn.classList.remove('tour-hover'));
+      };
+
+      // Clock: real time, or the scroll position through the hold runway,
+      // whichever is further along.
+      let started = false;
+      let raf = 0;
+      let last = 0;
+      let tAuto = 0;
+      let scrollT = 0;
+
+      const frame = (now) => {
+        raf = 0;
+        tAuto += last ? Math.min(64, now - last) : 16;
+        last = now;
+        const T = Math.max(tAuto, scrollT);
+        if (T >= DURATION) {
+          finish();
+          return;
+        }
+        apply(T, false);
+        raf = requestAnimationFrame(frame);
+      };
+
+      const start = () => {
+        if (started || finished) return;
+        started = true;
+        raf = requestAnimationFrame(frame);
+      };
+
+      window.__hc_tour = {
+        sync(pHold) {
+          if (finished) return;
+          scrollT = pHold * DURATION;
+          if (pHold > 0) start();
+        },
+      };
+
+      // Start state: a quiet empty desktop. If the page opens past step 3, or the
+      // visitor prefers reduced motion, show the finished layout straight away.
+      closeAll();
+      const st = window.__hc_handoff_state;
+      if (reduceMotion || (st && st.pHold > 0)) {
+        finish();
+      } else if ('IntersectionObserver' in window) {
+        new IntersectionObserver((entries) => {
+          if (entries.some((e) => e.isIntersecting)) start();
+        }, { threshold: 0.5 }).observe(slotEl);
+      } else {
+        finish();
+      }
+    })();
 
     // Activity Monitor Live Telemetry simulation
     setInterval(() => {

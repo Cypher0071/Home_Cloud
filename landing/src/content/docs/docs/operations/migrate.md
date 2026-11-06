@@ -9,7 +9,8 @@ Do not copy the install directory. Install Home Cloud fresh on the new machine, 
 
 ## Before you start
 
-- The new machine meets the [requirements](/docs/getting-started/requirements/): Node.js 22.23.4 or newer and Docker, installed before you run the installer.
+- The new machine meets the [requirements](/docs/getting-started/requirements/): Linux with systemd, `sudo` and internet access. The installer sets up Node.js and Docker if they are missing.
+- You know which Home Cloud version the old machine runs. The installer installs the latest release. Pass `--branch <tag>` if you want the same version.
 - Take a backup on the old machine and copy the archive to the new one.
 - Decide how to handle the tunnel. See [Tunnel choices](#tunnel-choices).
 - Moving Docker data is separate. See [Docker data](#docker-data).

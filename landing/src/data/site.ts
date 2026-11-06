@@ -2,7 +2,7 @@
 // Single source of truth for project links and release facts.
 // Release data is fetched from GitHub at build time, so publishing a new
 // tag and rebuilding the site (see .github/workflows/landing-release.yml)
-// updates every version, command and requirement on the page.
+// updates the version and changelog on the page.
 
 export const REPO = 'Cypher0071/Home_Cloud';
 export const REPO_URL = `https://github.com/${REPO}`;
@@ -30,7 +30,6 @@ export const links = {
 export interface ReleaseInfo {
   tag: string;
   publishedAt: string | null;
-  nodeMin: string;
   stars: number | null;
 }
 
@@ -38,7 +37,6 @@ export interface ReleaseInfo {
 const FALLBACK: ReleaseInfo = {
   tag: 'v1.0.1',
   publishedAt: '2026-10-23T20:37:14Z',
-  nodeMin: '22.13',
   stars: null,
 };
 
@@ -67,26 +65,20 @@ export function getRelease(): Promise<ReleaseInfo> {
     ]);
     const tag: string = release?.tag_name ?? FALLBACK.tag;
 
-    // Node minimum comes from the released package.json, not from a copy here.
-    let nodeMin = FALLBACK.nodeMin;
-    const pkg = await getJson(`https://raw.githubusercontent.com/${REPO}/${tag}/package.json`);
-    const range: string | undefined = pkg?.engines?.node;
-    const match = range?.match(/(\d+(?:\.\d+){0,2})/);
-    if (match) nodeMin = match[1].replace(/\.0$/, '');
-
     return {
       tag,
       publishedAt: release?.published_at ?? (release ? null : FALLBACK.publishedAt),
-      nodeMin,
       stars: typeof repo?.stargazers_count === 'number' ? repo.stargazers_count : FALLBACK.stars,
     };
   })();
   return cached;
 }
 
-export const installCommand = (tag: string) =>
-  `curl -fsSL https://raw.githubusercontent.com/${REPO}/${tag}/setup.sh -o setup.sh && \\
+// setup.sh on main always installs the latest published release, never
+// unreleased commits, so the command downloads it from main. It resolves the
+// release itself; `--branch <tag>` pins a version.
+export const installCommand = `curl -fsSL https://raw.githubusercontent.com/${REPO}/main/setup.sh -o setup.sh && \\
 less setup.sh && \\
 bash setup.sh`;
 
-export const installerSource = (tag: string) => `${REPO_URL}/blob/${tag}/setup.sh`;
+export const installerSource = `${REPO_URL}/blob/main/setup.sh`;
