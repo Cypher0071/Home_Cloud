@@ -324,6 +324,19 @@ try {
 		console.log("  ✔ Uses GitHub's latest release; falls back to the highest stable tag; never falls back to main.");
 	}
 
+	{
+		// Regression: the env step reads agent/.env with the agent's dotenv package, so a fresh
+		// clone (no node_modules yet) must run pnpm install before that step's first use.
+		const install = setupSource.indexOf("run_as_current_user pnpm install --frozen-lockfile");
+		const firstDotenvRun = setupSource.indexOf('CURRENT_JWT_STATE="$(');
+		const envStep = setupSource.indexOf('echo "⚙ Configuring environment & security credentials..."');
+		assert.ok(install >= 0 && firstDotenvRun >= 0 && envStep >= 0, "setup.sh install and env markers must exist");
+		assert.ok(install < envStep, "pnpm install must run before the env step, which requires dotenv");
+		assert.ok(install < firstDotenvRun, "pnpm install must run before dotenv is first required");
+		assert.equal(setupSource.split("pnpm install --frozen-lockfile)").length - 1, 1, "dependencies are installed exactly once");
+		console.log("  ✔ Dependencies are installed before the env step needs dotenv.");
+	}
+
 	console.log("\n=== ALL RUNTIME BOOTSTRAP TESTS PASSED ===");
 } finally {
 	for (const dir of sandboxes) fs.rmSync(dir, { recursive: true, force: true });
