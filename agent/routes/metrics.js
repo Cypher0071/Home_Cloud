@@ -2,11 +2,13 @@ const express = require("express");
 const router = express.Router();
 const si = require("systeminformation");
 const { bindStreamToSession } = require("../services/sessionStreams");
+const { filterRealDisks } = require("../services/disks");
 
 async function getMetrics() {
 	const cpu = await si.currentLoad();
 	const mem = await si.mem();
-	const disk = await si.fsSize();
+	// Real disks only: no per-container Docker overlays, no duplicate mounts of one device.
+	const disk = filterRealDisks(await si.fsSize());
 	const network = await si.networkStats();
 	return { cpu, mem, disk, network };
 }

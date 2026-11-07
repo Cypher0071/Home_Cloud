@@ -148,7 +148,7 @@ if [ "\${MOCK_CURL_FAIL:-0}" = "1" ]; then
 fi
 printf 'fake-cloudflared' > "$out"`,
 	);
-	writeMock(bin, "sha256sum", 'echo "053b80b0a23031a038fdbf3c073f59f82b8f1f152aa67971d7383ffafc0dbab0  ${2:-}"');
+	writeMock(bin, "sha256sum", 'echo "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872  ${2:-}"');
 
 	const env = {
 		...process.env,
@@ -724,7 +724,7 @@ console.log("\n[Test 12] Stale backup reference preserved when restoration canno
 	const setupStateDir = path.join(sandbox.state, "setup");
 	fs.mkdirSync(setupStateDir, { recursive: true });
 
-	const stateKey = "053b80b0a23031a038fdbf3c073f59f82b8f1f152aa67971d7383ffafc0dbab0";
+	const stateKey = "1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872";
 	const backupFile = path.join(setupStateDir, `service-unit.${stateKey}.backup.12345`);
 	fs.writeFileSync(backupFile, previousUnit);
 
