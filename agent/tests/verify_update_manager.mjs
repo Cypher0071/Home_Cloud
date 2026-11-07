@@ -130,8 +130,8 @@ updateManager._resetForTesting({
 	cachedReleaseInfo: {
 		currentVersion: "1.0.0",
 		currentCommit: "abc1234",
-		latestVersion: "1.2.5",
-		tagName: "v1.2.5",
+		latestVersion: "1.4.0",
+		tagName: "v1.4.0",
 		updateAvailable: true,
 		releaseNotes: "Fixes",
 		publishedAt: "2026-10-20T00:00:00Z",
@@ -145,8 +145,8 @@ updateManager._resetForTesting({
 const status = updateManager.getUpdateStatus();
 assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
-assert.equal(status.latestVersion, "1.2.5");
-assert.equal(status.tagName, "v1.2.5");
+assert.equal(status.latestVersion, "1.4.0");
+assert.equal(status.tagName, "v1.4.0");
 assert.equal(status.currentVersion, "1.3.0");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
