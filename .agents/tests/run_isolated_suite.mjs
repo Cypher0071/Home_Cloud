@@ -28,6 +28,7 @@ const suites = {
 		"agent/tests/verify_installer_lan_framing.mjs",
 		"agent/tests/verify_compose_ingress_reconcile.mjs",
 		"agent/tests/verify_port_check.mjs",
+		"agent/tests/verify_cloudflared_binary.mjs",
 		"agent/tests/verify_stream_revocation.mjs",
 		"agent/tests/verify_setup_runtime_bootstrap.mjs",
 		"agent/tests/verify_container_startup_watch.mjs",

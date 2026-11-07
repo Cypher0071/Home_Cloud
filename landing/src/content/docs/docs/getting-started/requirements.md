@@ -34,7 +34,7 @@ If you skip these, Home Cloud still works on your local network at `http://<serv
 | `docker` group membership | The service user is added to the `docker` group. |
 | `git`, `curl`, `ca-certificates`, `gnupg`, `psmisc`, `xz`, `tar`, build tools, `python3` | Installed with `apt-get`, `dnf`, `yum`, or `pacman`. Other package managers are not handled, so install `git` first on those systems. |
 | OpenSSH server | Installed and enabled if it is not already active. Skip with `--skip-ssh`. |
-| `cloudflared` | Optional. The installer pins release 2026.10.3 and checks its SHA-256 before installing. |
+| `cloudflared` | Optional. The installer pins release 2026.10.7 and checks its SHA-256 before installing. Each Home Cloud release pins a cloudflared version. After an update, Home Cloud downloads that version, checks its SHA-256, and runs it from `~/.local/share/home-cloud/bin` (no sudo). The system copy is left alone. |
 
 Nothing is piped into a shell. The installer does not run NodeSource, `get.pnpm.io`, `get.docker.com`, or the `cloudflared` `releases/latest` download.
 

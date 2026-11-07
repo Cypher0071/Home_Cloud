@@ -4,6 +4,7 @@ const { execFileSync } = require("child_process");
 const yaml = require("js-yaml");
 const { CF_CONFIG, CF_DOMAIN } = require("../config");
 const { restartTunnel } = require("../tunnel");
+const { getCloudflaredPath } = require("./cloudflaredBinary");
 
 const CONFIG_PATH = CF_CONFIG;
 
@@ -139,7 +140,7 @@ const ingressMutex = new AsyncMutex();
  */
 function validateWithCloudflared(filePath) {
 	try {
-		execFileSync("cloudflared", ["tunnel", "--config", filePath, "ingress", "validate"], {
+		execFileSync(getCloudflaredPath(), ["tunnel", "--config", filePath, "ingress", "validate"], {
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
 			timeout: 5000,

@@ -5,7 +5,8 @@ const http = require("http");
 const ws = require("ws");
 const path = require("path");
 const fs = require("fs");
-const { PORT, assertRuntimeSecrets } = require("./config");
+const { PORT, CF_CONFIG, assertRuntimeSecrets } = require("./config");
+const { selectCloudflared, ensureCloudflared, setCloudflaredPath } = require("./services/cloudflaredBinary");
 const {
 	startTunnel,
 	stopTunnel,
@@ -243,9 +244,31 @@ if (require.main === module) {
 	assertRuntimeSecrets();
 	server.listen(PORT, () => {
 		console.log(`Agent is running on port: ${PORT}`);
+		// Start on the newest cloudflared already installed, then bring it up to this release's
+		// pinned version in the background (a slow download must not delay the tunnel).
+		selectCloudflared();
 		startTunnelWithRetry().catch((err) => {
 			console.error("[tunnel] Unexpected supervisor error:", err.message);
 		});
+		updateCloudflaredInBackground();
+	});
+}
+
+async function updateCloudflaredInBackground() {
+	const result = await ensureCloudflared();
+	if (!result.updated || isShuttingDown || !fs.existsSync(CF_CONFIG)) return;
+	const { restartTunnel } = require("./tunnel");
+	const { ingressMutex } = require("./services/ingress");
+	await ingressMutex.runExclusive(async () => {
+		try {
+			await restartTunnel();
+			console.log(`[cloudflared] Tunnel restarted on ${result.version}`);
+		} catch (err) {
+			// The new build wouldn't connect; go back to the one that was working.
+			console.error(`[cloudflared] Tunnel failed on ${result.version} (${err.message}); reverting to ${result.previousVersion}`);
+			setCloudflaredPath(result.previousPath);
+			await restartTunnel().catch(() => {});
+		}
 	});
 }
 
