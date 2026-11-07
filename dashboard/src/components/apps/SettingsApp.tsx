@@ -27,6 +27,7 @@ import axios from 'axios';
 import { useWallpaper } from '../../hooks/useWallpaper';
 import { FIT_OPTIONS, WALLPAPER_PRESETS } from '../../utils/wallpaper';
 import { copyText } from '../../utils/clipboard';
+import { normalizeUpdateStatus } from '../../utils/updateStatus';
 import styles from './settings.module.css';
 
 interface StorageDrive {
@@ -325,7 +326,7 @@ export default function SettingsApp() {
     setUpdateError(null);
     try {
       const res = await axios.get<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/status');
-      const data = 'update' in res.data ? res.data.update : res.data;
+      const data = normalizeUpdateStatus('update' in res.data ? res.data.update : res.data);
       setUpdateStatus(data);
       broadcastUpdateStatus(Boolean(data?.updateAvailable));
       if (data?.isUpdating && !applyingUpdate) {
@@ -348,7 +349,7 @@ export default function SettingsApp() {
     setUpdateError(null);
     try {
       const res = await axios.post<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/check');
-      const data = 'update' in res.data ? res.data.update : res.data;
+      const data = normalizeUpdateStatus('update' in res.data ? res.data.update : res.data);
       setUpdateStatus(data);
       broadcastUpdateStatus(Boolean(data?.updateAvailable));
     } catch (err: unknown) {
@@ -374,7 +375,7 @@ export default function SettingsApp() {
     setUpdateProgress({ stage: 'restart', message, percent: 100 });
     broadcastUpdateStatus(false);
     axios.get<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/status')
-      .then(res => setUpdateStatus('update' in res.data ? res.data.update : res.data))
+      .then(res => setUpdateStatus(normalizeUpdateStatus('update' in res.data ? res.data.update : res.data)))
       .catch(() => {});
   };
 
@@ -407,7 +408,7 @@ export default function SettingsApp() {
               '/api/settings/update/status',
               { timeout: 2000 },
             );
-            const status = 'update' in st.data ? st.data.update : st.data;
+            const status = normalizeUpdateStatus('update' in st.data ? st.data.update : st.data);
             if (status?.restartRequired) {
               stillOldProcess += 1;
               if (stillOldProcess >= 20) {
@@ -553,7 +554,7 @@ export default function SettingsApp() {
     axios.get<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/status')
       .then(res => {
         if (!active) return;
-        const data = 'update' in res.data ? res.data.update : res.data;
+        const data = normalizeUpdateStatus('update' in res.data ? res.data.update : res.data);
         setUpdateStatus(data);
         broadcastUpdateStatus(Boolean(data?.updateAvailable));
       })
