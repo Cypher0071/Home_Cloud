@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { memInUse } from '../utils/memory';
 
 export interface CpuLoad {
   avgLoad?: number;
@@ -161,7 +162,7 @@ export function useSystemMetrics() {
 
   const cpuLoad = data?.cpu?.currentLoad ?? 0;
   const memTotal = data?.mem?.total ?? 0;
-  const memUsed = data?.mem?.used ?? 0;
+  const memUsed = data?.mem ? memInUse(data.mem) : 0;
   const memUsedPct = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
 
   // Active network interface download speed

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { memInUse } from '../utils/memory';
 import styles from './metrics.module.css';
 
 // ─── Types matching systeminformation output ───
@@ -137,7 +138,7 @@ export default function Metrics() {
 
   const { cpu, mem, disk } = data;
 
-  const memUsedPercent = mem.total > 0 ? (mem.used / mem.total) * 100 : 0;
+  const memUsedPercent = mem.total > 0 ? (memInUse(mem) / mem.total) * 100 : 0;
   const swapUsedPercent =
     mem.swaptotal > 0 ? (mem.swapused / mem.swaptotal) * 100 : 0;
 
@@ -218,7 +219,7 @@ export default function Metrics() {
           <div className={styles.statsRow}>
             <div className={styles.stat}>
               <div className={styles.statLabel}>Used</div>
-              <div className={styles.statValue}>{formatBytes(mem.used)}</div>
+              <div className={styles.statValue}>{formatBytes(memInUse(mem))}</div>
             </div>
             <div className={styles.stat}>
               <div className={styles.statLabel}>Free</div>
