@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.0
+
+Port checks in the Run form, cloudflared kept up to date with each release, and correct memory and storage numbers in the System Monitor.
+
+### Added
+
+- The Run Container form pre-fills container ports from the ports the image declares and suggests a free, browser-safe host port for each. Each row is checked as you type. A host port already used by a container or host program, a duplicate, or a malformed or half-filled row is an error. A browser-blocked port, an undeclared container port, or a port reserved by a stopped container is a warning. Most issues come with a one-click fix. The agent repeats the hard checks when the container is created. Any number of containers can listen on the same port inside; only host ports must be unique.
+- cloudflared now updates with Home Cloud. Each release pins a cloudflared version (now 2026.10.7). On startup, if the installed cloudflared is older, the agent downloads the pinned build, checks it against Cloudflare's published SHA256, keeps it in `~/.local/share/home-cloud/bin`, and restarts the tunnel on it. If anything fails, the working binary is kept or restored. `setup.sh` installs the same pinned version.
+
+### Fixed
+
+- Memory "In Use" and the memory percentage no longer count the disk cache Linux keeps in spare RAM, so In Use no longer equals Available. The System Monitor shows the cache and unused memory as separate rows.
+- Storage metrics count each real disk once. Docker's per-container `overlay` mounts, bind mounts and WSL internals are no longer listed as extra partitions or added to the total. The Files sidebar shows the disk that holds the storage folder first.
+- Settings no longer shows an update as available from a stale cached check, and treats an older agent that does not report `restartRequired` as needing a restart.
+
 ## 1.3.0
 
 Docker run failures are caught and explained, database run presets, and fixes for the container tabs and the Updates panel.
