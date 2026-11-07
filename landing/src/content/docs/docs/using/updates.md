@@ -35,11 +35,7 @@ After a check finds a newer release, choose **Update Now** and confirm. The upda
 3. **Checkout.** `git checkout --detach <tag>`. The install is then on a detached HEAD at that tag.
 4. **Install.** `pnpm install --frozen-lockfile`.
 5. **Build.** `pnpm --filter dashboard build`, followed by a check that `dashboard/dist/index.html` exists.
-6. **Restart.** The agent reports 100% and, two seconds later, runs this in the background:
-
-```bash
-sudo systemctl restart home-cloud || systemctl restart home-cloud || pkill -f 'nodemon index.js' || true
-```
+6. **Restart.** The agent asks systemd whether it is the `home-cloud` service and whether the unit restarts itself (`Restart=always`, which the installer sets). If so, it reports 100% and, two seconds later, exits gracefully, and systemd starts it again on the new code. This needs no `sudo` or other permission. If the agent was not started by that unit, for example when you run it by hand, nothing would bring it back, so it does not exit. It reports that the update is installed and that you need to restart it yourself.
 
 Only one update can run at a time. A second request gets a 409 error.
 
@@ -52,12 +48,12 @@ A dialog shows four steps with a progress bar and the latest log line:
 3. Compiling Dashboard
 4. Restarting Service
 
-The progress comes from a live stream at `/api/settings/update/progress`. When the restart step begins, the dashboard polls `/api/ping` every 1.5 seconds. When the agent answers again, it reloads the page.
+The progress comes from a live stream at `/api/settings/update/progress`. When the restart step begins, the dashboard polls `/api/ping` every 1.5 seconds. A ping alone is not enough, because the old process answers it until it is replaced, so the dashboard also checks that the agent is running the version that is on disk. When it is, the dashboard reloads the page.
 
 The restart ends everything running on the agent: host terminal sessions are killed and open streams reconnect. Your login stays valid, because the signing secret and the revocation counter are on disk.
 
-:::caution
-The restart needs permission. The command above runs as the service user. It works if that user can run `sudo systemctl restart home-cloud` without a password, or can restart the unit by another route. The installer does not add such a rule. If the restart does not happen, the new build is on disk but the old code keeps running, and the dashboard may still report success because the old process answers `/api/ping`. If the version shown in Settings does not change after reload, restart the service yourself:
+:::note
+If the agent cannot restart itself, the dialog says **Restart Required** instead of **Update Complete**, and Settings keeps showing a notice until you restart it. Run:
 
 ```bash
 sudo systemctl restart home-cloud

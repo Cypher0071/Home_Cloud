@@ -51,7 +51,7 @@ console.log("\n[Test Suite 2] Version & Commit Detection");
 
 const currentVersion = updateManager.getCurrentVersion();
 assert.ok(typeof currentVersion === "string" && currentVersion.length > 0, "Current version must be a non-empty string");
-assert.equal(currentVersion, "1.2.1", "Root package.json version is 1.2.1");
+assert.equal(currentVersion, "1.2.2", "Root package.json version is 1.2.2");
 
 const currentCommit = updateManager.getCurrentCommit();
 assert.ok(typeof currentCommit === "string" && currentCommit.length > 0, "Current commit must be detected");
@@ -147,9 +147,75 @@ assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
 assert.equal(status.latestVersion, "1.2.5");
 assert.equal(status.tagName, "v1.2.5");
-assert.equal(status.currentVersion, "1.2.1");
+assert.equal(status.currentVersion, "1.2.2");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
+
+// Regression: after an update is installed, a cache written before it must not keep claiming
+// that an update is available, or the dashboard shows "1.2.2 -> 1.2.2, Update Available".
+updateManager._resetForTesting({
+	cachedReleaseInfo: {
+		currentVersion: "1.0.0",
+		currentCommit: "abc1234",
+		latestVersion: "1.2.2",
+		tagName: "v1.2.2",
+		updateAvailable: true, // stale: computed before the update was installed
+		releaseNotes: "Fixes",
+		lastChecked: "2026-10-20T12:00:00Z",
+	},
+});
+const staleStatus = updateManager.getUpdateStatus();
+assert.equal(staleStatus.currentVersion, "1.2.2");
+assert.equal(staleStatus.latestVersion, "1.2.2");
+assert.equal(staleStatus.updateAvailable, false, "latest equals installed, so no update is available");
+assert.equal(staleStatus.restartRequired, false, "the running code matches what is on disk");
+const staleCheck = await updateManager.checkForUpdates();
+assert.equal(staleCheck.updateAvailable, false, "a cached check must also recompute availability");
+assert.equal(staleCheck.currentVersion, "1.2.2", "a cached check reports the installed version");
+
+console.log("  ✔ Cached update info is recomputed against the installed version");
+
+// Restart after an update: only when systemd says this process is home-cloud.service and the
+// unit restarts itself does the agent exit. Everything else must report a manual restart rather
+// than kill an agent that nothing would bring back (a hand-started agent inherits INVOCATION_ID).
+{
+	const realSetTimeout = globalThis.setTimeout;
+	const realKill = process.kill;
+	const kills = [];
+	globalThis.setTimeout = (fn) => {
+		fn();
+		return 0;
+	};
+	process.kill = (pid, signal) => {
+		kills.push([pid, signal]);
+		return true;
+	};
+	try {
+		const manualCases = {
+			"systemctl unavailable": () => null,
+			"unit stopped (MainPID 0)": () => ({ mainPid: 0, restart: "always" }),
+			"another process is the unit": () => ({ mainPid: process.pid + 1, restart: "always" }),
+			"unit does not restart itself": () => ({ mainPid: process.pid, restart: "no" }),
+		};
+		for (const [name, probe] of Object.entries(manualCases)) {
+			assert.equal(updateManager.scheduleServiceRestart({ probe }), "manual", name);
+		}
+		assert.deepEqual(kills, [], "nothing may be signalled unless systemd will restart the agent");
+
+		const mode = updateManager.scheduleServiceRestart({ probe: () => ({ mainPid: process.pid, restart: "always" }) });
+		assert.equal(mode, "service");
+		assert.deepEqual(kills, [[process.pid, "SIGTERM"]], "as the Restart=always unit the agent exits gracefully");
+
+		// With no injected probe the real systemctl is asked; a test process is never the unit.
+		kills.length = 0;
+		assert.equal(updateManager.scheduleServiceRestart(), "manual");
+		assert.deepEqual(kills, []);
+	} finally {
+		globalThis.setTimeout = realSetTimeout;
+		process.kill = realKill;
+	}
+}
+console.log("  ✔ Restart is a graceful exit only for the real systemd unit; otherwise reported as manual");
 
 // -------------------------------------------------------------
 // [Test Suite 5] Update Execution Pipeline (applyUpdate)
@@ -308,7 +374,7 @@ try {
 	assert.equal(resStatus.status, 200);
 	const dataStatus = await resStatus.json();
 	assert.equal(dataStatus.status, "ok");
-	assert.equal(dataStatus.currentVersion, "1.2.1");
+	assert.equal(dataStatus.currentVersion, "1.2.2");
 	assert.equal(dataStatus.isUpdating, false);
 	console.log("  ✔ GET /api/settings/update/status returns 200 with status payload");
 

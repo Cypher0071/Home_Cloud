@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ReleaseNotes from './ReleaseNotes';
 import {
   Monitor,
   HardDrive,
@@ -56,6 +57,7 @@ export interface UpdateStatus {
   latestVersion: string;
   tagName?: string;
   updateAvailable: boolean;
+  restartRequired?: boolean;
   releaseNotes?: string;
   publishedAt?: string;
   htmlUrl?: string;
@@ -187,6 +189,7 @@ export default function SettingsApp() {
   const [reconnecting, setReconnecting] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [isUpdateComplete, setIsUpdateComplete] = useState(false);
+  const [manualRestart, setManualRestart] = useState(false);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const watchdogRef = useRef<number | null>(null);
@@ -358,6 +361,23 @@ export default function SettingsApp() {
     }
   };
 
+  // The update is on disk but the service did not restart itself (for example it was started by
+  // hand instead of by systemd). Say so instead of claiming the update is complete.
+  const finishWithoutRestart = (message: string) => {
+    if (watchdogRef.current) {
+      clearInterval(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+    setManualRestart(true);
+    setApplyingUpdate(false);
+    setReconnecting(false);
+    setUpdateProgress({ stage: 'restart', message, percent: 100 });
+    broadcastUpdateStatus(false);
+    axios.get<UpdateStatus | { update: UpdateStatus }>('/api/settings/update/status')
+      .then(res => setUpdateStatus('update' in res.data ? res.data.update : res.data))
+      .catch(() => {});
+  };
+
   const startReconnectingWatchdog = () => {
     if (reconnecting) return;
     setReconnecting(true);
@@ -372,27 +392,49 @@ export default function SettingsApp() {
     }
 
     setTimeout(() => {
+      let stillOldProcess = 0;
       watchdogRef.current = window.setInterval(async () => {
         try {
           const res = await axios.get<{ status: string }>(`/api/ping?_t=${Date.now()}`, {
             timeout: 2000,
           });
-          if (res.data?.status === 'ok') {
-            if (watchdogRef.current) {
-              clearInterval(watchdogRef.current);
-              watchdogRef.current = null;
+          if (res.data?.status !== 'ok') return;
+
+          // A ping alone proves nothing: the old process answers it until it is replaced.
+          // The agent reports restartRequired until it runs the code that is on disk.
+          try {
+            const st = await axios.get<UpdateStatus | { update: UpdateStatus }>(
+              '/api/settings/update/status',
+              { timeout: 2000 },
+            );
+            const status = 'update' in st.data ? st.data.update : st.data;
+            if (status?.restartRequired) {
+              stillOldProcess += 1;
+              if (stillOldProcess >= 20) {
+                finishWithoutRestart(
+                  'Update installed, but Home Cloud did not restart. Restart it to finish: sudo systemctl restart home-cloud',
+                );
+              }
+              return;
             }
-            setIsUpdateComplete(true);
-            broadcastUpdateStatus(false);
-            setUpdateProgress({
-              stage: 'complete',
-              message: 'Update complete! Reloading dashboard…',
-              percent: 100,
-            });
-            setTimeout(() => {
-              window.location.reload();
-            }, 1200);
+          } catch {
+            // The server answered the ping; if status cannot be read, trust the ping.
           }
+
+          if (watchdogRef.current) {
+            clearInterval(watchdogRef.current);
+            watchdogRef.current = null;
+          }
+          setIsUpdateComplete(true);
+          broadcastUpdateStatus(false);
+          setUpdateProgress({
+            stage: 'complete',
+            message: 'Update complete! Reloading dashboard…',
+            percent: 100,
+          });
+          setTimeout(() => {
+            window.location.reload();
+          }, 1200);
         } catch {
           // Expected while server is offline / restarting
         }
@@ -405,6 +447,7 @@ export default function SettingsApp() {
     setApplyingUpdate(true);
     setUpdateError(null);
     setIsUpdateComplete(false);
+    setManualRestart(false);
     setReconnecting(false);
     setUpdateProgress({
       stage: 'checkout',
@@ -439,7 +482,11 @@ export default function SettingsApp() {
           });
           if (data.stage === 'restart' || data.done || data.stage === 'complete') {
             if (es) es.close();
-            startReconnectingWatchdog();
+            if (data.restartMode === 'manual') {
+              finishWithoutRestart(String(data.message || 'Update installed. Restart Home Cloud to finish.'));
+            } else {
+              startReconnectingWatchdog();
+            }
           }
         } catch {
           if (event.data) {
@@ -467,7 +514,11 @@ export default function SettingsApp() {
           });
           if (data.stage === 'restart') {
             if (es) es.close();
-            startReconnectingWatchdog();
+            if (data.restartMode === 'manual') {
+              finishWithoutRestart(String(data.message || 'Update installed. Restart Home Cloud to finish.'));
+            } else {
+              startReconnectingWatchdog();
+            }
           }
         } catch {
           // ignore
@@ -1136,6 +1187,16 @@ export default function SettingsApp() {
               </div>
             )}
 
+            {updateStatus?.restartRequired && !updateStatus.updateAvailable && !updateModalOpen && (
+              <div className={styles.passwordError} role="alert" style={{ marginBottom: 16 }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                <span>
+                  The update is installed, but Home Cloud is still running the old version. Restart it to finish:
+                  sudo systemctl restart home-cloud
+                </span>
+              </div>
+            )}
+
             <div className={`${styles.updateCard} ${updateStatus?.updateAvailable ? styles.updateCardAvailable : ''}`}>
               <div className={styles.cardHeader}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1222,9 +1283,7 @@ export default function SettingsApp() {
                         )}
                       </div>
                       <div className={styles.releaseNotesContainer}>
-                        <pre className={styles.releaseNotesText}>
-                          {updateStatus.releaseNotes}
-                        </pre>
+                        <ReleaseNotes markdown={updateStatus.releaseNotes} />
                       </div>
                     </div>
                   )}
@@ -1343,6 +1402,8 @@ export default function SettingsApp() {
               <div className={styles.modalTitle} id="progress-modal-title">
                 {updateError ? (
                   <AlertTriangle size={18} style={{ color: '#f87171' }} />
+                ) : manualRestart ? (
+                  <AlertTriangle size={18} style={{ color: '#fbbf24' }} />
                 ) : isUpdateComplete ? (
                   <CheckCircle2 size={18} style={{ color: '#4ade80' }} />
                 ) : (
@@ -1350,6 +1411,8 @@ export default function SettingsApp() {
                 )}
                 {updateError
                   ? 'Update Failed'
+                  : manualRestart
+                  ? 'Restart Required'
                   : isUpdateComplete
                   ? 'Update Complete!'
                   : reconnecting
@@ -1477,6 +1540,17 @@ export default function SettingsApp() {
                   }}
                 >
                   Close & Retry
+                </button>
+              ) : manualRestart ? (
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setUpdateModalOpen(false);
+                    setManualRestart(false);
+                  }}
+                >
+                  Close
                 </button>
               ) : isUpdateComplete ? (
                 <span className={styles.modalFooterStatus}>Reloading in a moment…</span>

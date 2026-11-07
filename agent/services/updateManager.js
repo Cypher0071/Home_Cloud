@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { spawn, execSync } = require("child_process");
+const { spawn, execSync, execFileSync } = require("child_process");
 const { EventEmitter } = require("events");
 
 const REPO = "Cypher0071/Home_Cloud";
@@ -145,6 +145,68 @@ function compareSemver(v1, v2) {
 	return 0;
 }
 
+// The version this process was started with. After an update the files on disk move on to the
+// new release while this process keeps running the old code until it is restarted.
+const runningVersion = getCurrentVersion();
+
+function isRestartRequired() {
+	return getCurrentVersion() !== runningVersion;
+}
+
+/**
+ * Release info is cached, but "current version" and "update available" depend on what is on
+ * disk right now. Recompute them on every read so a cached answer can never claim an update
+ * that has already been installed.
+ */
+function withLiveVersion(info) {
+	if (!info) return info;
+	const currentVersion = getCurrentVersion();
+	return {
+		...info,
+		currentVersion,
+		currentCommit: getCurrentCommit(),
+		updateAvailable: Boolean(info.latestVersion) && compareSemver(info.latestVersion, currentVersion) > 0,
+	};
+}
+
+/**
+ * Asks systemd whether this very process is the main process of home-cloud.service and the
+ * unit restarts itself. INVOCATION_ID is not enough: systemd exports it to everything it starts,
+ * including a terminal a developer launched the agent from by hand.
+ */
+function readSystemdUnit() {
+	try {
+		const out = execFileSync("systemctl", ["show", "home-cloud", "--property=MainPID,Restart"], {
+			encoding: "utf8",
+			timeout: 3000,
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+		const props = Object.fromEntries(
+			out
+				.split("\n")
+				.map((line) => line.split("="))
+				.filter((pair) => pair.length >= 2)
+				.map(([key, ...rest]) => [key.trim(), rest.join("=").trim()]),
+		);
+		return { mainPid: Number(props.MainPID), restart: props.Restart };
+	} catch (_) {
+		return null;
+	}
+}
+
+/**
+ * Restarts the service after an update. When this process is the systemd unit and the unit has
+ * Restart=always, a graceful exit is enough and needs no sudo or polkit rule. The old
+ * `sudo systemctl restart` could not work for the unprivileged service user, so the process kept
+ * running the old code. Anywhere else nothing would bring the agent back, so report "manual".
+ */
+function scheduleServiceRestart({ probe = readSystemdUnit } = {}) {
+	const unit = probe();
+	if (!unit || unit.mainPid !== process.pid || unit.restart !== "always") return "manual";
+	setTimeout(() => process.kill(process.pid, "SIGTERM"), 2000);
+	return "service";
+}
+
 /**
  * Checks for upstream releases from GitHub.
  * Caches release info for 24 hours unless force: true is passed.
@@ -154,7 +216,7 @@ async function checkForUpdates({ force = false } = {}) {
 	const currentCommit = getCurrentCommit();
 
 	if (!force && cachedReleaseInfo && Date.now() - lastFetchTime < CACHE_TTL_MS) {
-		return cachedReleaseInfo;
+		return withLiveVersion(cachedReleaseInfo);
 	}
 
 	const controller = new AbortController();
@@ -233,7 +295,7 @@ async function checkForUpdates({ force = false } = {}) {
 
 		if (cachedReleaseInfo) {
 			return {
-				...cachedReleaseInfo,
+				...withLiveVersion(cachedReleaseInfo),
 				error: errorMsg,
 				lastChecked: new Date().toISOString(),
 			};
@@ -463,23 +525,18 @@ async function applyUpdate(onProgress, options = {}) {
 		}
 
 		// Stage 6: Finalize & Restart trigger
+		const restartMode =
+			!options.skipRestart && process.env.NODE_ENV !== "test" ? scheduleServiceRestart() : "skipped";
 		emit({
 			stage: "restart",
-			message: "Update applied successfully. Scheduling service restart in 2 seconds...",
+			message:
+				restartMode === "manual"
+					? "Update installed. Restart Home Cloud to finish: sudo systemctl restart home-cloud"
+					: "Update applied successfully. Scheduling service restart in 2 seconds...",
 			percent: 100,
 			completed: true,
+			restartMode,
 		});
-
-		if (!options.skipRestart && process.env.NODE_ENV !== "test") {
-			spawn(
-				"bash",
-				[
-					"-c",
-					"sleep 2 && (sudo systemctl restart home-cloud || systemctl restart home-cloud || pkill -f 'nodemon index.js' || true)",
-				],
-				{ detached: true, stdio: "ignore" }
-			).unref();
-		}
 
 		isUpdating = false;
 		updateError = null;
@@ -515,21 +572,21 @@ async function applyUpdate(onProgress, options = {}) {
  * Returns complete update status object
  */
 function getUpdateStatus() {
-	const currentVersion = getCurrentVersion();
-	const currentCommit = getCurrentCommit();
+	const live = withLiveVersion(cachedReleaseInfo);
 
 	return {
 		isUpdating,
 		updateError,
-		currentVersion,
-		currentCommit,
-		latestVersion: cachedReleaseInfo ? cachedReleaseInfo.latestVersion : null,
-		tagName: cachedReleaseInfo ? cachedReleaseInfo.tagName : null,
-		updateAvailable: cachedReleaseInfo ? cachedReleaseInfo.updateAvailable : false,
-		releaseNotes: cachedReleaseInfo ? cachedReleaseInfo.releaseNotes : null,
-		publishedAt: cachedReleaseInfo ? cachedReleaseInfo.publishedAt : null,
-		htmlUrl: cachedReleaseInfo ? cachedReleaseInfo.htmlUrl : null,
-		lastChecked: cachedReleaseInfo ? cachedReleaseInfo.lastChecked : null,
+		currentVersion: live ? live.currentVersion : getCurrentVersion(),
+		currentCommit: live ? live.currentCommit : getCurrentCommit(),
+		latestVersion: live ? live.latestVersion : null,
+		tagName: live ? live.tagName : null,
+		updateAvailable: live ? live.updateAvailable : false,
+		restartRequired: isRestartRequired(),
+		releaseNotes: live ? live.releaseNotes : null,
+		publishedAt: live ? live.publishedAt : null,
+		htmlUrl: live ? live.htmlUrl : null,
+		lastChecked: live ? live.lastChecked : null,
 		lastProgress,
 	};
 }
@@ -569,6 +626,7 @@ module.exports = {
 	applyUpdate,
 	assertReleaseTag,
 	getUpdateStatus,
+	scheduleServiceRestart,
 	getLastProgress,
 	isUpdating: () => isUpdating,
 	runCommand,
