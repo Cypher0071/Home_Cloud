@@ -13,7 +13,7 @@
 		"build": "pnpm --filter dashboard build",
 		"build:landing": "pnpm --filter landing build",
 		"start": "pnpm --filter agent start",
-		"test:dashboard": "pnpm --filter dashboard lint && pnpm --filter dashboard build && node dashboard/tests/verify_code_splitting.mjs && node dashboard/tests/verify_release_notes.mjs && node dashboard/tests/verify_update_status.mjs",
+		"test:dashboard": "pnpm --filter dashboard lint && pnpm --filter dashboard build && node dashboard/tests/verify_code_splitting.mjs && node dashboard/tests/verify_release_notes.mjs && node dashboard/tests/verify_update_status.mjs && node dashboard/tests/verify_port_checks.mjs",
 		"test:agent": "node .agents/tests/run_isolated_suite.mjs agent",
 		"test:e2e": "node .agents/tests/run_isolated_suite.mjs e2e",
 		"test": "pnpm run test:dashboard && pnpm run test:agent && pnpm run test:e2e"

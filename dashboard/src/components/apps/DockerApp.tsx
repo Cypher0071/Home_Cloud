@@ -43,6 +43,7 @@ import { useNetworkDetector } from '../../hooks/useNetworkDetector';
 import * as yaml from 'js-yaml';
 import { copyText } from '../../utils/clipboard';
 import { findRiskyComposeSettings } from '../../utils/composeRisk';
+import { checkPortRows, defaultPortRows, type PortRow, type UsedPort } from '../../utils/portChecks';
 
 /* ─── Types ─── */
 
@@ -1406,7 +1407,11 @@ export default function DockerApp() {
   // Run Container Modal state
   const [runModalImage, setRunModalImage]           = useState<string | null>(null);
   const [runContainerName, setRunContainerName]     = useState('');
-  const [runPorts, setRunPorts]                     = useState<{ hostPort: string; containerPort: string }[]>([]);
+  const [runPorts, setRunPorts]                     = useState<PortRow[]>([]);
+  // Ports the image listens on and host ports already taken, from the agent. Null until loaded.
+  const [runPortInfo, setRunPortInfo]               = useState<{ exposed: number[]; used: UsedPort[] } | null>(null);
+  const runPortsTouchedRef                          = useRef(false);
+  const runPortInfoRequestRef                       = useRef(0);
   const [runEnvs, setRunEnvs]                       = useState<{ key: string; value: string }[]>([]);
   const [runVolumes, setRunVolumes]                 = useState<{ hostPath: string; containerPath: string }[]>([]);
   const [runRestartPolicy, setRunRestartPolicy]     = useState<string>('no');
@@ -2415,6 +2420,24 @@ export default function DockerApp() {
     setRunModalImage(repoTag);
     setRunContainerName('');
     setRunPorts([{ hostPort: '', containerPort: preset?.containerPort ?? '' }]);
+    setRunPortInfo(null);
+    runPortsTouchedRef.current = false;
+    const requestId = ++runPortInfoRequestRef.current;
+    fetch(`/api/docker/ports/info?image=${encodeURIComponent(repoTag)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { exposedPorts?: number[]; usedPorts?: UsedPort[] } | null) => {
+        if (requestId !== runPortInfoRequestRef.current) return;
+        const info = { exposed: data?.exposedPorts ?? [], used: data?.usedPorts ?? [] };
+        setRunPortInfo(info);
+        // Fill in ports the image declares, with free host ports, unless the user already typed.
+        if (data && !runPortsTouchedRef.current) {
+          setRunPorts(defaultPortRows(info.exposed, info.used, preset?.containerPort));
+        }
+      })
+      .catch(() => {
+        // Without the agent's data only the format checks run; the agent still validates on create.
+        if (requestId === runPortInfoRequestRef.current) setRunPortInfo({ exposed: [], used: [] });
+      });
     setRunEnvs([]);
     setRunRequiredFields(preset?.fields ?? []);
     setRunRequiredValues({});
@@ -2425,8 +2448,23 @@ export default function DockerApp() {
     setRunErrorLogs(null);
   };
 
-  const addPortRow = () => setRunPorts((prev) => [...prev, { hostPort: '', containerPort: '' }]);
-  const removePortRow = (idx: number) => setRunPorts((prev) => prev.filter((_, i) => i !== idx));
+  const updatePortRow = (idx: number, field: 'host' | 'container', value: string) => {
+    runPortsTouchedRef.current = true;
+    const key = field === 'host' ? 'hostPort' : 'containerPort';
+    setRunPorts((prev) => prev.map((item, i) => (i === idx ? { ...item, [key]: value } : item)));
+  };
+  const addPortRow = () => {
+    runPortsTouchedRef.current = true;
+    setRunPorts((prev) => [...prev, { hostPort: '', containerPort: '' }]);
+  };
+  const removePortRow = (idx: number) => {
+    runPortsTouchedRef.current = true;
+    setRunPorts((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const runPortIssues = useMemo(
+    () => checkPortRows(runPorts, runPortInfo?.used ?? [], runPortInfo?.exposed ?? []),
+    [runPorts, runPortInfo],
+  );
 
   const addEnvRow = () => setRunEnvs((prev) => [...prev, { key: '', value: '' }]);
   const removeEnvRow = (idx: number) => setRunEnvs((prev) => prev.filter((_, i) => i !== idx));
@@ -2450,6 +2488,12 @@ export default function DockerApp() {
     }
     const requiredKeys = new Set(runRequiredFields.map((f) => f.env));
 
+    if (runPortIssues.some((row) => row.some((issue) => issue.level === 'error'))) {
+      setRunError('Fix the port mappings marked in red first.');
+      setRunSubmitting(false);
+      return;
+    }
+
     const volumes = runVolumes.filter((v) => v.hostPath.trim() && v.containerPath.trim());
     if (net.baseDir) {
       const escaped = volumes.find((v) => {
@@ -2468,7 +2512,7 @@ export default function DockerApp() {
     const payload = {
       image: runModalImage,
       name: runContainerName.trim() || undefined,
-      ports: runPorts.filter((p) => p.hostPort.trim() && p.containerPort.trim()),
+      ports: runPorts.filter((p) => p.hostPort.trim() || p.containerPort.trim()),
       env: [
         ...runRequiredFields.map((f) => `${f.env}=${runRequiredValues[f.env]}`),
         // A manual row with the same key as a required field would override it; the field wins.
@@ -4803,35 +4847,68 @@ export default function DockerApp() {
                     <span style={{ fontSize: '11px', color: '#737373', fontStyle: 'italic' }}>No port mappings added</span>
                   ) : (
                     <div className={styles.dynamicList}>
-                      {runPorts.map((p, idx) => (
-                        <div key={idx} className={styles.dynamicRow}>
-                          <input
-                            className={styles.fieldInput}
-                            type="text"
-                            placeholder="Host (e.g. 8080)"
-                            value={p.hostPort}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setRunPorts((prev) => prev.map((item, i) => (i === idx ? { ...item, hostPort: val } : item)));
-                            }}
-                          />
-                          <span style={{ color: '#737373', fontSize: '12px' }}>→</span>
-                          <input
-                            className={styles.fieldInput}
-                            type="text"
-                            placeholder="Container (e.g. 80)"
-                            value={p.containerPort}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setRunPorts((prev) => prev.map((item, i) => (i === idx ? { ...item, containerPort: val } : item)));
-                            }}
-                          />
-                          <button type="button" className={styles.iconRemoveBtn} onClick={() => removePortRow(idx)}>
-                            <X size={12} />
-                          </button>
-                        </div>
-                      ))}
+                      {runPorts.map((p, idx) => {
+                        // Wait for the agent's port data so the pre-filled row doesn't flash an error.
+                        const issues = runPortInfo ? (runPortIssues[idx] ?? []) : [];
+                        const inputClass = (field: 'host' | 'container') => {
+                          const own = issues.filter((issue) => issue.field === field);
+                          if (own.some((issue) => issue.level === 'error')) return `${styles.fieldInput} ${styles.fieldInputError}`;
+                          if (own.length > 0) return `${styles.fieldInput} ${styles.fieldInputWarning}`;
+                          return styles.fieldInput;
+                        };
+                        return (
+                          <div key={idx} style={{ display: 'contents' }}>
+                            <div className={styles.dynamicRow}>
+                              <input
+                                className={inputClass('host')}
+                                type="text"
+                                inputMode="numeric"
+                                aria-label="Host port"
+                                placeholder="Host (e.g. 8080)"
+                                value={p.hostPort}
+                                onChange={(e) => updatePortRow(idx, 'host', e.target.value)}
+                              />
+                              <span style={{ color: '#737373', fontSize: '12px' }}>→</span>
+                              <input
+                                className={inputClass('container')}
+                                type="text"
+                                inputMode="numeric"
+                                aria-label="Container port"
+                                placeholder="Container (e.g. 80)"
+                                value={p.containerPort}
+                                onChange={(e) => updatePortRow(idx, 'container', e.target.value)}
+                              />
+                              <button type="button" className={styles.iconRemoveBtn} onClick={() => removePortRow(idx)}>
+                                <X size={12} />
+                              </button>
+                            </div>
+                            {issues.map((issue, i) => (
+                              <div
+                                key={i}
+                                role={issue.level === 'error' ? 'alert' : undefined}
+                                className={`${styles.portIssue} ${issue.level === 'error' ? styles.portIssueError : styles.portIssueWarning}`}
+                              >
+                                <span>{issue.message}</span>
+                                {issue.fix && (
+                                  <button
+                                    type="button"
+                                    className={styles.portIssueFix}
+                                    onClick={() => updatePortRow(idx, issue.fix!.field, issue.fix!.value)}
+                                  >
+                                    {issue.fix.label}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
                     </div>
+                  )}
+                  {runPortInfo && runPortInfo.exposed.length > 0 && (
+                    <span className={styles.portHint}>
+                      This image listens on {runPortInfo.exposed.join(', ')}. Host ports only need to be unique on this machine.
+                    </span>
                   )}
                 </div>
 

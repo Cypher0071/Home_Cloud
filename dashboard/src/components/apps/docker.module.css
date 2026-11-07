@@ -1787,6 +1787,57 @@
   align-items: center;
 }
 
+.fieldInputError,
+.fieldInputError:focus {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.fieldInputWarning,
+.fieldInputWarning:focus {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.portIssue {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: -2px 0 2px;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.portIssueError {
+  color: #f87171;
+}
+
+.portIssueWarning {
+  color: #fbbf24;
+}
+
+.portIssueFix {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  padding: 0 6px;
+  font-size: 10px;
+  font-family: var(--mono, monospace);
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.portIssueFix:hover {
+  opacity: 1;
+}
+
+.portHint {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: #737373;
+}
+
 .iconAddBtn {
   background: #000000;
   border: 1px solid #262626;

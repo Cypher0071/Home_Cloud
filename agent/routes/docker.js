@@ -20,6 +20,11 @@ const {
 	watchContainerStartup,
 	describeStartupFailure,
 } = require("../services/containerStartup");
+const {
+	exposedTcpPorts,
+	getUsedHostPorts,
+	validatePortMappings,
+} = require("../services/portCheck");
 
 /**
  * After a start, checks that the container stays up. If it crashed (or is crash-looping
@@ -437,22 +442,53 @@ router.post("/images/pull", async (req, res) => {
 	}
 });
 
+// What the Run form needs to pick ports: the ports the image listens on, and the host ports
+// that are already taken (by containers or by programs on the host).
+router.get("/ports/info", async (req, res) => {
+	const image = typeof req.query.image === "string" ? req.query.image.trim() : "";
+	if (image && (image.length > 255 || !IMAGE_REF_REGEX.test(image))) {
+		return res.status(400).json({ error: "Invalid image name" });
+	}
+	try {
+		let exposedPorts = [];
+		if (image) {
+			const info = await docker.getImage(image).inspect().catch(() => null);
+			exposedPorts = exposedTcpPorts(info);
+		}
+		const used = await getUsedHostPorts(docker);
+		const usedPorts = [...used.entries()]
+			.map(([port, u]) => ({ port, owner: u.owner, active: u.active }))
+			.sort((a, b) => a.port - b.port);
+		res.json({ exposedPorts, usedPorts });
+	} catch (err) {
+		res.status(500).json({ error: err.message });
+	}
+});
+
 router.post("/containers/create", async (req, res) => {
 	if (!req.body?.image) {
 		return res.status(400).json({ error: "Image name is required" });
 	}
 
+	let usedPorts = new Map();
+	if (Array.isArray(req.body.ports) && req.body.ports.length > 0) {
+		try {
+			usedPorts = await getUsedHostPorts(docker);
+		} catch {
+			// Can't read what's in use; Docker still refuses a taken port when starting.
+		}
+	}
+	const portCheck = validatePortMappings(req.body.ports, usedPorts);
+	if (portCheck.error) {
+		return res.status(portCheck.status).json({ error: portCheck.error });
+	}
+
 	const exposedPorts = {};
 	const portBindings = {};
-
-	if (Array.isArray(req.body.ports)) {
-		req.body.ports.forEach((p) => {
-			if (p.containerPort && p.hostPort) {
-				const containerKey = `${p.containerPort}/tcp`; // e.g. "80/tcp"
-				exposedPorts[containerKey] = {};
-				portBindings[containerKey] = [{ HostPort: String(p.hostPort) }];
-			}
-		});
+	for (const { hostPort, containerPort } of portCheck.mappings) {
+		const containerKey = `${containerPort}/tcp`; // e.g. "80/tcp"
+		exposedPorts[containerKey] = {};
+		portBindings[containerKey] = [{ HostPort: String(hostPort) }];
 	}
 
 function isNamedVolume(val) {
