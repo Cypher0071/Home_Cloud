@@ -51,7 +51,7 @@ console.log("\n[Test Suite 2] Version & Commit Detection");
 
 const currentVersion = updateManager.getCurrentVersion();
 assert.ok(typeof currentVersion === "string" && currentVersion.length > 0, "Current version must be a non-empty string");
-assert.equal(currentVersion, "1.3.0", "Root package.json version is 1.3.0");
+assert.equal(currentVersion, "1.4.0", "Root package.json version is 1.4.0");
 
 const currentCommit = updateManager.getCurrentCommit();
 assert.ok(typeof currentCommit === "string" && currentCommit.length > 0, "Current commit must be detected");
@@ -64,11 +64,11 @@ console.log("\n[Test Suite 3] Upstream Update Checks & Cache TTL");
 
 let fetchCallCount = 0;
 let mockResponseData = {
-	tag_name: "v1.4.0",
-	name: "Release 1.4.0: Major Performance Boost",
+	tag_name: "v1.5.0",
+	name: "Release 1.5.0: Major Performance Boost",
 	body: "### Changes\n- Optimized caching\n- New dashboard",
 	published_at: "2026-10-20T12:00:00Z",
-	html_url: "https://github.com/Cypher0071/Home_Cloud/releases/tag/v1.4.0",
+	html_url: "https://github.com/Cypher0071/Home_Cloud/releases/tag/v1.5.0",
 };
 
 updateManager._setMockFetch(async () => {
@@ -83,15 +83,15 @@ updateManager._setMockFetch(async () => {
 // 3a. Initial check should call fetch and find update
 const check1 = await updateManager.checkForUpdates();
 assert.equal(fetchCallCount, 1, "Fetch should be called once on first check");
-assert.equal(check1.updateAvailable, true, "1.4.0 should trigger updateAvailable: true against the installed version");
-assert.equal(check1.latestVersion, "1.4.0", "Version tag 'v' should be stripped");
-assert.equal(check1.tagName, "v1.4.0");
+assert.equal(check1.updateAvailable, true, "1.5.0 should trigger updateAvailable: true against the installed version");
+assert.equal(check1.latestVersion, "1.5.0", "Version tag 'v' should be stripped");
+assert.equal(check1.tagName, "v1.5.0");
 assert.equal(check1.releaseNotes, mockResponseData.body);
 
 // 3b. Second check within TTL should hit cache and NOT call fetch
 const check2 = await updateManager.checkForUpdates();
 assert.equal(fetchCallCount, 1, "Fetch should not be called again within cache TTL");
-assert.equal(check2.latestVersion, "1.4.0");
+assert.equal(check2.latestVersion, "1.5.0");
 
 // 3c. Forced check should bypass cache
 const check3 = await updateManager.checkForUpdates({ force: true });
@@ -130,8 +130,8 @@ updateManager._resetForTesting({
 	cachedReleaseInfo: {
 		currentVersion: "1.0.0",
 		currentCommit: "abc1234",
-		latestVersion: "1.4.0",
-		tagName: "v1.4.0",
+		latestVersion: "1.5.0",
+		tagName: "v1.5.0",
 		updateAvailable: true,
 		releaseNotes: "Fixes",
 		publishedAt: "2026-10-20T00:00:00Z",
@@ -145,33 +145,33 @@ updateManager._resetForTesting({
 const status = updateManager.getUpdateStatus();
 assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
-assert.equal(status.latestVersion, "1.4.0");
-assert.equal(status.tagName, "v1.4.0");
-assert.equal(status.currentVersion, "1.3.0");
+assert.equal(status.latestVersion, "1.5.0");
+assert.equal(status.tagName, "v1.5.0");
+assert.equal(status.currentVersion, "1.4.0");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
 
 // Regression: after an update is installed, a cache written before it must not keep claiming
-// that an update is available, or the dashboard shows "1.3.0 -> 1.3.0, Update Available".
+// that an update is available, or the dashboard shows "1.4.0 -> 1.4.0, Update Available".
 updateManager._resetForTesting({
 	cachedReleaseInfo: {
 		currentVersion: "1.0.0",
 		currentCommit: "abc1234",
-		latestVersion: "1.3.0",
-		tagName: "v1.3.0",
+		latestVersion: "1.4.0",
+		tagName: "v1.4.0",
 		updateAvailable: true, // stale: computed before the update was installed
 		releaseNotes: "Fixes",
 		lastChecked: "2026-10-20T12:00:00Z",
 	},
 });
 const staleStatus = updateManager.getUpdateStatus();
-assert.equal(staleStatus.currentVersion, "1.3.0");
-assert.equal(staleStatus.latestVersion, "1.3.0");
+assert.equal(staleStatus.currentVersion, "1.4.0");
+assert.equal(staleStatus.latestVersion, "1.4.0");
 assert.equal(staleStatus.updateAvailable, false, "latest equals installed, so no update is available");
 assert.equal(staleStatus.restartRequired, false, "the running code matches what is on disk");
 const staleCheck = await updateManager.checkForUpdates();
 assert.equal(staleCheck.updateAvailable, false, "a cached check must also recompute availability");
-assert.equal(staleCheck.currentVersion, "1.3.0", "a cached check reports the installed version");
+assert.equal(staleCheck.currentVersion, "1.4.0", "a cached check reports the installed version");
 
 console.log("  ✔ Cached update info is recomputed against the installed version");
 
@@ -255,7 +255,7 @@ updateManager._setMockRunCommand(async (cmd, args) => {
 
 const result = await updateManager.applyUpdate(
 	(p) => progressEvents.push(p),
-	{ targetTag: "v1.4.0", skipRestart: true }
+	{ targetTag: "v1.5.0", skipRestart: true }
 );
 
 assert.equal(result.success, true, "Pipeline should return success: true");
@@ -271,8 +271,8 @@ assert.ok(stages.includes("restart"), "Should pass restart stage");
 
 // Verify commands invoked
 assert.ok(executedCommands.some((c) => c.includes("git fetch --tags origin")));
-assert.ok(executedCommands.some((c) => c.includes("git ls-remote --tags origin refs/tags/v1.4.0")));
-assert.ok(executedCommands.some((c) => c.includes("git checkout --detach v1.4.0")));
+assert.ok(executedCommands.some((c) => c.includes("git ls-remote --tags origin refs/tags/v1.5.0")));
+assert.ok(executedCommands.some((c) => c.includes("git checkout --detach v1.5.0")));
 assert.ok(executedCommands.some((c) => c.includes("pnpm install --frozen-lockfile")));
 assert.ok(executedCommands.some((c) => c.includes("pnpm --filter dashboard build")));
 console.log("  ✔ Pipeline successfully progresses through preflight, fetch, install, build, and restart");
@@ -298,7 +298,7 @@ updateManager._setMockRunCommand(async (cmd, args) => {
 });
 
 await assert.rejects(
-	async () => updateManager.applyUpdate((p) => rollbackEvents.push(p), { targetTag: "v1.4.0", skipRestart: true }),
+	async () => updateManager.applyUpdate((p) => rollbackEvents.push(p), { targetTag: "v1.5.0", skipRestart: true }),
 	/Syntax error in dashboard build/,
 	"applyUpdate must re-throw failure error"
 );
@@ -337,7 +337,7 @@ updateManager._setMockRunCommand(async (cmd, args) => {
 });
 
 await assert.rejects(
-	async () => updateManager.applyUpdate((p) => frozenInstallEvents.push(p), { targetTag: "v1.4.0", skipRestart: true }),
+	async () => updateManager.applyUpdate((p) => frozenInstallEvents.push(p), { targetTag: "v1.5.0", skipRestart: true }),
 	/ERR_PNPM_LOCKFILE_CONFIG_MISMATCH/,
 	"applyUpdate must abort when frozen-lockfile fails"
 );
@@ -374,7 +374,7 @@ try {
 	assert.equal(resStatus.status, 200);
 	const dataStatus = await resStatus.json();
 	assert.equal(dataStatus.status, "ok");
-	assert.equal(dataStatus.currentVersion, "1.3.0");
+	assert.equal(dataStatus.currentVersion, "1.4.0");
 	assert.equal(dataStatus.isUpdating, false);
 	console.log("  ✔ GET /api/settings/update/status returns 200 with status payload");
 
