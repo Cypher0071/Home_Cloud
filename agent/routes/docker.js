@@ -16,6 +16,22 @@ const {
 const { CF_DOMAIN } = require("../config");
 const { BASE_DIR, jailPath } = require("../paths");
 const { bindStreamToSession } = require("../services/sessionStreams");
+const {
+	watchContainerStartup,
+	describeStartupFailure,
+} = require("../services/containerStartup");
+
+/**
+ * After a start, checks that the container stays up. If it crashed (or is crash-looping
+ * under a restart policy) it is stopped so it doesn't loop forever, and the failure is returned.
+ */
+async function checkStartupOrStop(container) {
+	const failure = await watchContainerStartup(container, router.startupWatchOptions);
+	if (failure) {
+		await container.stop({ t: 0 }).catch(() => {});
+	}
+	return failure;
+}
 
 router.get("/containers", async (req, res) => {
 	try {
@@ -51,6 +67,14 @@ router.post("/containers/:id/start", async (req, res) => {
 
 	try {
 		await container.start();
+		const failure = await checkStartupOrStop(container);
+		if (failure) {
+			return res.status(422).json({
+				error: describeStartupFailure(failure),
+				exitCode: failure.exitCode,
+				logs: failure.logs,
+			});
+		}
 		res.json({ success: true });
 	} catch (err) {
 		if (err.statusCode === 304)
@@ -81,6 +105,14 @@ router.post("/containers/:id/restart", async (req, res) => {
 
 	try {
 		await container.restart();
+		const failure = await checkStartupOrStop(container);
+		if (failure) {
+			return res.status(422).json({
+				error: describeStartupFailure(failure),
+				exitCode: failure.exitCode,
+				logs: failure.logs,
+			});
+		}
 		res.json({ success: true });
 	} catch (err) {
 		return res.status(500).json({ error: err.message });
@@ -358,6 +390,9 @@ router.post("/images/pull", async (req, res) => {
 		docker.modem.followProgress(
 			stream,
 			(err, output) => {
+				if (err) {
+					console.error(`[docker] Pull of '${imageName}' failed:`, err.message);
+				}
 				if (!res.writableEnded) {
 					if (err) {
 						res.write(
@@ -390,6 +425,7 @@ router.post("/images/pull", async (req, res) => {
 		bindStreamToSession(req, res, cleanup);
 		req.on("close", cleanup);
 	} catch (err) {
+		console.error(`[docker] Pull of '${imageName}' could not start:`, err.message);
 		if (res.headersSent) {
 			if (!res.writableEnded) {
 				res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
@@ -474,7 +510,24 @@ function isNamedVolume(val) {
 	};
 	try {
 		const container = await docker.createContainer(options);
-		await container.start();
+		try {
+			await container.start();
+		} catch (startErr) {
+			// Don't leave a half-created container behind (it would block re-using the name).
+			await container.remove({ force: true }).catch(() => {});
+			throw startErr;
+		}
+		const failure = await checkStartupOrStop(container);
+		if (failure) {
+			// Docker can't change a container's env/ports after creation, so a container that
+			// crashes on first boot is useless; remove it so the user can fix the form and retry.
+			await container.remove({ force: true }).catch(() => {});
+			return res.status(422).json({
+				error: describeStartupFailure(failure, { removed: true }),
+				exitCode: failure.exitCode,
+				logs: failure.logs,
+			});
+		}
 		res.json({ success: true, containerId: container.id });
 	} catch (err) {
 		if (err.statusCode === 409) {

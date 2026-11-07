@@ -179,6 +179,53 @@ interface FormPort {
   container: string;
 }
 
+/**
+ * Settings an image must be given or it exits on startup, like Portainer's app templates.
+ * Docker images don't declare their required env vars, so this is a curated list of
+ * official images. Each field is rendered as its own labelled input in "Run Container".
+ */
+interface RequiredRunField {
+  env: string;
+  label: string;
+  hint: string;
+  secret?: boolean;
+}
+
+interface ImageRunPreset {
+  fields: RequiredRunField[];
+  containerPort?: string;
+}
+
+const IMAGE_RUN_PRESETS: Record<string, ImageRunPreset> = {
+  postgres: {
+    fields: [{ env: 'POSTGRES_PASSWORD', label: 'Superuser password', hint: 'Password for the "postgres" user. Postgres will not start without it.', secret: true }],
+    containerPort: '5432',
+  },
+  mysql: {
+    fields: [{ env: 'MYSQL_ROOT_PASSWORD', label: 'Root password', hint: 'Password for the MySQL "root" user. MySQL will not start without it.', secret: true }],
+    containerPort: '3306',
+  },
+  mariadb: {
+    fields: [{ env: 'MARIADB_ROOT_PASSWORD', label: 'Root password', hint: 'Password for the MariaDB "root" user. MariaDB will not start without it.', secret: true }],
+    containerPort: '3306',
+  },
+};
+
+/** "postgres:16", "docker.io/library/postgres:latest" -> "postgres"; other namespaces -> null. */
+function officialImageName(repoTag: string): string | null {
+  const noDigest = repoTag.split('@')[0];
+  const parts = noDigest.split('/');
+  const last = parts[parts.length - 1].split(':')[0].toLowerCase();
+  let rest = parts.slice(0, -1);
+  const hasRegistry = rest.length > 0 && (/[.:]/.test(rest[0]) || rest[0] === 'localhost');
+  if (hasRegistry) {
+    if (rest[0] !== 'docker.io' && rest[0] !== 'index.docker.io') return null;
+    rest = rest.slice(1);
+  }
+  if (rest.length === 0 || (rest.length === 1 && rest[0] === 'library')) return last;
+  return null;
+}
+
 interface FormEnv {
   id: string;
   key: string;
@@ -203,10 +250,13 @@ interface FormService {
 }
 
 const generateRandomPassword = (length = 16): string => {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*';
+  // No "$": Docker Compose treats it as variable interpolation and would mangle the value.
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#%&*';
+  const bytes = new Uint32Array(length);
+  crypto.getRandomValues(bytes);
   let pass = '';
   for (let i = 0; i < length; i++) {
-    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    pass += chars.charAt(bytes[i] % chars.length);
   }
   return pass;
 };
@@ -1362,6 +1412,10 @@ export default function DockerApp() {
   const [runRestartPolicy, setRunRestartPolicy]     = useState<string>('no');
   const [runSubmitting, setRunSubmitting]           = useState(false);
   const [runError, setRunError]                     = useState<string | null>(null);
+  const [runErrorLogs, setRunErrorLogs]             = useState<string | null>(null);
+  const [runRequiredFields, setRunRequiredFields]   = useState<RequiredRunField[]>([]);
+  const [runRequiredValues, setRunRequiredValues]   = useState<Record<string, string>>({});
+  const [runShowSecrets, setRunShowSecrets]         = useState(false);
 
   // Expose container state
   const [exposeModalContainer, setExposeModalContainer] = useState<Container | null>(null);
@@ -2127,7 +2181,9 @@ export default function DockerApp() {
         const body = await res.json().catch(() => ({}));
         const msg = body.error ?? `Action failed (${res.status})`;
         setActionError({ id: containerId, msg });
-        setTimeout(() => setActionError(null), 3500);
+        // Startup-crash messages carry the reason from the logs; give time to read them.
+        setTimeout(() => setActionError(null), res.status === 422 ? 12000 : 3500);
+        if (res.status === 422) await fetchContainers(true);
         return;
       }
       await fetchContainers(true);
@@ -2151,6 +2207,19 @@ export default function DockerApp() {
     setPullSuccess(false);
     setImageInput('');
 
+    // Set once the agent reports success or an error, so a dropped connection can be told apart.
+    let finished = false;
+    const failPull = (msg: string) => {
+      finished = true;
+      setPullError(msg);
+      // The pull may have completed on the host even if we lost the stream.
+      fetchImages(true);
+      setTimeout(() => {
+        setPullingImage(null);
+        setPullError(null);
+      }, 10000);
+    };
+
     try {
       const resp = await fetch('/api/docker/images/pull', {
         method: 'POST',
@@ -2162,11 +2231,10 @@ export default function DockerApp() {
 
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
-        setPullError(errData.error || 'Image pull failed or repository does not exist');
-        setTimeout(() => {
-          setPullingImage(null);
-          setPullError(null);
-        }, 5000);
+        failPull(
+          errData.error ||
+            `The agent rejected the pull request (HTTP ${resp.status}${resp.statusText ? ` ${resp.statusText}` : ''}).`,
+        );
         return;
       }
 
@@ -2187,16 +2255,13 @@ export default function DockerApp() {
           const data = JSON.parse(jsonStr);
 
           if (data.error) {
-            setPullError(data.error);
+            failPull(data.error);
             reader.cancel().catch(() => {});
-            setTimeout(() => {
-              setPullingImage(null);
-              setPullError(null);
-            }, 5000);
             return;
           }
 
           if (data.status === 'success') {
+            finished = true;
             setPullSuccess(true);
             reader.cancel().catch(() => {});
             fetchImages(true);
@@ -2245,13 +2310,21 @@ export default function DockerApp() {
           processLine(line);
         }
       }
+
+      if (!finished) {
+        failPull(
+          'The connection to the agent closed before the pull finished. ' +
+            'The agent may have restarted; check the image list and try again.',
+        );
+      }
     } catch (err) {
       console.error('[pull] Stream error', err);
-      setPullError('Image pull failed or repository does not exist');
-      setTimeout(() => {
-        setPullingImage(null);
-        setPullError(null);
-      }, 5000);
+      if (finished) return;
+      const detail = err instanceof Error && err.message ? ` (${err.message})` : '';
+      failPull(
+        `Lost the connection to the agent during the pull${detail}. ` +
+          'Check the network or tunnel and the agent logs (journalctl -u home-cloud).',
+      );
     }
   };
 
@@ -2325,13 +2398,18 @@ export default function DockerApp() {
   /* ─── Run Container Modal Handlers ─── */
 
   const openRunModal = (repoTag: string) => {
+    const preset = IMAGE_RUN_PRESETS[officialImageName(repoTag) ?? ''];
     setRunModalImage(repoTag);
     setRunContainerName('');
-    setRunPorts([{ hostPort: '', containerPort: '' }]);
+    setRunPorts([{ hostPort: '', containerPort: preset?.containerPort ?? '' }]);
     setRunEnvs([]);
+    setRunRequiredFields(preset?.fields ?? []);
+    setRunRequiredValues({});
+    setRunShowSecrets(false);
     setRunVolumes([]);
     setRunRestartPolicy('no');
     setRunError(null);
+    setRunErrorLogs(null);
   };
 
   const addPortRow = () => setRunPorts((prev) => [...prev, { hostPort: '', containerPort: '' }]);
@@ -2349,6 +2427,15 @@ export default function DockerApp() {
 
     setRunSubmitting(true);
     setRunError(null);
+    setRunErrorLogs(null);
+
+    const missingRequired = runRequiredFields.filter((f) => !(runRequiredValues[f.env] ?? '').trim());
+    if (missingRequired.length > 0) {
+      setRunError(`Fill in: ${missingRequired.map((f) => f.label).join(', ')}. This image won't start without it.`);
+      setRunSubmitting(false);
+      return;
+    }
+    const requiredKeys = new Set(runRequiredFields.map((f) => f.env));
 
     const volumes = runVolumes.filter((v) => v.hostPath.trim() && v.containerPath.trim());
     if (net.baseDir) {
@@ -2369,7 +2456,13 @@ export default function DockerApp() {
       image: runModalImage,
       name: runContainerName.trim() || undefined,
       ports: runPorts.filter((p) => p.hostPort.trim() && p.containerPort.trim()),
-      env: runEnvs.filter((ev) => ev.key.trim()).map((ev) => `${ev.key.trim()}=${ev.value}`),
+      env: [
+        ...runRequiredFields.map((f) => `${f.env}=${runRequiredValues[f.env]}`),
+        // A manual row with the same key as a required field would override it; the field wins.
+        ...runEnvs
+          .filter((ev) => ev.key.trim() && !requiredKeys.has(ev.key.trim()))
+          .map((ev) => `${ev.key.trim()}=${ev.value}`),
+      ],
       volumes,
       restartPolicy: runRestartPolicy,
     };
@@ -2383,6 +2476,7 @@ export default function DockerApp() {
 
       const data = await res.json();
       if (!res.ok) {
+        if (typeof data.logs === 'string' && data.logs) setRunErrorLogs(data.logs);
         throw new Error(data.error || `Failed to create container (${res.status})`);
       }
 
@@ -3257,7 +3351,10 @@ export default function DockerApp() {
                                 </div>
 
                                 {actionError?.id === c.Id && (
-                                  <span style={{ fontSize: '9.5px', color: '#f87171', whiteSpace: 'nowrap' }}>
+                                  <span
+                                    title={actionError.msg}
+                                    style={{ fontSize: '9.5px', color: '#f87171', whiteSpace: 'nowrap', maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}
+                                  >
                                     ⚠ {actionError.msg}
                                   </span>
                                 )}
@@ -3651,8 +3748,12 @@ export default function DockerApp() {
             <div className={styles.pullProgressCard}>
               <div className={styles.pullProgressTitle}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <div className={styles.spinner} style={{ width: '12px', height: '12px', borderWidth: '1.5px' }} />
-                  <span>Downloading {pullingImage}</span>
+                  {pullError ? (
+                    <AlertCircle size={12} style={{ color: '#ef4444' }} />
+                  ) : (
+                    <div className={styles.spinner} style={{ width: '12px', height: '12px', borderWidth: '1.5px' }} />
+                  )}
+                  <span>{pullError ? 'Could not pull' : 'Downloading'} {pullingImage}</span>
                 </div>
                 {pullSuccess && <span style={{ color: '#22c55e' }}>✓ Pull Complete</span>}
                 {pullError && <span style={{ color: '#ef4444' }}>✗ Pull Failed</span>}
@@ -4602,9 +4703,12 @@ export default function DockerApp() {
               <div className={styles.modalBody}>
                 {runError && (
                   <div className={styles.alertError}>
-                    <AlertCircle size={14} />
+                    <AlertCircle size={14} style={{ flexShrink: 0 }} />
                     <span>{runError}</span>
                   </div>
+                )}
+                {runErrorLogs && (
+                  <pre className={styles.startupLogs}>{runErrorLogs}</pre>
                 )}
 
                 <div className={styles.fieldGroup}>
@@ -4617,6 +4721,57 @@ export default function DockerApp() {
                     style={{ opacity: 0.8 }}
                   />
                 </div>
+
+                {runRequiredFields.map((f) => (
+                  <div key={f.env} className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel} htmlFor={`run-required-${f.env}`}>
+                      {f.label} <span style={{ color: '#f87171' }}>*</span>
+                    </label>
+                    <div className={styles.dynamicRow}>
+                      <div className={styles.passwordInputWrapper}>
+                        <input
+                          id={`run-required-${f.env}`}
+                          className={styles.fieldInput}
+                          type={f.secret && !runShowSecrets ? 'password' : 'text'}
+                          value={runRequiredValues[f.env] ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setRunRequiredValues((prev) => ({ ...prev, [f.env]: val }));
+                          }}
+                          placeholder={f.secret ? 'Enter or generate a password' : f.env}
+                          autoComplete="new-password"
+                          required
+                        />
+                        {f.secret && (
+                          <button
+                            type="button"
+                            className={styles.passwordToggleBtn}
+                            onClick={() => setRunShowSecrets((v) => !v)}
+                            title={runShowSecrets ? 'Hide password' : 'Show password'}
+                          >
+                            {runShowSecrets ? <EyeOff size={12} /> : <Eye size={12} />}
+                          </button>
+                        )}
+                      </div>
+                      {f.secret && (
+                        <button
+                          type="button"
+                          className={styles.iconBtnSmall}
+                          onClick={() => {
+                            setRunRequiredValues((prev) => ({ ...prev, [f.env]: generateRandomPassword(20) }));
+                            setRunShowSecrets(true); // show it so the user can note it down
+                          }}
+                          title="Generate random password"
+                        >
+                          <Sparkles size={12} style={{ color: '#60a5fa' }} />
+                        </button>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                      {f.hint} Sets <code>{f.env}</code>.
+                    </span>
+                  </div>
+                ))}
 
                 <div className={styles.fieldGroup}>
                   <label className={styles.fieldLabel}>Container Name (optional)</label>
