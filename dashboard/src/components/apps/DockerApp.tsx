@@ -1515,6 +1515,14 @@ export default function DockerApp() {
   };
 
   const containersRef = useRef<Container[]>([]);
+  const tabRequestRef = useRef<{ id: string; tab: 'logs' | 'console' } | null>(null);
+  const openContainerTab = useCallback((id: string, tab: 'logs' | 'console') => {
+    // A newly selected container would get the default tab from the effect below, so leave a
+    // request for it. An already selected container keeps its selection, so switch directly.
+    tabRequestRef.current = { id, tab };
+    setSelectedId(id);
+    setActiveTab(tab);
+  }, []);
   const consecutiveFailuresRef = useRef(0);
   useEffect(() => { containersRef.current = containers; }, [containers]);
 
@@ -2024,10 +2032,13 @@ export default function DockerApp() {
     };
   }, [fetchContainers, fetchImages, fetchCompose]);
 
-  // Tab auto-switch on selection
+  // Pick a default tab when the selection changes. This must not depend on the container
+  // list: it refetches every 5 seconds and would otherwise reset the tab the user chose.
+  // A Logs/Shell button asks for its tab through tabRequestRef so this does not override it.
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!selectedId) {
+        tabRequestRef.current = null;
         setStatsData(null);
         setCpuHistory([]);
         setMemHistory([]);
@@ -2035,15 +2046,17 @@ export default function DockerApp() {
         setLogLines([]);
         return;
       }
-      const container = containers.find((c) => c.Id === selectedId);
-      if (container && container.State !== 'running') {
-        setActiveTab('inspect');
-      } else {
-        setActiveTab('stats');
+      const request = tabRequestRef.current;
+      tabRequestRef.current = null;
+      if (request && request.id === selectedId) {
+        setActiveTab(request.tab);
+        return;
       }
+      const container = containersRef.current.find((c) => c.Id === selectedId);
+      setActiveTab(container && container.State !== 'running' ? 'inspect' : 'stats');
     }, 0);
     return () => clearTimeout(timer);
-  }, [selectedId, containers]);
+  }, [selectedId]);
 
   // Stream stats via SSE with rolling sparkline history
   useEffect(() => {
@@ -3272,8 +3285,7 @@ export default function DockerApp() {
                                         className={`${styles.actionBtn} ${styles.btnNav}`}
                                         title="Open interactive shell console"
                                         onClick={() => {
-                                          setSelectedId(c.Id);
-                                          setActiveTab('console');
+                                          openContainerTab(c.Id, 'console');
                                         }}
                                       >
                                         <Terminal size={11} />
@@ -3282,8 +3294,7 @@ export default function DockerApp() {
                                         className={`${styles.actionBtn} ${styles.btnNav}`}
                                         title="View live container logs"
                                         onClick={() => {
-                                          setSelectedId(c.Id);
-                                          setActiveTab('logs');
+                                          openContainerTab(c.Id, 'logs');
                                         }}
                                       >
                                         <FileText size={11} />
@@ -3331,8 +3342,7 @@ export default function DockerApp() {
                                         className={`${styles.actionBtn} ${styles.btnNav}`}
                                         title="View container logs"
                                         onClick={() => {
-                                          setSelectedId(c.Id);
-                                          setActiveTab('logs');
+                                          openContainerTab(c.Id, 'logs');
                                         }}
                                       >
                                         <FileText size={11} />
@@ -3472,8 +3482,7 @@ export default function DockerApp() {
                                     type="button"
                                     className={styles.mobileActionBtn}
                                     onClick={() => {
-                                      setSelectedId(c.Id);
-                                      setActiveTab('console');
+                                      openContainerTab(c.Id, 'console');
                                     }}
                                   >
                                     <Terminal size={12} />
@@ -3483,8 +3492,7 @@ export default function DockerApp() {
                                     type="button"
                                     className={styles.mobileActionBtn}
                                     onClick={() => {
-                                      setSelectedId(c.Id);
-                                      setActiveTab('logs');
+                                      openContainerTab(c.Id, 'logs');
                                     }}
                                   >
                                     <FileText size={12} />
@@ -3506,8 +3514,7 @@ export default function DockerApp() {
                                     type="button"
                                     className={styles.mobileActionBtn}
                                     onClick={() => {
-                                      setSelectedId(c.Id);
-                                      setActiveTab('logs');
+                                      openContainerTab(c.Id, 'logs');
                                     }}
                                   >
                                     <FileText size={12} />
