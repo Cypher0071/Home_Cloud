@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0
+
+Docker run failures are caught and explained, database run presets, and fixes for the container tabs and the Updates panel.
+
+### Added
+
+- Starting, restarting or running a container now watches it for a moment. If it exits straight away or crash-loops under a restart policy, the request fails with the reason taken from the container logs instead of reporting success, and the crash logs show in the Run Container dialog. A container that fails on first creation is removed, so it cannot leave a stale name behind.
+- Run presets for the official `postgres`, `mysql` and `mariadb` images with the required password field, default ports pre-filled, and submit blocked until the required values are set.
+- When the new version needs a manual restart (the agent is not under systemd), Settings says so and shows a "Restart Required" notice instead of claiming the update is complete.
+
+### Fixed
+
+- Opening a container's Logs or Shell no longer jumps to Stats or Inspect when the container list refreshes.
+- After an update, Settings no longer keeps showing "Update Available" for the version that is already running. The status now reports the live installed version, and a cached check can no longer go stale.
+- Release notes in Settings render as formatted text (headings, lists, code, bold, links) instead of raw Markdown. Only `http` and `https` links are followed, and no HTML from the notes is injected.
+- Generated passwords no longer contain `$`, which Docker Compose treats as a variable, and use `crypto.getRandomValues`.
+- Dropped streams during an image pull now show a clear error.
+
 ## 1.2.1
 
 Fixes the installer on fresh machines.
