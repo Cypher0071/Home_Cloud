@@ -1,6 +1,7 @@
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const { CF_CONFIG, TUNNEL_NAME, CF_DOMAIN } = require("./config");
+const { getCloudflaredPath } = require("./services/cloudflaredBinary");
 
 let currentSpawn = spawn;
 let activeChild = null;
@@ -133,7 +134,7 @@ async function startTunnel(options = {}) {
 	tunnelState.error = null;
 
 	return new Promise((resolve, reject) => {
-		const child = spawnFn("cloudflared", [
+		const child = spawnFn(getCloudflaredPath(), [
 			"tunnel",
 			"--config",
 			CF_CONFIG,

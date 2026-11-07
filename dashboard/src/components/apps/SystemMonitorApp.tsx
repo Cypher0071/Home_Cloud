@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useNetworkDetector } from '../../hooks/useNetworkDetector';
 import { useSystemMetrics } from '../../hooks/useSystemMetrics';
+import { memCache, memInUse } from '../../utils/memory';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 // ─── Format Helpers ───
@@ -405,7 +406,8 @@ export default function SystemMonitorApp() {
   }
 
   const { cpu, mem, disk, network } = data;
-  const memUsedPct = mem.total > 0 ? (mem.used / mem.total) * 100 : 0;
+  const memInUseBytes = memInUse(mem);
+  const memUsedPct = mem.total > 0 ? (memInUseBytes / mem.total) * 100 : 0;
   const swapUsedPct = mem.swaptotal > 0 ? (mem.swapused / mem.swaptotal) * 100 : 0;
 
   // Active network interface (filter out virtual/loopback if possible)
@@ -414,23 +416,8 @@ export default function SystemMonitorApp() {
       (n) => n.operstate === 'up' && !n.iface.startsWith('lo') && !n.iface.startsWith('veth'),
     ) || network?.[0];
 
-  // Filter out internal WSL/virtual module partitions for a clean UI
-  const displayDisks =
-    disk.filter(
-      (d) =>
-        !d.mount.startsWith('/usr/lib') &&
-        !d.mount.startsWith('/mnt/wslg') &&
-        !d.fs?.includes('squashfs') &&
-        d.size > 0,
-    ).length > 0
-      ? disk.filter(
-          (d) =>
-            !d.mount.startsWith('/usr/lib') &&
-            !d.mount.startsWith('/mnt/wslg') &&
-            !d.fs?.includes('squashfs') &&
-            d.size > 0,
-        )
-      : disk;
+  // The agent already drops Docker overlays, duplicate mounts and virtual filesystems.
+  const displayDisks = disk;
 
   return (
     <div
@@ -619,17 +606,18 @@ export default function SystemMonitorApp() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <SectionLabel>Physical RAM</SectionLabel>
               <Val>
-                {formatBytes(mem.used)} / {formatBytes(mem.total)}
+                {formatBytes(memInUseBytes)} / {formatBytes(mem.total)}
               </Val>
             </div>
             <MeterBar value={memUsedPct} />
           </div>
 
-          {/* Breakdown: Used / Free / Available */}
+          {/* Breakdown: In use + Cache + Free = Total. Available = Cache + Free (roughly). */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <StatRow label="In Use" value={formatBytes(mem.used)} />
+            <StatRow label="In Use" value={formatBytes(memInUseBytes)} />
             <StatRow label="Available" value={formatBytes(mem.available)} />
-            <StatRow label="Unallocated Free" value={formatBytes(mem.free)} muted />
+            <StatRow label="Cache (freed when needed)" value={formatBytes(memCache(mem))} muted />
+            <StatRow label="Unused" value={formatBytes(mem.free)} muted />
           </div>
 
           {/* Swap Section */}
