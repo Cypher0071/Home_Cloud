@@ -416,23 +416,8 @@ export default function SystemMonitorApp() {
       (n) => n.operstate === 'up' && !n.iface.startsWith('lo') && !n.iface.startsWith('veth'),
     ) || network?.[0];
 
-  // Filter out internal WSL/virtual module partitions for a clean UI
-  const displayDisks =
-    disk.filter(
-      (d) =>
-        !d.mount.startsWith('/usr/lib') &&
-        !d.mount.startsWith('/mnt/wslg') &&
-        !d.fs?.includes('squashfs') &&
-        d.size > 0,
-    ).length > 0
-      ? disk.filter(
-          (d) =>
-            !d.mount.startsWith('/usr/lib') &&
-            !d.mount.startsWith('/mnt/wslg') &&
-            !d.fs?.includes('squashfs') &&
-            d.size > 0,
-        )
-      : disk;
+  // The agent already drops Docker overlays, duplicate mounts and virtual filesystems.
+  const displayDisks = disk;
 
   return (
     <div
