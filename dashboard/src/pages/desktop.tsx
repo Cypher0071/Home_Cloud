@@ -19,6 +19,7 @@ import DesktopMetricWidget from '../components/DesktopMetricWidget';
 import { useNetworkDetector } from '../hooks/useNetworkDetector';
 import { useSystemMetrics } from '../hooks/useSystemMetrics';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { normalizeUpdateStatus, type UpdateFlags } from '../utils/updateStatus';
 import { getLazyWindowApp, preloadWindowApp, type WindowAppId } from '../utils/windowAppRegistry';
 
 interface WindowState {
@@ -169,13 +170,11 @@ export default function Desktop() {
 
     const checkUpdateStatus = () => {
       axios
-        .get<{ updateAvailable?: boolean; update?: { updateAvailable?: boolean } }>(
-          '/api/settings/update/status',
-        )
+        .get<UpdateFlags & { update?: UpdateFlags }>('/api/settings/update/status')
         .then(res => {
           if (!active) return;
-          const isAvailable = Boolean(res.data?.updateAvailable ?? res.data?.update?.updateAvailable);
-          setHasUpdateAvailable(isAvailable);
+          const status = normalizeUpdateStatus(res.data?.update ?? res.data);
+          setHasUpdateAvailable(Boolean(status?.updateAvailable));
         })
         .catch(() => {});
     };
