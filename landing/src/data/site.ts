@@ -35,7 +35,7 @@ export interface ReleaseInfo {
 
 // Used only when GitHub cannot be reached at build time.
 const FALLBACK: ReleaseInfo = {
-  tag: 'v1.4.0',
+  tag: 'v1.4.1',
   publishedAt: '2026-11-07T00:00:00Z',
   stars: null,
 };

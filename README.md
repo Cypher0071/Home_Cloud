@@ -6,9 +6,9 @@
 
 A self-hosted dashboard for one Linux machine. It gives you a terminal, Docker and Compose, a file manager and system stats in the browser, at home or from anywhere through a Cloudflare Tunnel. You don't need to open ports or have a static IP.
 
-<!-- Demo GIF (install to dashboard, 10-20 s) goes here. -->
+[![The Home Cloud desktop: File Explorer, Terminal and Docker Manager windows](docs/assets/dashboard.webp)](https://home-cloud.live/#demo)
 
-Docs: **[home-cloud.live/docs](https://home-cloud.live/docs/)**
+**[Try the live demo](https://home-cloud.live/#demo)** in your browser · **[Docs](https://home-cloud.live/docs/)**
 
 ## Install
 

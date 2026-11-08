@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.1
+
+Security hardening for the agent, and a guide to putting Cloudflare Access in front of the dashboard.
+
+### Security
+
+- Session tokens are signed and checked with HS256 only. A token signed with any other algorithm is rejected, even with the right secret.
+- Responses no longer carry the `X-Powered-By: Express` header.
+- The installer now recommends a Cloudflare Access policy for `dash.<domain>`, not only for `ssh.<domain>`. The dashboard gives a host terminal and Docker control, so over the internet the password should not be the only lock. Step-by-step setup is in the Remote access docs and `SECURITY.md`.
+
+### Docs
+
+- Shorter README with a screenshot of the dashboard and a link to the live demo.
+- The security audit report is labelled as an automated audit.
+
 ## 1.4.0
 
 Port checks in the Run form, cloudflared kept up to date with each release, and correct memory and storage numbers in the System Monitor.
