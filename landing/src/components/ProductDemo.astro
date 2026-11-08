@@ -279,14 +279,14 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
                     <td><span class="docker-status-dot running"></span></td>
                     <td>
                       <div class="container-name-cell">
-                        <b>home-cloud</b>
-                        <span class="container-tunnel-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line></svg>dashboard.home.tunnel</span>
+                        <b>excalidraw</b>
+                        <span class="container-tunnel-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line></svg>draw.lan</span>
                       </div>
-                      <div style="font-size: 10px; color: #737373; font-family: monospace;">hc-01928374</div>
+                      <div style="font-size: 10px; color: #737373; font-family: monospace;">ex-01928374</div>
                     </td>
-                    <td><span class="image-tag-pill">ghcr.io/cypher0071/home-cloud:latest</span></td>
+                    <td><span class="image-tag-pill">excalidraw/excalidraw:latest</span></td>
                     <td><span class="status-pill-green">Up 3 days</span></td>
-                    <td><span style="font-family: monospace; font-size: 11px; color: #a1a1a1;">3000:3000</span></td>
+                    <td><span style="font-family: monospace; font-size: 11px; color: #a1a1a1;">8080:80</span></td>
                     <td class="table-cell-age"><span style="font-family: monospace; color: #737373;">3d ago</span></td>
                     <td style="text-align: right;">
                       <button type="button" style="background:#1a0a0a; border:1px solid #7f1d1d; color:#f87171; border-radius:4px; padding:3px 7px; cursor:pointer;"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg></button>
@@ -329,14 +329,13 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
                     <td><span class="docker-status-dot running"></span></td>
                     <td>
                       <div class="container-name-cell">
-                        <b>cloudflared</b>
-                        <span class="container-tunnel-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" x2="22" y1="12" y2="12"></line></svg>tunnel-gw</span>
+                        <b>redis</b>
                       </div>
-                      <div style="font-size: 10px; color: #737373; font-family: monospace;">cf-83920194</div>
+                      <div style="font-size: 10px; color: #737373; font-family: monospace;">rd-83920194</div>
                     </td>
-                    <td><span class="image-tag-pill">cloudflare/cloudflared:latest</span></td>
+                    <td><span class="image-tag-pill">redis:7-alpine</span></td>
                     <td><span class="status-pill-green">Up 3 days</span></td>
-                    <td><span style="font-family: monospace; font-size: 11px; color: #a1a1a1;">tunnel</span></td>
+                    <td><span style="font-family: monospace; font-size: 11px; color: #a1a1a1;">6379:6379</span></td>
                     <td class="table-cell-age"><span style="font-family: monospace; color: #737373;">3d ago</span></td>
                     <td style="text-align: right;">
                       <button type="button" style="background:#1a0a0a; border:1px solid #7f1d1d; color:#f87171; border-radius:4px; padding:3px 7px; cursor:pointer;"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg></button>
@@ -3863,18 +3862,18 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     let dockerSearch = '';
 
     const dockerImages = [
-      { repo: 'ghcr.io/cypher0071/home-cloud', tag: 'latest', id: 'img-1a2b3c', size: '142 MB', created: '3 days ago' },
+      { repo: 'excalidraw/excalidraw', tag: 'latest', id: 'img-1a2b3c', size: '58 MB', created: '3 days ago' },
       { repo: 'ghcr.io/immich-app/immich-server', tag: 'release', id: 'img-4d5e6f', size: '890 MB', created: '5 days ago' },
       { repo: 'postgres', tag: '16-alpine', id: 'img-7g8h9i', size: '379 MB', created: '2 weeks ago' },
-      { repo: 'cloudflare/cloudflared', tag: 'latest', id: 'img-0j1k2l', size: '64 MB', created: '1 week ago' },
+      { repo: 'nginx', tag: 'alpine', id: 'img-0j1k2l', size: '48 MB', created: '1 week ago' },
       { repo: 'redis', tag: '7-alpine', id: 'img-3m4n5o', size: '32 MB', created: '3 weeks ago' }
     ];
 
     let dockerContainers = [
-      { id: 'hc-01928374', name: 'home-cloud', tunnel: 'dashboard.home.tunnel', image: 'ghcr.io/cypher0071/home-cloud:latest', status: 'running', statusText: 'Up 3 days', ports: '3000:3000', age: '3d ago' },
+      { id: 'ex-01928374', name: 'excalidraw', tunnel: 'draw.lan', image: 'excalidraw/excalidraw:latest', status: 'running', statusText: 'Up 3 days', ports: '8080:80', age: '3d ago' },
       { id: 'im-92837461', name: 'immich-server', tunnel: 'photos.lan', image: 'ghcr.io/immich-app/immich-server:release', status: 'running', statusText: 'Up 2 days', ports: '2283:2283', age: '2d ago' },
       { id: 'pg-47291847', name: 'postgres', tunnel: '', image: 'postgres:16-alpine', status: 'running', statusText: 'Up 3 days', ports: '5432:5432', age: '3d ago' },
-      { id: 'cf-83920194', name: 'cloudflared', tunnel: 'tunnel-gw', image: 'cloudflare/cloudflared:latest', status: 'running', statusText: 'Up 3 days', ports: 'tunnel', age: '3d ago' }
+      { id: 'rd-83920194', name: 'redis', tunnel: '', image: 'redis:7-alpine', status: 'running', statusText: 'Up 3 days', ports: '6379:6379', age: '3d ago' }
     ];
 
     const dockerMakeId = () => `ct-${Date.now().toString(36).slice(-4)}${Math.random().toString(36).slice(2, 5)}`;
@@ -3890,8 +3889,8 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
     };
 
     const dockerDeployPool = [
-      { name: 'redis-cache', image: 'redis:7-alpine', ports: '6379:6379' },
-      { name: 'nginx-proxy', image: 'nginx:alpine', ports: '8080:80' },
+      { name: 'vaultwarden', image: 'vaultwarden/server:latest', ports: '8081:80' },
+      { name: 'nginx-proxy', image: 'nginx:alpine', ports: '8082:80' },
       { name: 'uptime-kuma', image: 'louislam/uptime-kuma:1', ports: '3001:3001' },
       { name: 'syncthing', image: 'syncthing/syncthing:latest', ports: '8384:8384' }
     ];
@@ -4666,7 +4665,7 @@ import wpSand from '../../../dashboard/src/assets/wallpaper_sand.jpg';
           output = 'Linux home-cloud 6.8.0-45-generic x86_64 GNU/Linux';
           termHistory.push({ cmd: clean, out: output });
         } else if (clean === 'docker ps') {
-          output = 'CONTAINER ID   IMAGE                               COMMAND   STATUS         PORTS\nhc-01928374    ghcr.io/cypher0071/home-cloud       "node"    Up 3 days      3000/tcp\nim-92837461    ghcr.io/immich-app/immich-server    "start"   Up 2 days      2283/tcp\npg-47291847    postgres:16-alpine                  "pg"      Up 3 days      5432/tcp\ncf-83920194    cloudflare/cloudflared:latest       "tunnel"  Up 3 days';
+          output = 'CONTAINER ID   IMAGE                               COMMAND   STATUS         PORTS\nex-01928374    excalidraw/excalidraw:latest        "nginx"   Up 3 days      80/tcp\nim-92837461    ghcr.io/immich-app/immich-server    "start"   Up 2 days      2283/tcp\npg-47291847    postgres:16-alpine                  "pg"      Up 3 days      5432/tcp\nrd-83920194    redis:7-alpine                      "redis"   Up 3 days      6379/tcp';
           termHistory.push({ cmd: clean, out: output });
         } else if (clean === 'uptime') {
           output = '22:30:14 up 3 days, 14:18, 1 user, load average: 0.12, 0.08, 0.05';
