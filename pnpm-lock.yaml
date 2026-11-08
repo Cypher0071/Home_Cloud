@@ -223,8 +223,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       systeminformation:
-        specifier: ^5.33.16
-        version: 5.33.16
+        specifier: ^5.33.19
+        version: 5.33.19
       ws:
         specifier: ^8.22.0
         version: 8.22.0
@@ -3165,8 +3165,8 @@ packages:
     engines: {node: '>=16'}
     hasBin: true
 
-  systeminformation@5.33.16:
-    resolution: {integrity: sha512-R+Lh69IJXfJj6bfyH1In5cIR9FTr4hBS39YvlZHZjsK1p9cuELPq7hplZZIb56ZESMMb+DzdKqqE6Iomi01Mvg==}
+  systeminformation@5.33.19:
+    resolution: {integrity: sha512-Zm7wGeCG7PqfvzegMJIzrxICopWqYCeLATVmvxOOci1isLcNVKgY4Fr0hhYQzvc7cgtK3377jQVChTFAnznOiA==}
     engines: {node: '>=10.0.0'}
     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
@@ -6601,7 +6601,7 @@ snapshots:
       picocolors: 1.1.1
       sax: 1.6.1
 
-  systeminformation@5.33.16: {}
+  systeminformation@5.33.19: {}
 
   tar-fs@2.1.5:
     dependencies:
