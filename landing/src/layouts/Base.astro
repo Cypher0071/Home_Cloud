@@ -1,4 +1,5 @@
 ---
+import { CF_BEACON_SRC, CF_BEACON_DATA } from '../data/analytics.mjs';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 import '@fontsource/instrument-serif/400.css';
@@ -56,6 +57,7 @@ const ogImageAlt = 'Home Cloud: your computer, your cloud. A private server you 
     <script is:inline>
       document.documentElement.classList.add('js');
     </script>
+    <script is:inline defer src={CF_BEACON_SRC} data-cf-beacon={CF_BEACON_DATA}></script>
   </head>
   <body>
     <slot />
