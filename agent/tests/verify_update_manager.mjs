@@ -51,7 +51,7 @@ console.log("\n[Test Suite 2] Version & Commit Detection");
 
 const currentVersion = updateManager.getCurrentVersion();
 assert.ok(typeof currentVersion === "string" && currentVersion.length > 0, "Current version must be a non-empty string");
-assert.equal(currentVersion, "1.4.0", "Root package.json version is 1.4.0");
+assert.equal(currentVersion, "1.4.1", "Root package.json version is 1.4.1");
 
 const currentCommit = updateManager.getCurrentCommit();
 assert.ok(typeof currentCommit === "string" && currentCommit.length > 0, "Current commit must be detected");
@@ -147,31 +147,31 @@ assert.equal(status.isUpdating, false);
 assert.equal(status.updateAvailable, true);
 assert.equal(status.latestVersion, "1.5.0");
 assert.equal(status.tagName, "v1.5.0");
-assert.equal(status.currentVersion, "1.4.0");
+assert.equal(status.currentVersion, "1.4.1");
 
 console.log("  ✔ getUpdateStatus accurately reflects cache and runtime state");
 
 // Regression: after an update is installed, a cache written before it must not keep claiming
-// that an update is available, or the dashboard shows "1.4.0 -> 1.4.0, Update Available".
+// that an update is available, or the dashboard shows "1.4.1 -> 1.4.1, Update Available".
 updateManager._resetForTesting({
 	cachedReleaseInfo: {
 		currentVersion: "1.0.0",
 		currentCommit: "abc1234",
-		latestVersion: "1.4.0",
-		tagName: "v1.4.0",
+		latestVersion: "1.4.1",
+		tagName: "v1.4.1",
 		updateAvailable: true, // stale: computed before the update was installed
 		releaseNotes: "Fixes",
 		lastChecked: "2026-10-20T12:00:00Z",
 	},
 });
 const staleStatus = updateManager.getUpdateStatus();
-assert.equal(staleStatus.currentVersion, "1.4.0");
-assert.equal(staleStatus.latestVersion, "1.4.0");
+assert.equal(staleStatus.currentVersion, "1.4.1");
+assert.equal(staleStatus.latestVersion, "1.4.1");
 assert.equal(staleStatus.updateAvailable, false, "latest equals installed, so no update is available");
 assert.equal(staleStatus.restartRequired, false, "the running code matches what is on disk");
 const staleCheck = await updateManager.checkForUpdates();
 assert.equal(staleCheck.updateAvailable, false, "a cached check must also recompute availability");
-assert.equal(staleCheck.currentVersion, "1.4.0", "a cached check reports the installed version");
+assert.equal(staleCheck.currentVersion, "1.4.1", "a cached check reports the installed version");
 
 console.log("  ✔ Cached update info is recomputed against the installed version");
 
@@ -374,7 +374,7 @@ try {
 	assert.equal(resStatus.status, 200);
 	const dataStatus = await resStatus.json();
 	assert.equal(dataStatus.status, "ok");
-	assert.equal(dataStatus.currentVersion, "1.4.0");
+	assert.equal(dataStatus.currentVersion, "1.4.1");
 	assert.equal(dataStatus.isUpdating, false);
 	console.log("  ✔ GET /api/settings/update/status returns 200 with status payload");
 
