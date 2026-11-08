@@ -61,7 +61,7 @@ If you are unsure, report it privately anyway. A false alarm costs little.
 
 ## Audits
 
-The repository keeps internal audit reports in [`docs/security_audit/`](https://github.com/Cypher0071/Home_Cloud/blob/main/docs/security_audit/REPORT.md). The latest run, run-5, found no open issues. An internal audit is not a guarantee, and it is not an outside review. Anything new that you find is still worth reporting.
+The repository keeps automated audit reports in [`docs/security_audit/`](https://github.com/Cypher0071/Home_Cloud/blob/main/docs/security_audit/REPORT.md). The latest run, run-5, found no open issues. An automated audit is not a guarantee, and it is not an outside review. Anything new that you find is still worth reporting.
 
 ## Hardening your own install
 

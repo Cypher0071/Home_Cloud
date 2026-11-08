@@ -35,6 +35,9 @@ function runSetup(args, options = {}) {
 			...process.env,
 			NON_INTERACTIVE: "true",
 			DRY_RUN: "true",
+			// Pin the ref so setup.sh skips its GitHub latest-release lookup; these
+			// tests cover password flags and must not depend on the network.
+			HOME_CLOUD_BRANCH: "main",
 			...env,
 		},
 		encoding: "utf8",
