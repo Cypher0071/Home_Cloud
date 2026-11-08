@@ -186,7 +186,7 @@ router.post('/login', (req, res) => {
         const token = jwt.sign(
             { authorized: true, epoch: preferences.getSessionEpoch() },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            { algorithm: 'HS256', expiresIn: '7d' }
         );
         res.cookie('token', token, buildCookieOptions(req));
         return res.json({ success: true });
@@ -230,7 +230,7 @@ router.get('/me', (req, res) => {
     if (!token) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
-    jwt.verify(token, process.env.JWT_SECRET, (err, decodedtoken) => {
+    jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] }, (err, decodedtoken) => {
         if (err) {
             return res.status(401).json({ error: 'Unauthorized' });
         }

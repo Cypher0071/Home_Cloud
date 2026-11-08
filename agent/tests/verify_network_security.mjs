@@ -121,7 +121,24 @@ try {
 	assert.ok("tunnel" in authTunnelData, "Expected tunnel status in authenticated payload");
 	console.log("  ✔ Authenticated session accesses tunnel status.");
 
-	console.log("\n✅ All 8 Network Security & LAN Detection tests passed successfully!");
+	console.log("[Test 9] Responses do not advertise the server framework");
+	assert.equal(pingRes.headers.get("x-powered-by"), null, "X-Powered-By must be disabled");
+	console.log("  ✔ No X-Powered-By header.");
+
+	console.log("[Test 10] Tokens signed with any algorithm other than HS256 are rejected");
+	const hs512Token = jwt.sign(
+		{ authorized: true, epoch: preferences.getSessionEpoch() },
+		JWT_SECRET,
+		{ algorithm: "HS512", expiresIn: "1h" }
+	);
+	const hs512Res = await fetch(`${baseUrl}/api/network/info`, {
+		headers: { Cookie: `token=${hs512Token}` },
+	});
+	assert.equal(hs512Res.status, 401, "An HS512 token with the right secret must still be rejected");
+	assert.equal(jwt.decode(validToken, { complete: true }).header.alg, "HS256");
+	console.log("  ✔ Only HS256 tokens are accepted.");
+
+	console.log("\n✅ All 10 Network Security & LAN Detection tests passed successfully!");
 } finally {
 	await new Promise((resolve) => testServer.close(resolve));
 	try {

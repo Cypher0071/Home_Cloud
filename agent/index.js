@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const app = express();
+app.disable("x-powered-by");
 const http = require("http");
 const ws = require("ws");
 const path = require("path");

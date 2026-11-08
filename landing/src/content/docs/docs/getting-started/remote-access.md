@@ -40,11 +40,22 @@ Afterwards the dashboard is at `https://dash.example.com`.
 
 If you pass `--skip-cloudflared`, decline the prompt, or login does not finish, the installer continues without a tunnel. The agent logs that the tunnel is inactive and serves the LAN address only.
 
+### Protect the dashboard with Cloudflare Access
+
+Signing in to the dashboard gives a host terminal and control of Docker. Over the tunnel, anyone on the internet can reach the login page, so add Cloudflare Access in front of it. It is free for personal use and needs no change to Home Cloud.
+
+1. In the Cloudflare dashboard, open **Zero Trust → Access → Applications → Add an application → Self-hosted**.
+2. Set the application domain to `dash.<domain>`. If the installer published `ssh.<domain>`, add it as a second domain on the same application.
+3. Add a policy with action **Allow** and an **Emails** rule listing only your own address. The default login method sends a one-time code to that email. You can add Google or GitHub under **Settings → Authentication**.
+4. Open `https://dash.<domain>` in a private window. You should see the Cloudflare login first and the Home Cloud login after it.
+
+The dashboard, its API and the terminal all use the same Access session. Direct LAN access on port 3000 does not go through Cloudflare and is not affected.
+
 ### Remote SSH
 
 Unless you pass `--skip-ssh`, the installer can also publish `ssh.<domain>` in the same tunnel. It does this only if your `~/.ssh/authorized_keys` has at least one key, and `sshd_config` includes `sshd_config.d`. It then installs `/etc/ssh/sshd_config.d/60-home-cloud-tunnel.conf`, which turns off password logins for connections arriving through the tunnel (from `127.0.0.1` and `::1`). If a check fails, SSH is not published and the dashboard setup continues.
 
-Put a Cloudflare Access policy on `ssh.<domain>` in Zero Trust. The installer recommends this too.
+Put `ssh.<domain>` behind Cloudflare Access too, as in the steps above. The installer recommends this as well.
 
 ## Add remote access later
 

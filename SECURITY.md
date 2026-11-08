@@ -128,12 +128,24 @@ When deploying Home Cloud in production or on a home server:
 3. [ ] Keep Safe Server Mode enabled unless you explicitly require root filesystem navigation.
 4. [ ] Regularly update the system using the built-in update manager, or manually with `git fetch --tags && git checkout <release-tag> && pnpm install --frozen-lockfile && pnpm --filter dashboard build`. Do not run an unpinned `git pull && pnpm install`.
 5. [ ] Verify that the systemd service runs as an unprivileged user and not as `root`.
-6. [ ] If the installer published `ssh.<domain>`, protect it with a Cloudflare Access application and policy, and prefer key-only SSH (`PasswordAuthentication no`). The tunnel itself does not authenticate SSH clients, and `sshd` sees every tunnel client as `127.0.0.1`, so source-IP bans and rate limits do not separate attackers.
-7. [ ] Pass the installer password through `HOME_CLOUD_PASSWORD`, `--password-file`, `--password-stdin`, or the interactive prompt, never `--password`. Command-line arguments are readable by other local users via `/proc` while the installer runs.
-8. [ ] Keep port 3000 restricted to trusted LAN devices (firewall), and only expose apps on `<sub>.<domain>` whose content you control. Exposed apps share a site with the dashboard.
+6. [ ] Protect `dash.<domain>` with a Cloudflare Access application that allows only your own email (see [Cloudflare Access for the dashboard](#cloudflare-access-for-the-dashboard)). Without it, anyone on the internet can reach the login page, and the password is the only thing between them and a host terminal.
+7. [ ] If the installer published `ssh.<domain>`, protect it with a Cloudflare Access application and policy, and prefer key-only SSH (`PasswordAuthentication no`). The tunnel itself does not authenticate SSH clients, and `sshd` sees every tunnel client as `127.0.0.1`, so source-IP bans and rate limits do not separate attackers.
+8. [ ] Pass the installer password through `HOME_CLOUD_PASSWORD`, `--password-file`, `--password-stdin`, or the interactive prompt, never `--password`. Command-line arguments are readable by other local users via `/proc` while the installer runs.
+9. [ ] Keep port 3000 restricted to trusted LAN devices (firewall), and only expose apps on `<sub>.<domain>` whose content you control. Exposed apps share a site with the dashboard.
+
+### Cloudflare Access for the dashboard
+
+The dashboard password gives root-equivalent access, so on the internet it should not be the only lock. Cloudflare Access (free for up to 50 users) adds an identity check in front of the tunnel: visitors have to prove they own an allowed email before Cloudflare forwards a single request to your machine.
+
+1. In the Cloudflare dashboard, open **Zero Trust → Access → Applications → Add an application → Self-hosted**.
+2. Set the application domain to `dash.<domain>`. Add `ssh.<domain>` as a second domain on the same application if the installer published it.
+3. Add a policy with action **Allow** and an **Emails** include rule listing only your own address. Leave the default "One-time PIN" login method on, or add Google or GitHub under **Settings → Authentication**.
+4. Save, then open `https://dash.<domain>` in a private window. You should see the Cloudflare login page first and the Home Cloud login only after entering the emailed code.
+
+The dashboard, its API and its terminal WebSocket all go through the same Access session, so nothing else needs changing. Direct LAN access on port 3000 does not pass through Cloudflare and is not affected. Apps you expose on `<sub>.<domain>` are not covered unless you add them too.
 
 ---
 
 ## 5. Security Audits
 
-Internal audit reports live in [`docs/security_audit/`](docs/security_audit/REPORT.md). The latest run (run-5) is a clean pass with no open findings. If a future run reports open findings, treat them under the private-disclosure rules in section 2 and do not publish them before a fix ships.
+Automated audit reports live in [`docs/security_audit/`](docs/security_audit/REPORT.md). The latest run (run-5) is a clean pass with no open findings. If a future run reports open findings, treat them under the private-disclosure rules in section 2 and do not publish them before a fix ships.

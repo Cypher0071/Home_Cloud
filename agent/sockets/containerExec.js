@@ -21,7 +21,7 @@ function handleContainerExec(ws, request) {
 		return;
 	}
 
-	jwt.verify(token, process.env.JWT_SECRET, async (err, decodedtoken) => {
+	jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] }, async (err, decodedtoken) => {
 		if (err || !decodedtoken || decodedtoken.epoch !== preferences.getSessionEpoch()) {
 			ws.close();
 			return;

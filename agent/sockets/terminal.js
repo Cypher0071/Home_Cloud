@@ -376,7 +376,7 @@ function handleSystemTerminal(ws, request) {
 
 	let authEpoch;
 	try {
-		const decoded = jwt.verify(token, process.env.JWT_SECRET);
+		const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
 		if (!decoded || decoded.epoch !== preferences.getSessionEpoch()) {
 			ws.close();
 			return;

@@ -2644,6 +2644,7 @@ setup_cloudflare_tunnel() {
                                 echo "$DNS_OUT"
                                 echo "⚠️ DNS routing did not complete; setup is idempotent and a rerun will retry it."
                             fi
+                            echo "🔒 Recommendation: dash.$CF_DOMAIN_VAL gives a host terminal and Docker control behind your password. Put a Cloudflare Access policy on it so only your email can reach the login page."
 
                             if [ "$publish_ssh_ingress" = true ]; then
                                 echo "🌐 Routing DNS for ssh.$CF_DOMAIN_VAL..."
@@ -2959,6 +2960,8 @@ if [ -f "$SCRIPT_DIR/agent/.env" ]; then
 fi
 if [ -n "$ACTIVE_CF_DOMAIN" ] && [ -f "$CURRENT_HOME/.cloudflared/config.yml" ]; then
     echo "  Access remotely at: https://dash.$ACTIVE_CF_DOMAIN"
+    echo "  🔒 Recommendation: Put a Cloudflare Access policy on dash.$ACTIVE_CF_DOMAIN in Zero Trust,"
+    echo "     so only your email can reach the login page. See SECURITY.md."
     if grep -qE "hostname:[[:space:]]*ssh\.$ACTIVE_CF_DOMAIN" "$CURRENT_HOME/.cloudflared/config.yml" 2>/dev/null; then
         echo "  Remote SSH:         ssh.$ACTIVE_CF_DOMAIN (key-only; requires cloudflared)"
         echo ""
