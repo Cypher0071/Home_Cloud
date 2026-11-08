@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import { CF_BEACON_SRC, CF_BEACON_DATA } from './src/data/analytics.mjs';
 
 const REPO_URL = 'https://github.com/Cypher0071/Home_Cloud';
 
@@ -40,6 +41,7 @@ export default defineConfig({
         { tag: 'meta', attrs: { property: 'og:image', content: 'https://home-cloud.live/og.png' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
         { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://home-cloud.live/og.png' } },
+        { tag: 'script', attrs: { defer: true, src: CF_BEACON_SRC, 'data-cf-beacon': CF_BEACON_DATA } },
       ],
       expressiveCode: {
         themes: ['github-dark-default'],
